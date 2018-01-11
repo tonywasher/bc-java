@@ -286,11 +286,7 @@ public class KCCMBlockCipher
             inOff += totalLength;
             outOff += totalLength;
 
-            for (int byteIndex = 0; byteIndex < counter.length; byteIndex++)
-            {
-                s[byteIndex] += counter[byteIndex];
-            }
-
+            applyCounter();
             engine.processBlock(s, 0, buffer, 0);
 
             for (int byteIndex = 0; byteIndex < macSize; byteIndex++)
@@ -320,11 +316,7 @@ public class KCCMBlockCipher
             inOff += totalLength;
             outOff += totalLength;
 
-            for (int byteIndex = 0; byteIndex < counter.length; byteIndex++)
-            {
-                s[byteIndex] += counter[byteIndex];
-            }
-
+            applyCounter();
             engine.processBlock(s, 0, buffer, 0);
 
             byte[] calculatedMac = new byte[macSize];
@@ -350,12 +342,7 @@ public class KCCMBlockCipher
 
     private void ProcessBlock(byte[] input, int inOff, int len, byte[] output, int outOff)
     {
-
-        for (int byteIndex = 0; byteIndex < counter.length; byteIndex++)
-        {
-            s[byteIndex] += counter[byteIndex];
-        }
-
+        applyCounter();
         engine.processBlock(s, 0, buffer, 0);
 
         for (int byteIndex = 0; byteIndex < engine.getBlockSize() && byteIndex < len; byteIndex++)
@@ -429,6 +416,21 @@ public class KCCMBlockCipher
         }
     }
 
+    private void applyCounter() {
+        /* Apply Counter */
+        for (int byteIndex = 0; byteIndex < counter.length; byteIndex++)
+        {
+            s[byteIndex] += counter[byteIndex];
+        }
+
+        /* Increment counter by 1 */
+        for (int byteIndex = 0; byteIndex < counter.length; byteIndex++)
+        {
+            if (++counter[byteIndex] != 0) {
+                break;
+            }
+        }
+    }
 
     private void intToBytes(
         int num,
