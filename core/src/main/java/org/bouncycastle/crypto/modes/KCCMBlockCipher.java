@@ -107,7 +107,8 @@ public class KCCMBlockCipher
 
             AEADParameters parameters = (AEADParameters)params;
 
-            if (parameters.getMacSize() > MAX_MAC_BIT_LENGTH || parameters.getMacSize() < MIN_MAC_BIT_LENGTH || parameters.getMacSize() % 8 != 0)
+            if (parameters.getMacSize() > MAX_MAC_BIT_LENGTH || parameters.getMacSize() < MIN_MAC_BIT_LENGTH
+             || parameters.getMacSize() % 8 != 0 || parameters.getMacSize() % 8 > engine.getBlockSize())
             {
                 throw new IllegalArgumentException("Invalid mac size specified");
             }
@@ -127,6 +128,10 @@ public class KCCMBlockCipher
         else
         {
             throw new IllegalArgumentException("Invalid parameters specified");
+        }
+
+        if (nonce.length != engine.getBlockSize()) {
+            throw new IllegalArgumentException("IV must be " + engine.getBlockSize() + " long");
         }
 
         this.mac = new byte[macSize];
@@ -163,13 +168,9 @@ public class KCCMBlockCipher
 
     private void processAAD(byte[] assocText, int assocOff, int assocLen, int dataLen)
     {
-        if (assocLen - assocOff < engine.getBlockSize())
+        if (assocText.length < (assocOff + assocLen))
         {
-            throw new IllegalArgumentException("authText buffer too short");
-        }
-        if (assocLen % engine.getBlockSize() != 0)
-        {
-            throw new IllegalArgumentException("padding not supported");
+            throw new DataLengthException("assocText buffer too short");
         }
 
         System.arraycopy(nonce, 0, G1, 0, nonce.length - Nb_ - 1);
@@ -209,9 +210,9 @@ public class KCCMBlockCipher
         engine.processBlock(macBlock, 0, macBlock, 0);
 
         int authLen = assocLen;
-        while (authLen != 0)
+        while (authLen > 0)
         {
-            for (int byteIndex = 0; byteIndex < engine.getBlockSize(); byteIndex++)
+            for (int byteIndex = 0; byteIndex < engine.getBlockSize() && byteIndex < authLen; byteIndex++)
             {
                 macBlock[byteIndex] ^= assocText[byteIndex + assocOff];
             }
@@ -250,7 +251,8 @@ public class KCCMBlockCipher
         {
             throw new DataLengthException("input buffer too short");
         }
-        if (out.length - outOff < len)
+        int requiredOutLen = forEncryption ? len + macSize : len - macSize;
+        if (out.length - outOff < requiredOutLen)
         {
             throw new OutputLengthException("output buffer too short");
         }
@@ -269,22 +271,20 @@ public class KCCMBlockCipher
 
         if (forEncryption)
         {
-            if ((len % engine.getBlockSize()) != 0)
-            {
-                throw new DataLengthException("partial blocks not supported");
-            }
-
             CalculateMac(in, inOff, len);
             engine.processBlock(nonce, 0, s, 0);
 
             int totalLength = len;
             while (totalLength > 0)
             {
-                ProcessBlock(in, inOff, len, out, outOff);
+                ProcessBlock(in, inOff, totalLength, out, outOff);
                 totalLength -= engine.getBlockSize();
                 inOff += engine.getBlockSize();
                 outOff += engine.getBlockSize();
             }
+
+            inOff += totalLength;
+            outOff += totalLength;
 
             for (int byteIndex = 0; byteIndex < counter.length; byteIndex++)
             {
@@ -299,45 +299,26 @@ public class KCCMBlockCipher
             }
 
             System.arraycopy(macBlock, 0, mac, 0, macSize);
-            
+
             reset();
 
             return len + macSize;
         }
         else
         {
-            if ((len - macSize) % engine.getBlockSize() != 0)
-            {
-                throw new DataLengthException("partial blocks not supported");
-            }
-
             engine.processBlock(nonce, 0, s, 0);
 
-            int blocks = len / engine.getBlockSize();
-
-            for (int blockNum = 0; blockNum < blocks; blockNum++)
+            int totalLength = len - macSize;
+            while (totalLength > 0)
             {
-                ProcessBlock(in, inOff, len, out, outOff);
-
+                ProcessBlock(in, inOff, totalLength, out, outOff);
+                totalLength -= engine.getBlockSize();
                 inOff += engine.getBlockSize();
                 outOff += engine.getBlockSize();
             }
 
-            if (len > inOff)
-            {
-                for (int byteIndex = 0; byteIndex < counter.length; byteIndex++)
-                {
-                    s[byteIndex] += counter[byteIndex];
-                }
-
-                engine.processBlock(s, 0, buffer, 0);
-
-                for (int byteIndex = 0; byteIndex < macSize; byteIndex++)
-                {
-                    out[outOff + byteIndex] = (byte)(buffer[byteIndex] ^ in[inOff + byteIndex]);
-                }
-                outOff += macSize;
-            }
+            inOff += totalLength;
+            outOff += totalLength;
 
             for (int byteIndex = 0; byteIndex < counter.length; byteIndex++)
             {
@@ -346,15 +327,15 @@ public class KCCMBlockCipher
 
             engine.processBlock(s, 0, buffer, 0);
 
-            System.arraycopy(out, outOff - macSize, buffer, 0, macSize);
+            byte[] calculatedMac = new byte[macSize];
+            for (int byteIndex = 0; byteIndex < macSize; byteIndex++)
+            {
+                calculatedMac[byteIndex] = (byte)(buffer[byteIndex] ^ in[inOff + byteIndex]);
+            }
 
-            CalculateMac(out, 0, outOff - macSize);
+            CalculateMac(out, 0, outOff);
 
             System.arraycopy(macBlock, 0, mac, 0, macSize);
-
-            byte[] calculatedMac = new byte[macSize];
-
-            System.arraycopy(buffer, 0, calculatedMac, 0, macSize);
 
             if (!Arrays.constantTimeAreEqual(mac, calculatedMac))
             {
@@ -377,7 +358,7 @@ public class KCCMBlockCipher
 
         engine.processBlock(s, 0, buffer, 0);
 
-        for (int byteIndex = 0; byteIndex < engine.getBlockSize(); byteIndex++)
+        for (int byteIndex = 0; byteIndex < engine.getBlockSize() && byteIndex < len; byteIndex++)
         {
             output[outOff + byteIndex] = (byte)(buffer[byteIndex] ^ input[inOff + byteIndex]);
         }
@@ -388,7 +369,7 @@ public class KCCMBlockCipher
         int totalLen = len;
         while (totalLen > 0)
         {
-            for (int byteIndex = 0; byteIndex < engine.getBlockSize(); byteIndex++)
+            for (int byteIndex = 0; byteIndex < engine.getBlockSize() && byteIndex < totalLen; byteIndex++)
             {
                 macBlock[byteIndex] ^= authText[authOff + byteIndex];
             }
@@ -417,12 +398,19 @@ public class KCCMBlockCipher
 
     public int getUpdateOutputSize(int len)
     {
-        return len;
+        return 0;
     }
 
     public int getOutputSize(int len)
     {
-        return len + macSize;
+      int totalData = len + data.size();
+
+      if (forEncryption)
+      {
+          return totalData + macSize;
+      }
+
+      return totalData < macSize ? 0 : totalData - macSize;
     }
 
     public void reset()
