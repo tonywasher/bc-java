@@ -224,15 +224,13 @@ public class McElieceKeyFactorySpi
     protected KeySpec engineGetKeySpec(Key key, Class tClass)
         throws InvalidKeySpecException
     {
-        // TODO:
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
+        return getKeySpec(key, tClass);
     }
 
     protected Key engineTranslateKey(Key key)
         throws InvalidKeyException
     {
-        // TODO:
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
+        return translateKey(key);
     }
 
     private static Digest getDigest(AlgorithmIdentifier algId)
