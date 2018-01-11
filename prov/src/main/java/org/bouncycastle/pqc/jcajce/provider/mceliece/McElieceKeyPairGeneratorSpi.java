@@ -24,14 +24,15 @@ public class McElieceKeyPairGeneratorSpi
         super("McEliece");
     }
 
-    public void initialize(AlgorithmParameterSpec params)
+    public void initialize(AlgorithmParameterSpec params,
+                           SecureRandom random)
         throws InvalidAlgorithmParameterException
     {
         kpg = new McElieceKeyPairGenerator();
         super.initialize(params);
         McElieceKeyGenParameterSpec ecc = (McElieceKeyGenParameterSpec)params;
 
-        McElieceKeyGenerationParameters mccKGParams = new McElieceKeyGenerationParameters(new SecureRandom(), new McElieceParameters(ecc.getM(), ecc.getT()));
+        McElieceKeyGenerationParameters mccKGParams = new McElieceKeyGenerationParameters(random, new McElieceParameters(ecc.getM(), ecc.getT()));
         kpg.init(mccKGParams);
     }
 
