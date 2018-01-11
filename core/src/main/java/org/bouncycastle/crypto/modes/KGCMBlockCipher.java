@@ -167,7 +167,7 @@ public class KGCMBlockCipher
         int pos = authOff, end = authOff + len;
         while (pos < end)
         {
-            xorWithInput(b, authText, pos);
+            xorWithInput(b, authText, pos, end);
             multiplier.multiplyH(b);
             pos += blockSize;
         }
@@ -221,7 +221,7 @@ public class KGCMBlockCipher
         {
             processAAD(associatedText.getBuffer(), 0, lenAAD);
         }
-        
+
         //use alternative cipher to produce output
         int resultLen;
         if (forEncryption)
@@ -238,7 +238,7 @@ public class KGCMBlockCipher
         }
         else
         {
-            int ctLen = len - macSize; 
+            int ctLen = len - macSize;
             if (out.length - outOff < ctLen)
             {
                 throw new OutputLengthException("Output buffer too short");
@@ -328,7 +328,7 @@ public class KGCMBlockCipher
         int pos = inOff, end = inOff + len;
         while (pos < end)
         {
-            xorWithInput(b, input, pos);
+            xorWithInput(b, input, pos, end);
             multiplier.multiplyH(b);
             pos += blockSize;
         }
@@ -348,11 +348,15 @@ public class KGCMBlockCipher
         engine.processBlock(macBlock, 0, macBlock, 0);
     }
 
-    private static void xorWithInput(long[] z, byte[] buf, int off)
+    private static void xorWithInput(long[] z, byte[] buf, int off, int end)
     {
         for (int i = 0; i < z.length; ++i)
         {
-            z[i] ^= Pack.littleEndianToLong(buf, off);
+            if (end - off >= 8) {
+                z[i] ^= Pack.littleEndianToLong(buf, off);
+            } else {
+                z[i] ^= Pack.littleEndianToLongShortBuff(buf, off, end);
+            }
             off += 8;
         }
     }

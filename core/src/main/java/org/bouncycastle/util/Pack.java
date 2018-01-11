@@ -113,6 +113,24 @@ public abstract class Pack
         return (short)n;
     }
 
+    public static int littleEndianToIntShortBuff(byte[] bs, int off, int len)
+    {
+        int n = 0;
+        if (off < len) {
+            n |=  bs[off++] & 0xff;
+        }
+        if (off < len) {
+            n |= (bs[off++] & 0xff) << 8;
+        }
+        if (off < len) {
+            n |= (bs[off++] & 0xff) << 16;
+        }
+        if (off < len) {
+            n |=  bs[off  ] << 24;
+        }
+        return n;
+    }
+
     public static int littleEndianToInt(byte[] bs, int off)
     {
         int n = bs[  off] & 0xff;
@@ -193,6 +211,12 @@ public abstract class Pack
             intToLittleEndian(ns[i], bs, off);
             off += 4;
         }
+    }
+
+    public static long littleEndianToLongShortBuff(byte[] bs, int off, int end) {
+        int lo = littleEndianToIntShortBuff(bs, off, end);
+        int hi = littleEndianToIntShortBuff(bs, off + 4, end);
+        return ((long)(hi & 0xffffffffL) << 32) | (long)(lo & 0xffffffffL);
     }
 
     public static long littleEndianToLong(byte[] bs, int off)
