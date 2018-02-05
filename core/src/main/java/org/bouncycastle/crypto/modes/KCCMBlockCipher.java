@@ -102,6 +102,7 @@ public class KCCMBlockCipher
     {
 
         CipherParameters cipherParameters;
+        byte[] nonce;
         if (params instanceof AEADParameters)
         {
 
@@ -130,9 +131,10 @@ public class KCCMBlockCipher
             throw new IllegalArgumentException("Invalid parameters specified");
         }
 
-        if (nonce.length != engine.getBlockSize()) {
-            throw new IllegalArgumentException("IV must be " + engine.getBlockSize() + " long");
+        if (nonce.length > engine.getBlockSize()) {
+            throw new IllegalArgumentException("IV must be at most " + engine.getBlockSize() + " long");
         }
+        this.nonce = Arrays.copyOf(nonce, engine.getBlockSize());
 
         this.mac = new byte[macSize];
         this.forEncryption = forEncryption;
