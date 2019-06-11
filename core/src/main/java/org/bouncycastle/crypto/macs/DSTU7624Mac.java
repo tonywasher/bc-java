@@ -118,7 +118,12 @@ public class DSTU7624Mac
     {
         if (bufOff % buf.length != 0)
         {
-            throw new DataLengthException("input must be a multiple of blocksize");
+            /* Pad using Poly1305-style padding */
+            buf[bufOff] = 1;
+            for (int i = bufOff + 1; bufOff < buf.length; i++)
+            {
+                buf[i] = 0;
+            }
         }
 
         //Last block
