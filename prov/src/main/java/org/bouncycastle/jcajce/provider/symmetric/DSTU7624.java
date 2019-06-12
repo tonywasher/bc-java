@@ -35,7 +35,7 @@ public class DSTU7624
     private DSTU7624()
     {
     }
-    
+
     public static class ECB
         extends BaseBlockCipher
     {
@@ -57,7 +57,13 @@ public class DSTU7624
     {
         public ECB_128()
         {
-            super(new DSTU7624Engine(128));
+            super(new BlockCipherProvider()
+            {
+                public BlockCipher get()
+                {
+                    return new DSTU7624Engine(128);
+                  }
+            });
         }
     }
 
@@ -533,7 +539,7 @@ public class DSTU7624
             provider.addAlgorithm("Alg.Alias.Mac." + UAObjectIdentifiers.dstu7624gmac_256.getId(), "DSTU7624-256GMAC");
             provider.addAlgorithm("Mac.DSTU7624-512GMAC", PREFIX + "$GMAC512");
             provider.addAlgorithm("Alg.Alias.Mac." + UAObjectIdentifiers.dstu7624gmac_512.getId(), "DSTU7624-512GMAC");
-            
+
             provider.addAlgorithm("KeyGenerator.DSTU7624", PREFIX + "$KeyGen");
             provider.addAlgorithm("KeyGenerator", UAObjectIdentifiers.dstu7624kw_128, PREFIX + "$KeyGen128");
             provider.addAlgorithm("KeyGenerator", UAObjectIdentifiers.dstu7624kw_256, PREFIX + "$KeyGen256");

@@ -1,5 +1,6 @@
 package org.bouncycastle.jcajce.provider.symmetric;
 
+import org.bouncycastle.crypto.BlockCipher;
 import org.bouncycastle.crypto.BufferedBlockCipher;
 import org.bouncycastle.crypto.CipherKeyGenerator;
 import org.bouncycastle.crypto.engines.GOST3412_2015Engine;
@@ -12,6 +13,7 @@ import org.bouncycastle.jcajce.provider.config.ConfigurableProvider;
 import org.bouncycastle.jcajce.provider.symmetric.util.BaseBlockCipher;
 import org.bouncycastle.jcajce.provider.symmetric.util.BaseKeyGenerator;
 import org.bouncycastle.jcajce.provider.symmetric.util.BaseMac;
+import org.bouncycastle.jcajce.provider.symmetric.util.BlockCipherProvider;
 import org.bouncycastle.jcajce.provider.util.AlgorithmProvider;
 
 
@@ -22,7 +24,13 @@ public class GOST3412_2015
     {
         public ECB()
         {
-            super(new GOST3412_2015Engine());
+            super(new BlockCipherProvider()
+            {
+                public BlockCipher get()
+                {
+                    return new GOST3412_2015Engine();
+                }
+            });
         }
     }
 
