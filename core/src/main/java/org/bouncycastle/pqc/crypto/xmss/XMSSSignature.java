@@ -7,7 +7,10 @@ import org.bouncycastle.util.Pack;
 
 /**
  * XMSS Signature.
+ *
+ * @deprecated use {@link org.bouncycastle.crypto.signers.xmss.XMSSSignature} instead.
  */
+@Deprecated
 public final class XMSSSignature
     extends XMSSReducedSignature
     implements XMSSStoreableObjectInterface, Encodable

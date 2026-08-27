@@ -9,7 +9,10 @@ import org.bouncycastle.util.Encodable;
 
 /**
  * XMSS^MT Signature.
+ *
+ * @deprecated use {@link org.bouncycastle.crypto.signers.xmss.XMSSMTSignature} instead.
  */
+@Deprecated
 public final class XMSSMTSignature
     implements XMSSStoreableObjectInterface, Encodable
 {

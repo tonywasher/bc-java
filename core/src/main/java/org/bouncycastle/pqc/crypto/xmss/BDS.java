@@ -16,7 +16,10 @@ import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 
 /**
  * BDS.
+ *
+ * @deprecated use {@link org.bouncycastle.crypto.signers.xmss.BDS} instead.
  */
+@Deprecated
 public final class BDS
     implements Serializable
 {

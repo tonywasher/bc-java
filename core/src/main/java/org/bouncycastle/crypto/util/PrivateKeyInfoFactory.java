@@ -219,6 +219,10 @@ public class PrivateKeyInfoFactory
         {
             return LmsKeyUtil.createPrivateKeyInfo(privateKey, attributes);
         }
+        else if (XmssKeyUtil.createPrivateKeyInfo(privateKey, attributes) != null)
+        {
+            return XmssKeyUtil.createPrivateKeyInfo(privateKey, attributes);
+        }
         else if (privateKey instanceof CMCEPrivateKeyParameters)
         {
             CMCEPrivateKeyParameters params = (CMCEPrivateKeyParameters)privateKey;

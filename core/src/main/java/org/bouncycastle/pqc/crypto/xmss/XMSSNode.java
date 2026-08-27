@@ -4,7 +4,10 @@ import java.io.Serializable;
 
 /**
  * Binary tree node.
+ *
+ * @deprecated use {@link org.bouncycastle.crypto.signers.xmss.XMSSNode} instead.
  */
+@Deprecated
 public final class XMSSNode
     implements Serializable
 {

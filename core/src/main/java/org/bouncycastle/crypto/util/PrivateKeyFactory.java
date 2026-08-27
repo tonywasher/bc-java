@@ -14,6 +14,7 @@ import org.bouncycastle.asn1.ASN1Sequence;
 import org.bouncycastle.asn1.cryptopro.CryptoProObjectIdentifiers;
 import org.bouncycastle.asn1.cryptopro.ECGOST3410NamedCurves;
 import org.bouncycastle.asn1.cryptopro.GOST3410PublicKeyAlgParameters;
+import org.bouncycastle.asn1.iana.IANAObjectIdentifiers;
 import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
 import org.bouncycastle.asn1.pkcs.DHParameter;
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
@@ -28,6 +29,8 @@ import org.bouncycastle.asn1.x9.X962Parameters;
 import org.bouncycastle.asn1.x9.X9ECParameters;
 import org.bouncycastle.asn1.x9.X9ObjectIdentifiers;
 import org.bouncycastle.crypto.params.AsymmetricKeyParameter;
+import org.bouncycastle.crypto.params.CMCEParameters;
+import org.bouncycastle.crypto.params.CMCEPrivateKeyParameters;
 import org.bouncycastle.crypto.params.DHParameters;
 import org.bouncycastle.crypto.params.DHPrivateKeyParameters;
 import org.bouncycastle.crypto.params.DSAParameters;
@@ -40,17 +43,14 @@ import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters;
 import org.bouncycastle.crypto.params.Ed448PrivateKeyParameters;
 import org.bouncycastle.crypto.params.ElGamalParameters;
 import org.bouncycastle.crypto.params.ElGamalPrivateKeyParameters;
-import org.bouncycastle.crypto.params.CMCEParameters;
-import org.bouncycastle.crypto.params.CMCEPrivateKeyParameters;
+import org.bouncycastle.crypto.params.FrodoKEMParameters;
+import org.bouncycastle.crypto.params.FrodoKEMPrivateKeyParameters;
 import org.bouncycastle.crypto.params.MLDSAParameters;
 import org.bouncycastle.crypto.params.MLDSAPrivateKeyParameters;
 import org.bouncycastle.crypto.params.MLDSAPublicKeyParameters;
-import org.bouncycastle.crypto.params.FrodoKEMParameters;
-import org.bouncycastle.crypto.params.FrodoKEMPrivateKeyParameters;
 import org.bouncycastle.crypto.params.MLKEMParameters;
 import org.bouncycastle.crypto.params.MLKEMPrivateKeyParameters;
 import org.bouncycastle.crypto.params.MLKEMPublicKeyParameters;
-import org.bouncycastle.internal.asn1.iso.ISOIECObjectIdentifiers;
 import org.bouncycastle.crypto.params.RSAPrivateCrtKeyParameters;
 import org.bouncycastle.crypto.params.SLHDSAParameters;
 import org.bouncycastle.crypto.params.SLHDSAPrivateKeyParameters;
@@ -61,6 +61,7 @@ import org.bouncycastle.internal.asn1.iso.ISOIECObjectIdentifiers;
 import org.bouncycastle.internal.asn1.oiw.ElGamalParameter;
 import org.bouncycastle.internal.asn1.oiw.OIWObjectIdentifiers;
 import org.bouncycastle.internal.asn1.rosstandart.RosstandartObjectIdentifiers;
+import org.bouncycastle.pqc.asn1.PQCObjectIdentifiers;
 import org.bouncycastle.util.Arrays;
 
 /**
@@ -261,6 +262,13 @@ public class PrivateKeyFactory
         else if (algOID.equals(PKCSObjectIdentifiers.id_alg_hss_lms_hashsig))
         {
             return LmsKeyUtil.createPrivateKey(keyInfo);
+        }
+        else if (algOID.equals(PQCObjectIdentifiers.xmss)
+            || algOID.equals(PQCObjectIdentifiers.xmss_mt)
+            || algOID.equals(IANAObjectIdentifiers.id_alg_xmss_hashsig)
+            || algOID.equals(IANAObjectIdentifiers.id_alg_xmssmt_hashsig))
+        {
+            return XmssKeyUtil.createPrivateKey(keyInfo);
         }
         else if (algOID.equals(ISOIECObjectIdentifiers.frodokem976_shake) ||
             algOID.equals(ISOIECObjectIdentifiers.frodokem1344_shake) ||

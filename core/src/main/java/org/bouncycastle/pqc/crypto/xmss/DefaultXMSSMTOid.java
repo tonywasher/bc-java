@@ -6,7 +6,10 @@ import java.util.Map;
 
 /**
  * XMSSOid^MT class.
+ *
+ * @deprecated use {@link org.bouncycastle.crypto.signers.xmss.DefaultXMSSMTOid} instead.
  */
+@Deprecated
 public final class DefaultXMSSMTOid
     implements XMSSOid
 {

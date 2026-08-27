@@ -8,7 +8,10 @@ import org.bouncycastle.util.Arrays;
 
 /**
  * XMSS.
+ *
+ * @deprecated use {@link org.bouncycastle.crypto.signers.xmss.XMSS} instead.
  */
+@Deprecated
 public class XMSS
 {
 

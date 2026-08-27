@@ -6,6 +6,10 @@ import org.bouncycastle.pqc.crypto.ExhaustedPrivateKeyException;
 import org.bouncycastle.pqc.crypto.StateAwareMessageSigner;
 import org.bouncycastle.util.Arrays;
 
+/**
+ * @deprecated use {@link org.bouncycastle.crypto.signers.XMSSSigner} instead.
+ */
+@Deprecated
 public class XMSSSigner
     implements StateAwareMessageSigner
 {

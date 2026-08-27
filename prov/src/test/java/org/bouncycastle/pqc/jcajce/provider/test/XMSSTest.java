@@ -24,18 +24,20 @@ import junit.framework.TestCase;
 import org.bouncycastle.asn1.ASN1Encodable;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.ASN1Sequence;
-import org.bouncycastle.asn1.DERSequence;
 import org.bouncycastle.asn1.DEROctetString;
+import org.bouncycastle.asn1.DERSequence;
 import org.bouncycastle.asn1.bc.BCObjectIdentifiers;
+import org.bouncycastle.asn1.iana.IANAObjectIdentifiers;
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
-import org.bouncycastle.asn1.iana.IANAObjectIdentifiers;
-import org.bouncycastle.internal.asn1.isara.IsaraObjectIdentifiers;
 import org.bouncycastle.crypto.Digest;
 import org.bouncycastle.crypto.digests.SHA256Digest;
 import org.bouncycastle.crypto.digests.SHA512Digest;
 import org.bouncycastle.crypto.digests.SHAKEDigest;
+import org.bouncycastle.crypto.params.AsymmetricKeyParameter;
+import org.bouncycastle.internal.asn1.isara.IsaraObjectIdentifiers;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.pqc.jcajce.interfaces.StateAwareSignature;
 import org.bouncycastle.pqc.jcajce.interfaces.XMSSKey;
 import org.bouncycastle.pqc.jcajce.interfaces.XMSSPrivateKey;
@@ -101,6 +103,85 @@ public class XMSSTest
         {
             Security.addProvider(new BouncyCastlePQCProvider());
         }
+    }
+
+    /**
+     * A private key written by a release before the XMSS implementation was promoted out of
+     * org.bouncycastle.pqc.crypto.xmss carries its BDS traversal state as a Java serialized graph
+     * naming the classes of that package. The promoted reader has to go on accepting it, which it
+     * does by mapping those four class names onto the classes in
+     * org.bouncycastle.crypto.signers.xmss - nothing writes them any more, so only a fixture like
+     * this one exercises the path.
+     */
+    public void testPromotedFactoryReadsLegacyBdsState()
+        throws Exception
+    {
+        assertTrue("fixture is not a pre-promotion key", hasLegacyBdsMarker(testPrivKey));
+
+        AsymmetricKeyParameter key = org.bouncycastle.crypto.util.PrivateKeyFactory.createKey(testPrivKey);
+
+        assertTrue(key instanceof org.bouncycastle.crypto.params.XMSSPrivateKeyParameters);
+    }
+
+    private static boolean hasLegacyBdsMarker(byte[] encoding)
+    {
+        byte[] marker = Strings.toByteArray("org.bouncycastle.pqc.crypto.xmss.BDS");
+
+        for (int i = 0; i <= encoding.length - marker.length; i++)
+        {
+            int j = 0;
+            while (j != marker.length && encoding[i + j] == marker[j])
+            {
+                j++;
+            }
+            if (j == marker.length)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * XMSS is now a BC provider algorithm as well as a BCPQC one - the BC provider has carried
+     * the key info converters for it for some time, but the KeyFactory, KeyPairGenerator and
+     * Signature services were only in BCPQC.
+     */
+    public void testBCProviderServices()
+        throws Exception
+    {
+        if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null)
+        {
+            Security.addProvider(new BouncyCastleProvider());
+        }
+
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("XMSS", "BC");
+
+        kpg.initialize(new XMSSParameterSpec(4, XMSSParameterSpec.SHA256), new SecureRandom());
+
+        KeyPair kp = kpg.generateKeyPair();
+
+        Signature sig = Signature.getInstance("XMSS-SHA256", "BC");
+
+        sig.initSign(kp.getPrivate());
+        sig.update(msg, 0, msg.length);
+
+        byte[] s = sig.sign();
+
+        sig.initVerify(kp.getPublic());
+        sig.update(msg, 0, msg.length);
+
+        assertTrue(sig.verify(s));
+
+        KeyFactory kFact = KeyFactory.getInstance("XMSS", "BC");
+
+        assertEquals(kp.getPublic(), kFact.generatePublic(new X509EncodedKeySpec(kp.getPublic().getEncoded())));
+        assertEquals(kp.getPrivate(), kFact.generatePrivate(new PKCS8EncodedKeySpec(kp.getPrivate().getEncoded())));
+
+        // the same key must go back and forth between the two providers
+        assertEquals(kp.getPublic(),
+            KeyFactory.getInstance("XMSS", "BCPQC").generatePublic(new X509EncodedKeySpec(kp.getPublic().getEncoded())));
     }
 
     public void test160PrivateKeyRecovery()

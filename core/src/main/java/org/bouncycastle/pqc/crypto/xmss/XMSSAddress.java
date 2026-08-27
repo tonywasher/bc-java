@@ -4,7 +4,10 @@ import org.bouncycastle.util.Pack;
 
 /**
  * XMSS address.
+ *
+ * @deprecated use {@link org.bouncycastle.crypto.signers.xmss.XMSSAddress} instead.
  */
+@Deprecated
 public abstract class XMSSAddress
 {
 

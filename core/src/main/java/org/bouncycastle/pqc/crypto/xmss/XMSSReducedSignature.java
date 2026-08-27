@@ -5,7 +5,10 @@ import java.util.List;
 
 /**
  * Reduced XMSS Signature.
+ *
+ * @deprecated use {@link org.bouncycastle.crypto.signers.xmss.XMSSReducedSignature} instead.
  */
+@Deprecated
 public class XMSSReducedSignature
     implements XMSSStoreableObjectInterface
 {

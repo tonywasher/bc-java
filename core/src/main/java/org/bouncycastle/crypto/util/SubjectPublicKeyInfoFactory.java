@@ -243,6 +243,10 @@ public class SubjectPublicKeyInfoFactory
         {
             return LmsKeyUtil.createSubjectPublicKeyInfo(publicKey);
         }
+        else if (XmssKeyUtil.createSubjectPublicKeyInfo(publicKey) != null)
+        {
+            return XmssKeyUtil.createSubjectPublicKeyInfo(publicKey);
+        }
         else
         {
             throw new IOException("key parameters not recognized");

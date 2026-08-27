@@ -7,7 +7,10 @@ import org.bouncycastle.util.Arrays;
 
 /**
  * XMSS^MT Signer class.
+ *
+ * @deprecated use {@link org.bouncycastle.crypto.signers.XMSSMTSigner} instead.
  */
+@Deprecated
 public class XMSSMTSigner
     implements StateAwareMessageSigner
 {

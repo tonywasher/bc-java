@@ -15,7 +15,10 @@ import org.bouncycastle.util.encoders.Hex;
 
 /**
  * Utils for XMSS implementation.
+ *
+ * @deprecated use {@link org.bouncycastle.crypto.signers.xmss.XMSSUtil} instead.
  */
+@Deprecated
 public class XMSSUtil
 {
 
