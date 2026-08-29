@@ -88,9 +88,10 @@ public final class XMSSPrivateKeyParameters
             byte[] bdsStateBinary = XMSSUtil.extractBytesAtOffset(privateKey, position, privateKey.length - position);
             try
             {
-                BDS bdsImport = (BDS)XMSSUtil.deserialize(bdsStateBinary, BDS.class);
+                BDS bdsImport = (BDS)XMSSUtil.deserialize(bdsStateBinary, BDS.class, publicSeed);
                 bdsState = bdsImport.withWOTSDigest(builder.params.getTreeDigestOID(), builder.params.getTreeDigestSize());
                 bdsState.validate(params, index);
+                bdsState.validateRoot(root);
             }
             catch (IOException e)
             {
@@ -176,6 +177,12 @@ public final class XMSSPrivateKeyParameters
             try
             {
                 bdsState.validate(params, builder.index);
+                if (builder.bdsState != null)
+                {
+                    // only a restored state carries a root worth comparing: one built here is
+                    // computed from the seeds, and a key built without a root carries zeros
+                    bdsState.validateRoot(builder.root);
+                }
             }
             catch (IllegalStateException e)
             {
@@ -394,7 +401,7 @@ public final class XMSSPrivateKeyParameters
             byte[] bdsStateOut = null;
             try
             {
-                bdsStateOut = XMSSUtil.serialize(bdsState);
+                bdsStateOut = XMSSUtil.serialize(bdsState, publicSeed);
             }
             catch (IOException e)
             {

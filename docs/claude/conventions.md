@@ -156,6 +156,116 @@ Two details that are easy to get wrong when adding the translation:
   path the digest's `doFinal` has usually reset it already, so the `finally` is a no-op there —
   which is fine, and far safer than one `reset()` per exit that the next branch will forget.
 
+## Stateful hash-based private keys: the position is stored twice, so cross-check it
+
+An LMS/HSS or XMSS/XMSS^MT private key records where it has got to in **two** independent places,
+and until github #2414 nothing compared them:
+
+- HSS: the top-level `index`, and each component key's one-time index `q`.
+- XMSS^MT: the global `index`, and the per-layer BDS traversal states.
+- XMSS: the `index` field and the BDS state's own index (this one was already checked, which is
+  what made the omission in the other two visible).
+
+Two records of one value that are never compared is the shape to look for, and it recurs: the same
+key also stores the tree `root` twice (its own field and the BDS state's root node), also
+uncompared. The consequence is the worst one a stateful scheme has: a stored key whose index was
+rolled back while its state stayed advanced signs a second message under a one-time key it has
+already used, **and that signature verifies**, so nothing surfaces it. RFC 8554 sec. 1 and RFC 8391
+sec. 1.1 both exist to prevent exactly that. Bit rot, a partial write and a restore-from-backup are
+all ordinary non-adversarial ways to get there, so "an attacker who can rewrite the key already has
+the seed" is not a reason to skip the check.
+
+**Derive the invariant by enumeration, not by reading the code.** These relationships have
+boundary cases that reasoning misses and that a wrong check turns into false rejections of
+legitimate keys - worse than the bug. Walk a small key across its whole index space and print both
+records at every step:
+
+- HSS came out exact, no exception: `index == sum over levels i<d-1 of (q_i - 1) * 2^(heights below i) + q_last`
+  (a level above the last has already advanced past the subtree it signed, hence the `- 1`).
+- XMSS^MT needed one allowance: when a layer's expected leaf index is 0 its state legitimately
+  still holds the previous subtree's final index (`2^h - 1`), because `updateState` skips the
+  advance on a subtree's last leaf and the signer rebuilds the state when it next signs there.
+  Absent layers are skipped - they are built lazily.
+
+So **every such test needs a compatibility half, and it matters more than the rejection half**:
+walk every index a key can reach, encode/decode at each, and assert the decoded key still signs
+verifiably. 912 XMSS^MT indices across five parameter sets and 2124 HSS indices, plus a shard,
+is what made the allowances above trustworthy.
+
+### What "validated" can mean differs by scheme - say which you have
+
+The LMS tree cache and the XMSS BDS state look like the same problem and are not:
+
+- **LMS**: every cached node's children are also cached, so the interior nodes can be *recomputed*
+  from them - 31 hashes, ~20us, independent of `h`. That is a **semantic** check: it establishes
+  the nodes are the *right* nodes.
+- **XMSS**: a BDS authentication path, stack, retain or keep node does **not** have its children
+  stored beside it, so recomputing one means rebuilding a subtree - the work the state exists to
+  avoid. The state therefore carries a **checksum** instead (SHA-256 over the owning key's
+  `publicSeed` followed by the state). That is only an **error-detecting code**: unchanged since
+  written, never right when written. Anyone able to rewrite the key recomputes it, so it
+  authenticates nothing and the allocation bounds on the encoding still carry the DoS load.
+
+Bind the *public* seed, not the secret one: the state's own root and index are inside the encoding
+and so already covered, hashing secret material would make the stored checksum a commitment to it
+for no gain in detection, and `secretKeyPRF` does not influence the state at all (corrupting it
+yields a different but still valid signature, since `r` travels in the signature).
+
+Two traps that came with it:
+
+- **A checksum verified before parsing changes which error a crafted encoding hits.** Verify-first
+  is right - it rejects before any allocation - but it makes the specific bound messages
+  unreachable for hand-crafted input, so a test asserting `"BDS authentication path size out of
+  bounds"` has to recompute the checksum after patching. That is also the honest threat shape.
+- **`docs/formats/{lms,xmss}-private-key.md` document these encodings byte by byte, with worked
+  hex examples generated from fixed seeds.** A format change means regenerating them - reproduce
+  the example, confirm a known value (the root) still matches so you know the reproduction is
+  exact, then update the hex and every byte count. The XMSS checksum moved four sizes and the
+  whole dump.
+
+## A compatibility retry must not report its own exception
+
+`HSSPrivateKeyParameters.getInstance(byte[])` retries a failed parse as a pre-HSS single LMS key,
+and reported *that* retry's failure. So every new field check on the HSS path surfaced as
+`"expected version 0 lms private key"` - the checks looked absent through the byte-array entry
+point, which is the one the JCA uses. Keep the original exception and throw it when the retry
+fails too; the fallback is for encodings that predate the format, not a reason to lose the reason.
+Whenever a decoder has a `catch` that tries a second interpretation, check which exception escapes.
+
+## `Signature.setParameter()` takes the context on either side of init
+
+`engineSetParameter` is declared `throws InvalidAlgorithmParameterException`, so it must not let an
+unchecked exception out — and the way it does is always the same: applying a context means
+re-initialising the signer with the key the object holds, and before `initSign` / `initVerify`
+there is no key. The base engines were fixed for github #2396
+(`BaseDeterministicOrRandomSignature.setContext`: record the context, clear `engineParams`,
+re-initialise **only** `if (keyParams != null)`), and the composite ML-DSA SPI — a separate class
+that never extended them — repeated the defect verbatim for github #2412. So when an SPI carries
+its **own** `engineSetParameter` rather than inheriting one, check it against that shape; a whole
+family can fail identically because they share one parent (37 composite services here).
+
+Three things travel with that guard, and the first two are easy to miss because nothing fails
+loudly:
+
+- **Clear the cached `AlgorithmParameters`.** `engineGetParameters()` builds it lazily and keeps
+  it, so a context set after it has been asked for once goes on being reported as the old one.
+  Assert the `set` / `get` / `set` / `get` sequence — a test that only asks *after* the second set
+  never populates the cache and cannot see this.
+- **Don't mutate and then throw in the same branch.** The composite's fall-through
+  `SpecUtil.getContextFrom` branch applied the context it extracted and then fell into an
+  unconditional `throw new InvalidAlgorithmParameterException("unknown parameterSpec…")`, so a
+  caller that took the exception at its word went on signing with a context it believed unset. The
+  base shape — `if (context != null) { setContext(…); } else { throw …; }` — is what makes the two
+  outcomes exclusive.
+- **Anything else the spec sets before the algorithm is known has to be recorded too.** For the
+  generic `COMPOSITE` service the algorithm arrives with the key, so a `CompositeSignatureSpec` set
+  first dereferenced the absent digest; the pre-hash choice is now held in a field and applied at
+  init alongside the context.
+
+The measurement that finds all of this is one loop over every registered service in the family:
+`getInstance(name)` then `setParameter(new ContextParameterSpec(…))` with no init, counting
+unchecked throws. It is a dozen lines and it is what turned "one code path" into "36 of 36".
+
 ## System / security property constants
 
 Any system or security property that controls BC behaviour belongs in `core/src/main/java/org/bouncycastle/util/Properties.java` as a `public static final String`, e.g. `Properties.PKCS12_MAX_IT_COUNT`, `Properties.PKCS12_IGNORE_USELESS_PASSWD`, `Properties.EMULATE_ORACLE`. Callers should reference the constant rather than inlining the literal `"org.bouncycastle.…"` name — both in production code and in tests that flip the property via `System.setProperty`. New properties should be added to `Properties` with the same naming pattern (`org.bouncycastle.<area>.<flag>`).
@@ -240,7 +350,7 @@ a probe rather than by reading — a two-minute check saved shipping a redundant
 
 ## Release notes
 
-Defects fixed and additional features go into `docs/releasenotes.html` under the **current** unreleased version block (e.g. section 2.1 with header "Release: 1.85"). Each entry is a single `<li>...</li>` referencing the GitHub issue number where applicable. The file is hand-edited HTML; preserve the existing prose style and `<ul>` structure.
+Defects fixed and additional features go into `docs/releasenotes.md` under the **current** unreleased version block (e.g. section 2.1 with header "Release: 1.85"). Each entry is a single `-` bullet on one line, referencing the GitHub issue number where applicable. The file is hand-edited GitHub-flavoured markdown; preserve the existing prose style and list structure, and keep one entry per line — the entries are long, and one-line-per-entry is what keeps release-branch merges of this file tractable. The per-version `<a id="r1rvNN"></a>` anchors above the version headings are deep-link targets, carried over from the HTML so an old `releasenotes.html#r1rv86` link needs only its extension changed, and are deliberately raw HTML rather than relying on GFM's generated heading slugs: the section numbers renumber every cycle (the newest release is always 2.1.x, so 1.86's `#211-version` becomes 1.87's when that cycle opens), whereas `#r1rv86` keeps naming 1.86. Opening a new version block means adding the next `<a id="r1rv<NN>"></a>`.
 
 A CVE-bearing fix appears **twice** in its release's block: once as the "Defects Fixed" entry describing what was wrong, and once in the "Security Advisories" `<ul>` (`Release <ver> deals with the following CVEs:`) as `<li>CVE-YYYY-NNNNN - <one-line summary>.</li>`, kept in ascending CVE-number order. **Cross-reference the two**: close the Defects Fixed entry with a trailing `(CVE-YYYY-NNNNN)` before the `</li>` so a reader of the defect list can find the advisory, and vice versa. Historically the two lists were left unlinked; the 1.78 block was brought into line retroactively in `b1e21a374d` and is the worked example of the finished shape — all five of its advisory CVEs now carry a cross-reference in both directions. Do the same for new entries from now on. If an advisory has no matching Defects Fixed entry at all, that is a gap to fill rather than a case for skipping the cross-reference: 1.78 was missing entries for both CVE-2024-14041 (KyberSlash) and CVE-2024-29857 (crafted F2m EC parameters), and the fix is to write the defect entry from what the commits actually changed — for CVE-2024-29857, the `m` bound added to `ECCurve.F2m.buildField` in `efc498ca4c` / `fee80dd230` — not to paraphrase the advisory line.
 
@@ -253,7 +363,7 @@ Changing the BC version (opening a dev cycle, cutting a release) is a fixed, mul
 - The JCE providers — the `info` string (`"...Security Provider v<ver>[-SNAPSHOT]"`) and the `super(PROVIDER_NAME, 1.<yy>99, info)` version double, in **every** copy: `prov/src/main/java/.../jce/provider/BouncyCastleProvider.java`, `prov/src/main/jdk1.1/.../BouncyCastleProvider.java`, `prov/src/main/jdk1.4/.../BouncyCastleProvider.java`, and `prov/src/main/java/.../pqc/jcajce/provider/BouncyCastlePQCProvider.java`. The dev-cycle double is `1.<prev>99` (e.g. `1.8599` while developing 1.86) and the `info`/label use `<next>-SNAPSHOT`; historically `v<ver>b` was standardised to `v<ver>-SNAPSHOT` mid-cycle (see git of `b7eaf8f5ad` / `c93b376083`).
 - **The OpenPGP ASCII-armor version stamp** — `ArmoredOutputStream.DEFAULT_VERSION` (`public static final String DEFAULT_VERSION = "BCPG v<ver>"`, written as the `Version:` header of every armored PGP output), in both `pg/src/main/java/org/bouncycastle/bcpg/ArmoredOutputStream.java` **and** its legacy overlay `pg/src/main/jdk1.4/org/bouncycastle/bcpg/ArmoredOutputStream.java`. This lives in `pg`, away from the provider/build files, so it is the one most often forgotten. The pg tests that assert on the emitted armor `Version:` header (`BCPGOutputStreamTest`, `ArmoredInputStreamTest`, `PGPArmoredTest`, `ECDSAKeyPairTest`, `PGPv6SignatureTest`) then need updating in lockstep.
 
-## `CONTRIBUTORS.html` is for contributed code, not for reporting a bug
+## `CONTRIBUTORS.md` is for contributed code, not for reporting a bug
 
 An entry is normally added when someone **opened a PR or otherwise supplied code** — including when
 their patch was reworked or discarded, in which case the entry says "initial implementation of ...".
@@ -271,11 +381,23 @@ it names the area swept and what the sweep led to, not the individual bugs, and 
 the existing entry**. Still don't add one unprompted — wait for dgh to ask.
 
 When an entry is warranted it goes at the end of the list in the house form
-`<li>name-or-handle &lt;email-or-github-url&gt; - what they contributed (PR #NNNN).</li>`; a bare
+`- name-or-handle \<email-or-github-url\> - what they contributed (PR #NNNN).`; a bare
 GitHub handle with `https://github.com/<handle>` in place of an email is well established. When a
 contributor appears more than once, **append to their existing entry** rather than adding a second
-`<li>` (see `rootvector2`). Cite the source the work came from — everything historic says
+bullet (see `rootvector2`). Cite the source the work came from — everything historic says
 `(PR #NNNN)`, so a contribution that arrived on an issue rather than a pull request is `(issue #NNNN)`.
+
+Two things about the markdown form, both of which the file's 340-odd existing entries follow:
+
+- **The `@` of an email address is written `&#064;`, never literally.** That is anti-harvesting
+  obfuscation inherited from the HTML — GFM passes the entity through to the renderer, so the page
+  shows `@` while the raw file contains none. A handful of entries had been added with a plain `@`
+  before the conversion and were folded into the same form; keep it that way, and grep for a stray
+  literal `@` before committing an addition.
+- **The angle brackets around the address are escaped**, `\<...\>`. Unescaped, GFM would read
+  `<name@example.com>` as an autolink and emit a `mailto:` — which both defeats the obfuscation and
+  differs from every other entry. A bare URL inside the brackets does get auto-linked, which is
+  fine and matches what GitHub does with any bare URL.
 
 ## Commit messages
 
@@ -283,7 +405,7 @@ Existing convention: a short imperative sentence ending with `relates to github 
 
 ## URLs in source, docs, and Javadoc must be checked before they ship
 
-Any URL you add to a source file, Javadoc, `releasenotes.html`, `README.md`, or any other tracked document has to actually resolve to the page you're citing — and the page has to still say what you're citing it for. Hallucinated paths, rotted spec URLs, and "I made up an OID page on iana.org" all read identically when reviewed by eye; the only way to catch them is to fetch the URL and confirm. The model fetches I have available are good enough to do this — use them, before committing.
+Any URL you add to a source file, Javadoc, `releasenotes.md`, `README.md`, or any other tracked document has to actually resolve to the page you're citing — and the page has to still say what you're citing it for. Hallucinated paths, rotted spec URLs, and "I made up an OID page on iana.org" all read identically when reviewed by eye; the only way to catch them is to fetch the URL and confirm. The model fetches I have available are good enough to do this — use them, before committing.
 
 Two non-obvious failure modes worth pre-empting:
 - **The URL works but the cited section number is wrong.** When citing "RFC 5280 sec. 4.2.1.12" or "RFC 9162 sec. 7.1", confirm the linked section actually contains the wording you're paraphrasing. RFC errata, RFC obsoletions, and section-number drift in IETF drafts all surface here.

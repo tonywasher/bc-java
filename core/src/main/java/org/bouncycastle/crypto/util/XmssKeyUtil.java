@@ -294,7 +294,7 @@ class XmssKeyUtil
 
                 if (xmssPrivateKey.getBdsState() != null)
                 {
-                    BDS bds = (BDS)XMSSUtil.deserialize(xmssPrivateKey.getBdsState(), BDS.class);
+                    BDS bds = (BDS)XMSSUtil.deserialize(xmssPrivateKey.getBdsState(), BDS.class, xmssPrivateKey.getPublicSeed());
                     keyBuilder.withBDSState(bds.withWOTSDigest(treeDigest));
                 }
 
@@ -329,7 +329,7 @@ class XmssKeyUtil
 
                 if (xmssMtPrivateKey.getBdsState() != null)
                 {
-                    BDSStateMap bdsState = (BDSStateMap)XMSSUtil.deserialize(xmssMtPrivateKey.getBdsState(), BDSStateMap.class);
+                    BDSStateMap bdsState = (BDSStateMap)XMSSUtil.deserialize(xmssMtPrivateKey.getBdsState(), BDSStateMap.class, xmssMtPrivateKey.getPublicSeed());
                     keyBuilder.withBDSState(bdsState.withWOTSDigest(treeDigest));
                 }
 
@@ -483,7 +483,7 @@ class XmssKeyUtil
         BDS bds;
         try
         {
-            bds = (BDS)XMSSUtil.deserialize(bdsStateBinary, BDS.class);
+            bds = (BDS)XMSSUtil.deserialize(bdsStateBinary, BDS.class, publicSeed);
         }
         catch (ClassNotFoundException e)
         {
@@ -531,7 +531,7 @@ class XmssKeyUtil
         BDSStateMap bds;
         try
         {
-            bds = (BDSStateMap)XMSSUtil.deserialize(bdsStateBinary, BDSStateMap.class);
+            bds = (BDSStateMap)XMSSUtil.deserialize(bdsStateBinary, BDSStateMap.class, publicSeed);
         }
         catch (ClassNotFoundException e)
         {

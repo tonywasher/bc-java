@@ -15,6 +15,7 @@ import org.bouncycastle.crypto.signers.LMSContextBasedSigner;
 import org.bouncycastle.crypto.signers.lms.LMSContext;
 import org.bouncycastle.crypto.signers.lms.LMSEngine;
 import org.bouncycastle.crypto.signers.lms.LMSSignature;
+import org.bouncycastle.util.Exceptions;
 import org.bouncycastle.util.io.Streams;
 
 public class HSSPrivateKeyParameters
@@ -81,9 +82,65 @@ public class HSSPrivateKeyParameters
     {
         HSSPrivateKeyParameters pKey = getInstance(privEnc);
 
-        pKey.publicKey = HSSPublicKeyParameters.getInstance(pubEnc);
+        HSSPublicKeyParameters pubKey = HSSPublicKeyParameters.getInstance(pubEnc);
+
+        // The public key that arrived alongside the private one is authoritative, so where the root
+        // tree already carries its root node in the cache it costs nothing to confirm the two agree.
+        // That catches a tree cache which is internally consistent but belongs to a different key -
+        // the one corruption the node-by-node check in LMSPrivateKeyParameters cannot see. It is
+        // deliberately skipped when the root is not cached: recomputing it there means rebuilding the
+        // whole tree, which is the work the cache exists to avoid (github #2414).
+        byte[] cachedRoot = pKey.getRootKey().peekRootT();
+
+        if (cachedRoot != null && !org.bouncycastle.util.Arrays.areEqual(
+                cachedRoot, pubKey.getLMSPublicKey().getT1()))
+        {
+            throw new IOException("HSS private key tree cache does not match the public key");
+        }
+
+        pKey.publicKey = pubKey;
 
         return pKey;
+    }
+
+    /**
+     * The HSS index and the component keys' one-time indices are two records of the same position in
+     * the key, and a decoded key whose records disagree is refused. RFC 8554 sec. 1 requires each
+     * one-time key to be used once; a stored key whose index has been rolled back while its
+     * component keys stayed advanced - a partial write, a restore from backup, a buggy storage layer
+     * - would otherwise sign a second message under a one-time key already used, and that signature
+     * would verify, so nothing would surface it. The check is the identity the two records satisfy:
+     * a level below the last contributes (q - 1) leaves of the levels beneath it, because its q has
+     * already advanced past the subtree it signed, and the last level contributes its q directly.
+     * Verified against every index of a two-level key and across a level boundary of a three-level
+     * one (github #2414).
+     * <p>
+     * Applied at decode only. The constructor is also reached from the hierarchy update, which
+     * rebuilds lower levels and is momentarily inconsistent by design; corrupt stored state can only
+     * arrive here.
+     */
+    private static void checkIndexAgainstKeys(int d, List keys, long index)
+        throws IOException
+    {
+        long implied = ((LMSPrivateKeyParameters)keys.get(d - 1)).getIndex();
+        int shift = 0;
+
+        for (int i = d - 2; i >= 0; i--)
+        {
+            shift += ((LMSPrivateKeyParameters)keys.get(i + 1)).getSigParameters().getH();
+            if (shift >= 63)
+            {
+                // taller than the 64-bit index can address, so the two records cannot be compared
+                return;
+            }
+            implied += (((long)((LMSPrivateKeyParameters)keys.get(i)).getIndex()) - 1L) << shift;
+        }
+
+        if (implied != index)
+        {
+            throw new IOException("HSS private key index " + index
+                + " does not match the component key indices, which imply " + implied);
+        }
     }
 
     public static HSSPrivateKeyParameters getInstance(Object src)
@@ -101,8 +158,17 @@ public class HSSPrivateKeyParameters
                 throw new IllegalStateException("unknown version for hss private key");
             }
             int d = ((DataInputStream)src).readInt();
+            if (d < 1 || d > 8)    // RFC 8554, Section 6.
+            {
+                throw new IOException("d value of HSS private key out of range: " + d);
+            }
             long index = ((DataInputStream)src).readLong();
             long maxIndex = ((DataInputStream)src).readLong();
+            if (index < 0 || maxIndex < 0 || index > maxIndex)
+            {
+                throw new IOException(
+                    "HSS private key index out of range: index=" + index + " maxIndex=" + maxIndex);
+            }
             boolean limited = ((DataInputStream)src).readBoolean();
 
             ArrayList<LMSPrivateKeyParameters> keys = new ArrayList<LMSPrivateKeyParameters>();
@@ -123,6 +189,8 @@ public class HSSPrivateKeyParameters
                 signatures.add(LMSSignature.getInstance(src));
             }
 
+            checkIndexAgainstKeys(d, keys, index);
+
             return new HSSPrivateKeyParameters(d, keys, signatures, index, maxIndex, limited);
         }
         else if (src instanceof byte[])
@@ -131,15 +199,43 @@ public class HSSPrivateKeyParameters
             try // 1.5 / 1.6 compatibility
             {
                 in = new DataInputStream(new ByteArrayInputStream((byte[])src));
+
+                Exception hssFailure;
+
                 try
                 {
                     return getInstance(in);
                 }
                 catch (Exception e)
                 {
+                    hssFailure = e;
+                }
+
+                try
+                {
                     // old style single LMS key.
                     LMSPrivateKeyParameters lmsKey = LMSPrivateKeyParameters.getInstance(src);
                     return new HSSPrivateKeyParameters(lmsKey, lmsKey.getIndex(), lmsKey.getIndexLimit());
+                }
+                catch (Exception e)
+                {
+                    //
+                    // Neither shape parsed. The retry as a single LMS key is a compatibility path for
+                    // encodings that predate HSS, so when it fails too the HSS failure is the one worth
+                    // reporting - it is what the field checks raise - rather than the retry complaining
+                    // about a version field it was never going to match. Reporting the retry's exception
+                    // masked the real reason a key was rejected, which is how the field checks below
+                    // looked absent through this entry point (github #2414).
+                    //
+                    if (hssFailure instanceof RuntimeException)
+                    {
+                        throw (RuntimeException)hssFailure;
+                    }
+                    if (hssFailure instanceof IOException)
+                    {
+                        throw (IOException)hssFailure;
+                    }
+                    throw Exceptions.ioException(hssFailure.getMessage(), hssFailure);
                 }
             }
             finally
@@ -436,7 +532,9 @@ public class HSSPrivateKeyParameters
             int L = l;
             int d = L;
             List<LMSPrivateKeyParameters> prv = keys;
-            while (prv.get(d - 1).getIndex() == 1 << (prv.get(d - 1).getSigParameters().getH()))
+            // >= rather than ==: an index above 2^h steps straight over an equality test
+            // (github #2414). Decode now rejects such a q, so this is belt and braces.
+            while (prv.get(d - 1).getIndex() >= 1 << (prv.get(d - 1).getSigParameters().getH()))
             {
                 d = d - 1;
                 if (d == 0)
