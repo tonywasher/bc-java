@@ -2,6 +2,7 @@ package org.bouncycastle.pqc.crypto.xmss;
 
 import org.bouncycastle.crypto.CipherParameters;
 import org.bouncycastle.crypto.params.AsymmetricKeyParameter;
+import org.bouncycastle.crypto.params.ParametersWithRandom;
 import org.bouncycastle.pqc.crypto.StateAwareMessageSigner;
 import org.bouncycastle.util.Arrays;
 
@@ -30,7 +31,19 @@ public class XMSSMTSigner
         {
             initSign = true;
             hasGenerated = false;
-            privateKey = (XMSSMTPrivateKeyParameters)param;
+            // the randomizer is derived from the key itself - r = PRF(SK_PRF, toByte(idx, 32)),
+            // RFC 8391 sec. 4.2.7 - so a SecureRandom supplied here has nothing to drive and is
+            // discarded, the way SPHINCS256Signer discards it. Accepting the wrapper is what
+            // matters: XMSSMTSignatureSpi.engineInitSign(PrivateKey, SecureRandom) wraps the key
+            // whenever a random is supplied, so initSign(key, random) used to fail on the cast.
+            if (param instanceof ParametersWithRandom)
+            {
+                privateKey = (XMSSMTPrivateKeyParameters)((ParametersWithRandom)param).getParameters();
+            }
+            else
+            {
+                privateKey = (XMSSMTPrivateKeyParameters)param;
+            }
 
             params = privateKey.getParameters();
             xmssParams = params.getXMSSParameters();

@@ -420,6 +420,52 @@ public class XMSSMTTest
         assertEquals(XMSSMTParameterSpec.SHA512, pubKey.getTreeDigest());
     }
 
+    /**
+     * initSign(PrivateKey, SecureRandom) is the two-argument JCA form, and it is the one that goes
+     * through XMSSMTSignatureSpi.engineInitSign(PrivateKey, SecureRandom): that wraps the key in a
+     * ParametersWithRandom before handing it to the signer. XMSS derives its randomizer from the
+     * key itself (RFC 8391 sec. 4.2.7), so the supplied SecureRandom is discarded - but the wrapper
+     * still has to be accepted, and used to raise a ClassCastException out of initSign. Every
+     * other test here uses the one-argument form, which does not wrap.
+     */
+    public void testInitSignWithSecureRandom()
+        throws Exception
+    {
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("XMSSMT", "BCPQC");
+
+        kpg.initialize(new XMSSMTParameterSpec(20, 10, XMSSMTParameterSpec.SHA256), new SecureRandom());
+
+        KeyPair kp = kpg.generateKeyPair();
+
+        Signature sig = Signature.getInstance("XMSSMT", "BCPQC");
+
+        sig.initSign(kp.getPrivate(), new SecureRandom());
+
+        sig.update(msg, 0, msg.length);
+
+        byte[] s = sig.sign();
+
+        sig.initVerify(kp.getPublic());
+
+        sig.update(msg, 0, msg.length);
+
+        assertTrue(sig.verify(s));
+
+        // the SPI keeps the random it was given, so a later one-argument init still wraps: check
+        // the second, sticky path too
+        sig.initSign(kp.getPrivate());
+
+        sig.update(msg, 0, msg.length);
+
+        byte[] s2 = sig.sign();
+
+        sig.initVerify(kp.getPublic());
+
+        sig.update(msg, 0, msg.length);
+
+        assertTrue(sig.verify(s2));
+    }
+
     public void testXMSSMTSha256Signature()
         throws Exception
     {

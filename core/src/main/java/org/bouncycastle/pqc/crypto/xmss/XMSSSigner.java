@@ -2,6 +2,7 @@ package org.bouncycastle.pqc.crypto.xmss;
 
 import org.bouncycastle.crypto.CipherParameters;
 import org.bouncycastle.crypto.params.AsymmetricKeyParameter;
+import org.bouncycastle.crypto.params.ParametersWithRandom;
 import org.bouncycastle.pqc.crypto.ExhaustedPrivateKeyException;
 import org.bouncycastle.pqc.crypto.StateAwareMessageSigner;
 import org.bouncycastle.util.Arrays;
@@ -28,7 +29,19 @@ public class XMSSSigner
         {
             initSign = true;
             hasGenerated = false;
-            privateKey = (XMSSPrivateKeyParameters)param;
+            // the randomizer is derived from the key itself - r = PRF(SK_PRF, toByte(idx, 32)),
+            // RFC 8391 sec. 4.1.9 - so a SecureRandom supplied here has nothing to drive and is
+            // discarded, the way SPHINCS256Signer discards it. Accepting the wrapper is what
+            // matters: XMSSSignatureSpi.engineInitSign(PrivateKey, SecureRandom) wraps the key
+            // whenever a random is supplied, so initSign(key, random) used to fail on the cast.
+            if (param instanceof ParametersWithRandom)
+            {
+                privateKey = (XMSSPrivateKeyParameters)((ParametersWithRandom)param).getParameters();
+            }
+            else
+            {
+                privateKey = (XMSSPrivateKeyParameters)param;
+            }
             params = privateKey.getParameters();
             // the public key from a previous verification init must not stay behind, or this signer
             // still verifies against it. The private key is deliberately NOT cleared on a

@@ -9,6 +9,7 @@ import org.bouncycastle.crypto.Digest;
 import org.bouncycastle.crypto.digests.SHA256Digest;
 import org.bouncycastle.crypto.digests.SHA512Digest;
 import org.bouncycastle.crypto.digests.SHAKEDigest;
+import org.bouncycastle.crypto.params.ParametersWithRandom;
 import org.bouncycastle.crypto.util.PrivateKeyFactory;
 import org.bouncycastle.crypto.util.PrivateKeyInfoFactory;
 import org.bouncycastle.crypto.util.PublicKeyFactory;
@@ -115,6 +116,95 @@ public class XMSSPromotionCompatibilityTest
         verifier.init(false, kp.getPublic());
         verifier.update(MESSAGE, 0, MESSAGE.length);
         assertTrue("second streamed verification failed", verifier.verifySignature(streamed));
+    }
+
+    /**
+     * The JCA layer wraps the private key in a ParametersWithRandom whenever a SecureRandom is
+     * supplied - XMSSSignatureSpi.engineInitSign(PrivateKey, SecureRandom) does - so all four
+     * signers have to accept the wrapper. XMSS derives its randomizer from the key
+     * (r = PRF(SK_PRF, toByte(idx, 32)), RFC 8391 sec. 4.1.9 / 4.2.7), so the supplied random has
+     * nothing to drive: the signature must come out byte-identical to the one signed without the
+     * wrapper, which is what says the random was discarded rather than mixed in.
+     */
+    public void testParametersWithRandomAcceptedForSigning()
+        throws Exception
+    {
+        // a random that would be impossible to miss had any of it reached the signature
+        SecureRandom random = new FixedSecureRandom(
+            new FixedSecureRandom.Source[]{ new FixedSecureRandom.Data(new byte[256]) });
+
+        org.bouncycastle.crypto.params.XMSSParameters newParams = newXmssParams(4, 0);
+        org.bouncycastle.crypto.params.XMSSMTParameters newMtParams = newXmssMtParams(4, 2, 0);
+        org.bouncycastle.pqc.crypto.xmss.XMSSParameters oldParams = oldXmssParams(4, 0);
+        org.bouncycastle.pqc.crypto.xmss.XMSSMTParameters oldMtParams = oldXmssMtParams(4, 2, 0);
+
+        byte[] seed = seedFor(31);
+
+        org.bouncycastle.crypto.signers.XMSSSigner newSigner = new org.bouncycastle.crypto.signers.XMSSSigner();
+        newSigner.init(true, new ParametersWithRandom(newXmssKey(newParams, seed).getPrivate(), random));
+        newSigner.update(MESSAGE, 0, MESSAGE.length);
+        byte[] wrapped = newSigner.generateSignature();
+
+        org.bouncycastle.crypto.signers.XMSSSigner plainSigner = new org.bouncycastle.crypto.signers.XMSSSigner();
+        plainSigner.init(true, newXmssKey(newParams, seed).getPrivate());
+        plainSigner.update(MESSAGE, 0, MESSAGE.length);
+        assertTrue("XMSS: ParametersWithRandom changed the signature",
+            Arrays.areEqual(wrapped, plainSigner.generateSignature()));
+
+        org.bouncycastle.pqc.crypto.xmss.XMSSSigner oldSigner = new org.bouncycastle.pqc.crypto.xmss.XMSSSigner();
+        oldSigner.init(true, new ParametersWithRandom(oldXmssKey(oldParams, seed).getPrivate(), random));
+        assertTrue("XMSS: deprecated signer disagreed under ParametersWithRandom",
+            Arrays.areEqual(wrapped, oldSigner.generateSignature(MESSAGE)));
+
+        byte[] mtSeed = seedFor(32);
+
+        org.bouncycastle.crypto.signers.XMSSMTSigner newMtSigner = new org.bouncycastle.crypto.signers.XMSSMTSigner();
+        newMtSigner.init(true, new ParametersWithRandom(newXmssMtKey(newMtParams, mtSeed).getPrivate(), random));
+        newMtSigner.update(MESSAGE, 0, MESSAGE.length);
+        byte[] mtWrapped = newMtSigner.generateSignature();
+
+        org.bouncycastle.crypto.signers.XMSSMTSigner plainMtSigner = new org.bouncycastle.crypto.signers.XMSSMTSigner();
+        plainMtSigner.init(true, newXmssMtKey(newMtParams, mtSeed).getPrivate());
+        plainMtSigner.update(MESSAGE, 0, MESSAGE.length);
+        assertTrue("XMSS^MT: ParametersWithRandom changed the signature",
+            Arrays.areEqual(mtWrapped, plainMtSigner.generateSignature()));
+
+        org.bouncycastle.pqc.crypto.xmss.XMSSMTSigner oldMtSigner = new org.bouncycastle.pqc.crypto.xmss.XMSSMTSigner();
+        oldMtSigner.init(true, new ParametersWithRandom(oldXmssMtKey(oldMtParams, mtSeed).getPrivate(), random));
+        assertTrue("XMSS^MT: deprecated signer disagreed under ParametersWithRandom",
+            Arrays.areEqual(mtWrapped, oldMtSigner.generateSignature(MESSAGE)));
+    }
+
+    private static AsymmetricCipherKeyPair newXmssKey(org.bouncycastle.crypto.params.XMSSParameters params, byte[] seed)
+    {
+        org.bouncycastle.crypto.generators.XMSSKeyPairGenerator gen =
+            new org.bouncycastle.crypto.generators.XMSSKeyPairGenerator();
+        gen.init(new org.bouncycastle.crypto.params.XMSSKeyGenerationParameters(params, fixedRandom(seed)));
+        return gen.generateKeyPair();
+    }
+
+    private static AsymmetricCipherKeyPair oldXmssKey(org.bouncycastle.pqc.crypto.xmss.XMSSParameters params, byte[] seed)
+    {
+        org.bouncycastle.pqc.crypto.xmss.XMSSKeyPairGenerator gen =
+            new org.bouncycastle.pqc.crypto.xmss.XMSSKeyPairGenerator();
+        gen.init(new org.bouncycastle.pqc.crypto.xmss.XMSSKeyGenerationParameters(params, fixedRandom(seed)));
+        return gen.generateKeyPair();
+    }
+
+    private static AsymmetricCipherKeyPair newXmssMtKey(org.bouncycastle.crypto.params.XMSSMTParameters params, byte[] seed)
+    {
+        org.bouncycastle.crypto.generators.XMSSMTKeyPairGenerator gen =
+            new org.bouncycastle.crypto.generators.XMSSMTKeyPairGenerator();
+        gen.init(new org.bouncycastle.crypto.params.XMSSMTKeyGenerationParameters(params, fixedRandom(seed)));
+        return gen.generateKeyPair();
+    }
+
+    private static AsymmetricCipherKeyPair oldXmssMtKey(org.bouncycastle.pqc.crypto.xmss.XMSSMTParameters params, byte[] seed)
+    {
+        org.bouncycastle.pqc.crypto.xmss.XMSSMTKeyPairGenerator gen =
+            new org.bouncycastle.pqc.crypto.xmss.XMSSMTKeyPairGenerator();
+        gen.init(new org.bouncycastle.pqc.crypto.xmss.XMSSMTKeyGenerationParameters(params, fixedRandom(seed)));
+        return gen.generateKeyPair();
     }
 
     private void checkXMSS(String label,

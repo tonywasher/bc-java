@@ -23,6 +23,7 @@ public class AllTests
         suite.addTestSuite(KeyParametersBuilderTests.class);
         suite.addTestSuite(ExhaustedKeyTests.class);
         suite.addTestSuite(SignerStateHandoverTests.class);
+        suite.addTestSuite(SignerMessageBufferTests.class);
         suite.addTestSuite(BDSStateSerializationTests.class);
         suite.addTestSuite(CorruptedStateTests.class);
 

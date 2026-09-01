@@ -6,6 +6,7 @@ import org.bouncycastle.crypto.CipherParameters;
 import org.bouncycastle.crypto.ExhaustedPrivateKeyException;
 import org.bouncycastle.crypto.Signer;
 import org.bouncycastle.crypto.params.AsymmetricKeyParameter;
+import org.bouncycastle.crypto.params.ParametersWithRandom;
 import org.bouncycastle.crypto.params.XMSSMTPrivateKeyParameters;
 import org.bouncycastle.crypto.params.XMSSMTPublicKeyParameters;
 import org.bouncycastle.crypto.signers.xmss.XMSSEngine;
@@ -29,7 +30,19 @@ public class XMSSMTSigner
         {
             initSign = true;
             hasGenerated = false;
-            privateKey = (XMSSMTPrivateKeyParameters)param;
+            // the randomizer is derived from the key itself - r = PRF(SK_PRF, toByte(idx, 32)),
+            // RFC 8391 sec. 4.2.7 - so a SecureRandom supplied here has nothing to drive and is
+            // discarded, the way SPHINCS256Signer discards it. Accepting the wrapper is what
+            // matters: XMSSMTSignatureSpi.engineInitSign(PrivateKey, SecureRandom) wraps the key
+            // whenever a random is supplied, so initSign(key, random) used to fail on the cast.
+            if (param instanceof ParametersWithRandom)
+            {
+                privateKey = (XMSSMTPrivateKeyParameters)((ParametersWithRandom)param).getParameters();
+            }
+            else
+            {
+                privateKey = (XMSSMTPrivateKeyParameters)param;
+            }
 
             // the public key from a previous verification init must not stay behind, or this signer
             // still verifies against it. The private key is deliberately NOT cleared on a
@@ -43,6 +56,12 @@ public class XMSSMTSigner
             publicKey = (XMSSMTPublicKeyParameters)param;
 
         }
+
+        // a message absorbed before this call belongs to the operation that has just ended:
+        // carrying it into the new one would sign or verify bytes the caller never presented for
+        // it, and on the signing side would spend a one-time key doing so. Ed25519Signer,
+        // Ed448Signer and DSADigestSigner all reset here for the same reason.
+        reset();
     }
 
     public byte[] generateSignature()
