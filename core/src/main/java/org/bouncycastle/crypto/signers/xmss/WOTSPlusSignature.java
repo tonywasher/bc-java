@@ -3,10 +3,10 @@ package org.bouncycastle.crypto.signers.xmss;
 /**
  * WOTS+ signature.
  */
-public final class WOTSPlusSignature
+final class WOTSPlusSignature
 {
 
-    private byte[][] signature;
+    private final byte[][] signature;
 
     public WOTSPlusSignature(WOTSPlusParameters params, byte[][] signature)
     {

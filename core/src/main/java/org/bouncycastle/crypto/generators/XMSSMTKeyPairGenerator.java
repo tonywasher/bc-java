@@ -7,13 +7,7 @@ import org.bouncycastle.crypto.AsymmetricCipherKeyPairGenerator;
 import org.bouncycastle.crypto.KeyGenerationParameters;
 import org.bouncycastle.crypto.params.XMSSMTKeyGenerationParameters;
 import org.bouncycastle.crypto.params.XMSSMTParameters;
-import org.bouncycastle.crypto.params.XMSSMTPrivateKeyParameters;
-import org.bouncycastle.crypto.params.XMSSMTPublicKeyParameters;
-import org.bouncycastle.crypto.params.XMSSParameters;
-import org.bouncycastle.crypto.signers.xmss.BDS;
-import org.bouncycastle.crypto.signers.xmss.BDSStateMap;
-import org.bouncycastle.crypto.signers.xmss.OTSHashAddress;
-import org.bouncycastle.crypto.signers.xmss.XMSSNode;
+import org.bouncycastle.crypto.signers.xmss.XMSSEngine;
 
 /**
  * Key pair generator for XMSS^MT keys.
@@ -22,10 +16,7 @@ public final class XMSSMTKeyPairGenerator
     implements AsymmetricCipherKeyPairGenerator
 {
     private XMSSMTParameters params;
-    private XMSSParameters xmssParams;
-
     private SecureRandom prng;
-
 
     /**
      * Base constructor...
@@ -39,9 +30,8 @@ public final class XMSSMTKeyPairGenerator
     {
         XMSSMTKeyGenerationParameters parameters = (XMSSMTKeyGenerationParameters)param;
 
-        prng = parameters.getRandom();
+        this.prng = parameters.getRandom();
         this.params = parameters.getParameters();
-        this.xmssParams = params.getXMSSParameters();
     }
 
     /**
@@ -49,51 +39,6 @@ public final class XMSSMTKeyPairGenerator
      */
     public AsymmetricCipherKeyPair generateKeyPair()
     {
-        XMSSMTPrivateKeyParameters privateKey;
-        XMSSMTPublicKeyParameters publicKey;
-
-            /* generate XMSSMT private key */
-        privateKey = generatePrivateKey(new XMSSMTPrivateKeyParameters.Builder(params).build().getBDSState());
-
-            /* import to xmss */
-        xmssParams.getWOTSPlus().importKeys(new byte[params.getTreeDigestSize()], privateKey.getPublicSeed());
-
-            /* get root */
-        int rootLayerIndex = params.getLayers() - 1;
-        OTSHashAddress otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder().withLayerAddress(rootLayerIndex)
-            .build();
-
-                  /* store BDS instance of root xmss instance */
-        BDS bdsRoot = new BDS(xmssParams, privateKey.getPublicSeed(), privateKey.getSecretKeySeed(), otsHashAddress);
-        XMSSNode root = bdsRoot.getRoot();
-        privateKey.getBDSState().put(rootLayerIndex, bdsRoot);
-
-            /* set XMSS^MT root / create public key */
-        privateKey = new XMSSMTPrivateKeyParameters.Builder(params).withSecretKeySeed(privateKey.getSecretKeySeed())
-            .withSecretKeyPRF(privateKey.getSecretKeyPRF()).withPublicSeed(privateKey.getPublicSeed())
-            .withRoot(root.getValue()).withBDSState(privateKey.getBDSState()).build();
-        publicKey = new XMSSMTPublicKeyParameters.Builder(params).withRoot(root.getValue())
-            .withPublicSeed(privateKey.getPublicSeed()).build();
-
-        return new AsymmetricCipherKeyPair(publicKey, privateKey);
-    }
-
-    private XMSSMTPrivateKeyParameters generatePrivateKey(BDSStateMap bdsState)
-    {
-        int n = params.getTreeDigestSize();
-        byte[] secretKeySeed = new byte[n];
-        prng.nextBytes(secretKeySeed);
-        byte[] secretKeyPRF = new byte[n];
-        prng.nextBytes(secretKeyPRF);
-        byte[] publicSeed = new byte[n];
-        prng.nextBytes(publicSeed);
-
-        XMSSMTPrivateKeyParameters privateKey = null;
-
-        privateKey = new XMSSMTPrivateKeyParameters.Builder(params).withSecretKeySeed(secretKeySeed)
-                .withSecretKeyPRF(secretKeyPRF).withPublicSeed(publicSeed)
-                .withBDSState(bdsState).build();
-
-        return privateKey;
+        return XMSSEngine.generateMTKeyPair(params, prng);
     }
 }

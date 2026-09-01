@@ -7,7 +7,7 @@ import java.util.Map;
 /**
  * WOTS+ OID class.
  */
-public final class WOTSPlusOid
+final class WOTSPlusOid
     implements XMSSOid
 {
 

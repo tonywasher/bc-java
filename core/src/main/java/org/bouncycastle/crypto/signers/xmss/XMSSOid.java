@@ -1,6 +1,6 @@
 package org.bouncycastle.crypto.signers.xmss;
 
-public interface XMSSOid
+interface XMSSOid
 {
 
     public int getOid();

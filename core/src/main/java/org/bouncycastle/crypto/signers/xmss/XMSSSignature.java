@@ -9,7 +9,7 @@ import org.bouncycastle.util.Pack;
 /**
  * XMSS Signature.
  */
-public final class XMSSSignature
+final class XMSSSignature
     extends XMSSReducedSignature
     implements Encodable
 {
@@ -77,7 +77,7 @@ public final class XMSSSignature
                 throw new NullPointerException("signature == null");
             }
             int n = params.getTreeDigestSize();
-            int len = params.getWOTSPlus().getParams().getLen();
+            int len = params.getLen();
             int height = params.getHeight();
             int indexSize = 4;
             int randomSize = n;
@@ -118,7 +118,7 @@ public final class XMSSSignature
         int n = getParams().getTreeDigestSize();
         int indexSize = 4;
         int randomSize = n;
-        int signatureSize = getParams().getWOTSPlus().getParams().getLen() * n;
+        int signatureSize = getParams().getLen() * n;
         int authPathSize = getParams().getHeight() * n;
         int totalSize = indexSize + randomSize + signatureSize + authPathSize;
         byte[] out = new byte[totalSize];

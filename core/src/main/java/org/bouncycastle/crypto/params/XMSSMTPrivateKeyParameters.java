@@ -3,7 +3,7 @@ package org.bouncycastle.crypto.params;
 import java.io.IOException;
 
 import org.bouncycastle.crypto.signers.xmss.BDSStateMap;
-import org.bouncycastle.crypto.signers.xmss.XMSSUtil;
+import org.bouncycastle.crypto.signers.xmss.XMSSEngine;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Encodable;
 import org.bouncycastle.util.Exceptions;
@@ -30,10 +30,6 @@ public final class XMSSMTPrivateKeyParameters
         super(true, builder.params.getTreeDigest());
         params = builder.params;
 
-        if (params == null)
-        {
-            throw new NullPointerException("params == null");
-        }
         int n = params.getTreeDigestSize();
         byte[] privateKey = builder.privateKey;
         if (privateKey != null)
@@ -56,28 +52,37 @@ public final class XMSSMTPrivateKeyParameters
             }
             */
             int position = 0;
-            index = XMSSUtil.bytesToXBigEndian(privateKey, position, indexSize);
-            if (!XMSSUtil.isIndexValid(totalHeight, index))
+            index = XMSSEngine.bytesToXBigEndian(privateKey, position, indexSize);
+            if (!XMSSEngine.isStoredIndexValid(totalHeight, index))
             {
                 throw new IllegalArgumentException("index out of bounds");
             }
             position += indexSize;
-            secretKeySeed = XMSSUtil.extractBytesAtOffset(privateKey, position, secretKeySize);
+            secretKeySeed = XMSSEngine.extractBytesAtOffset(privateKey, position, secretKeySize);
             position += secretKeySize;
-            secretKeyPRF = XMSSUtil.extractBytesAtOffset(privateKey, position, secretKeyPRFSize);
+            secretKeyPRF = XMSSEngine.extractBytesAtOffset(privateKey, position, secretKeyPRFSize);
             position += secretKeyPRFSize;
-            publicSeed = XMSSUtil.extractBytesAtOffset(privateKey, position, publicSeedSize);
+            publicSeed = XMSSEngine.extractBytesAtOffset(privateKey, position, publicSeedSize);
             position += publicSeedSize;
-            root = XMSSUtil.extractBytesAtOffset(privateKey, position, rootSize);
+            root = XMSSEngine.extractBytesAtOffset(privateKey, position, rootSize);
             position += rootSize;
             /* import BDS state */
-            byte[] bdsStateBinary = XMSSUtil.extractBytesAtOffset(privateKey, position, privateKey.length - position);
+            byte[] bdsStateBinary = XMSSEngine.extractBytesAtOffset(privateKey, position, privateKey.length - position);
 
             try
             {
-                BDSStateMap bdsImport = (BDSStateMap)XMSSUtil.deserialize(bdsStateBinary, BDSStateMap.class, publicSeed);
+                BDSStateMap bdsImport = XMSSEngine.getBDSStateMapFromEncoding(bdsStateBinary, publicSeed);
 
-                bdsState = bdsImport.withWOTSDigest(builder.xmss.getTreeDigestOID(), builder.xmss.getTreeDigestSize());
+                // the WOTS+ parameters are not part of what was serialized, and the copy the
+                // legacy fixup below makes of each state needs them, so put the digest back first
+                bdsImport = bdsImport.withWOTSDigest(builder.xmss.getTreeDigestOID(), builder.xmss.getTreeDigestSize());
+
+                if (bdsImport.getMaxIndex() < 0)   // check for legacy state maps
+                {
+                    bdsImport = new BDSStateMap(bdsImport, (1L << totalHeight) - 1);
+                }
+
+                bdsState = bdsImport;
                 bdsState.validate(params, index);
                 bdsState.validateRoot(params, root);
             }
@@ -99,57 +104,13 @@ public final class XMSSMTPrivateKeyParameters
             /* set */
             index = builder.index;
             byte[] tmpSecretKeySeed = builder.secretKeySeed;
-            if (tmpSecretKeySeed != null)
-            {
-                if (tmpSecretKeySeed.length != n)
-                {
-                    throw new IllegalArgumentException("size of secretKeySeed needs to be equal size of digest");
-                }
-                secretKeySeed = tmpSecretKeySeed;
-            }
-            else
-            {
-                secretKeySeed = new byte[n];
-            }
+            secretKeySeed = validateOrAllocate(tmpSecretKeySeed, n, "secretKeySeed");
             byte[] tmpSecretKeyPRF = builder.secretKeyPRF;
-            if (tmpSecretKeyPRF != null)
-            {
-                if (tmpSecretKeyPRF.length != n)
-                {
-                    throw new IllegalArgumentException("size of secretKeyPRF needs to be equal size of digest");
-                }
-                secretKeyPRF = tmpSecretKeyPRF;
-            }
-            else
-            {
-                secretKeyPRF = new byte[n];
-            }
+            secretKeyPRF = validateOrAllocate(tmpSecretKeyPRF, n, "secretKeyPRF");
             byte[] tmpPublicSeed = builder.publicSeed;
-            if (tmpPublicSeed != null)
-            {
-                if (tmpPublicSeed.length != n)
-                {
-                    throw new IllegalArgumentException("size of publicSeed needs to be equal size of digest");
-                }
-                publicSeed = tmpPublicSeed;
-            }
-            else
-            {
-                publicSeed = new byte[n];
-            }
+            publicSeed = validateOrAllocate(tmpPublicSeed, n, "publicSeed");
             byte[] tmpRoot = builder.root;
-            if (tmpRoot != null)
-            {
-                if (tmpRoot.length != n)
-                {
-                    throw new IllegalArgumentException("size of root needs to be equal size of digest");
-                }
-                root = tmpRoot;
-            }
-            else
-            {
-                root = new byte[n];
-            }
+            root = validateOrAllocate(tmpRoot, n, "root");
             BDSStateMap tmpBDSState = builder.bdsState;
             if (tmpBDSState != null)
             {
@@ -160,7 +121,7 @@ public final class XMSSMTPrivateKeyParameters
                 long globalIndex = builder.index;
                 int totalHeight = params.getHeight();
 
-                if (XMSSUtil.isIndexValid(totalHeight, globalIndex) && tmpPublicSeed != null && tmpSecretKeySeed != null)
+                if (XMSSEngine.isIndexValid(totalHeight, globalIndex) && tmpPublicSeed != null && tmpSecretKeySeed != null)
                 {
                     bdsState = new BDSStateMap(params, builder.index, tmpPublicSeed, tmpSecretKeySeed);
                 }
@@ -217,6 +178,10 @@ public final class XMSSMTPrivateKeyParameters
         public Builder(XMSSMTParameters params)
         {
             super();
+            if (params == null)
+            {
+                throw new NullPointerException("params == null");
+            }
             this.params = params;
         }
 
@@ -234,31 +199,31 @@ public final class XMSSMTPrivateKeyParameters
 
         public Builder withSecretKeySeed(byte[] val)
         {
-            secretKeySeed = XMSSUtil.cloneArray(val);
+            secretKeySeed = XMSSEngine.cloneArray(val);
             return this;
         }
 
         public Builder withSecretKeyPRF(byte[] val)
         {
-            secretKeyPRF = XMSSUtil.cloneArray(val);
+            secretKeyPRF = XMSSEngine.cloneArray(val);
             return this;
         }
 
         public Builder withPublicSeed(byte[] val)
         {
-            publicSeed = XMSSUtil.cloneArray(val);
+            publicSeed = XMSSEngine.cloneArray(val);
             return this;
         }
 
         public Builder withRoot(byte[] val)
         {
-            root = XMSSUtil.cloneArray(val);
+            root = XMSSEngine.cloneArray(val);
             return this;
         }
 
         public Builder withBDSState(BDSStateMap val)
         {
-            if (val.getMaxIndex() == 0)   // check for legacy state maps
+            if (val.getMaxIndex() < 0)   // check for legacy state maps
             {
                 bdsState = new BDSStateMap(val, (1L << params.getHeight()) - 1);
             }
@@ -271,13 +236,17 @@ public final class XMSSMTPrivateKeyParameters
 
         public Builder withPrivateKey(byte[] privateKeyVal)
         {
-            privateKey = XMSSUtil.cloneArray(privateKeyVal);
+            privateKey = XMSSEngine.cloneArray(privateKeyVal);
             xmss = params.getXMSSParameters();
             return this;
         }
 
         public XMSSMTPrivateKeyParameters build()
         {
+            if (!((privateKey != null) || (publicSeed != null && secretKeySeed != null)))
+            {
+                throw new IllegalStateException("publicSeed or secretKeySeed is null");
+            }
             return new XMSSMTPrivateKeyParameters(this);
         }
     }
@@ -301,24 +270,24 @@ public final class XMSSMTPrivateKeyParameters
             byte[] out = new byte[totalSize];
             int position = 0;
             /* copy index */
-            byte[] indexBytes = XMSSUtil.toBytesBigEndian(index, indexSize);
-            XMSSUtil.copyBytesAtOffset(out, indexBytes, position);
+            byte[] indexBytes = XMSSEngine.toBytesBigEndian(index, indexSize);
+            XMSSEngine.copyBytesAtOffset(out, indexBytes, position);
             position += indexSize;
             /* copy secretKeySeed */
-            XMSSUtil.copyBytesAtOffset(out, secretKeySeed, position);
+            XMSSEngine.copyBytesAtOffset(out, secretKeySeed, position);
             position += secretKeySize;
             /* copy secretKeyPRF */
-            XMSSUtil.copyBytesAtOffset(out, secretKeyPRF, position);
+            XMSSEngine.copyBytesAtOffset(out, secretKeyPRF, position);
             position += secretKeyPRFSize;
             /* copy publicSeed */
-            XMSSUtil.copyBytesAtOffset(out, publicSeed, position);
+            XMSSEngine.copyBytesAtOffset(out, publicSeed, position);
             position += publicSeedSize;
             /* copy root */
-            XMSSUtil.copyBytesAtOffset(out, root, position);
+            XMSSEngine.copyBytesAtOffset(out, root, position);
             /* concatenate bdsState */
             try
             {
-                return Arrays.concatenate(out, XMSSUtil.serialize(bdsState, publicSeed));
+                return Arrays.concatenate(out, XMSSEngine.getEncodedBDSState(bdsState, publicSeed));
             }
             catch (IOException e)
             {
@@ -342,22 +311,22 @@ public final class XMSSMTPrivateKeyParameters
 
     public byte[] getSecretKeySeed()
     {
-        return XMSSUtil.cloneArray(secretKeySeed);
+        return XMSSEngine.cloneArray(secretKeySeed);
     }
 
     public byte[] getSecretKeyPRF()
     {
-        return XMSSUtil.cloneArray(secretKeyPRF);
+        return XMSSEngine.cloneArray(secretKeyPRF);
     }
 
     public byte[] getPublicSeed()
     {
-        return XMSSUtil.cloneArray(publicSeed);
+        return XMSSEngine.cloneArray(publicSeed);
     }
 
     public byte[] getRoot()
     {
-        return XMSSUtil.cloneArray(root);
+        return XMSSEngine.cloneArray(root);
     }
 
     public BDSStateMap getBDSState()

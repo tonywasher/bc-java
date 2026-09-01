@@ -1,6 +1,6 @@
 package org.bouncycastle.crypto.signers.xmss;
 
-public class XMSSNodeUtil
+class XMSSNodeUtil
 {
     /**
      * Compresses a WOTS+ public key to a single n-byte string.
@@ -84,7 +84,7 @@ public class XMSSNodeUtil
         if (address instanceof LTreeAddress)
         {
             LTreeAddress tmpAddress = (LTreeAddress)address;
-            address = (LTreeAddress)new LTreeAddress.Builder().withLayerAddress(tmpAddress.getLayerAddress())
+            address = new LTreeAddress.Builder().withLayerAddress(tmpAddress.getLayerAddress())
                 .withTreeAddress(tmpAddress.getTreeAddress()).withLTreeAddress(tmpAddress.getLTreeAddress())
                 .withTreeHeight(tmpAddress.getTreeHeight()).withTreeIndex(tmpAddress.getTreeIndex())
                 .withKeyAndMask(0).build();
@@ -92,7 +92,7 @@ public class XMSSNodeUtil
         else if (address instanceof HashTreeAddress)
         {
             HashTreeAddress tmpAddress = (HashTreeAddress)address;
-            address = (HashTreeAddress)new HashTreeAddress.Builder().withLayerAddress(tmpAddress.getLayerAddress())
+            address = new HashTreeAddress.Builder().withLayerAddress(tmpAddress.getLayerAddress())
                 .withTreeAddress(tmpAddress.getTreeAddress()).withTreeHeight(tmpAddress.getTreeHeight())
                 .withTreeIndex(tmpAddress.getTreeIndex()).withKeyAndMask(0).build();
         }
@@ -102,7 +102,7 @@ public class XMSSNodeUtil
         if (address instanceof LTreeAddress)
         {
             LTreeAddress tmpAddress = (LTreeAddress)address;
-            address = (LTreeAddress)new LTreeAddress.Builder().withLayerAddress(tmpAddress.getLayerAddress())
+            address = new LTreeAddress.Builder().withLayerAddress(tmpAddress.getLayerAddress())
                 .withTreeAddress(tmpAddress.getTreeAddress()).withLTreeAddress(tmpAddress.getLTreeAddress())
                 .withTreeHeight(tmpAddress.getTreeHeight()).withTreeIndex(tmpAddress.getTreeIndex())
                 .withKeyAndMask(1).build();
@@ -110,7 +110,7 @@ public class XMSSNodeUtil
         else if (address instanceof HashTreeAddress)
         {
             HashTreeAddress tmpAddress = (HashTreeAddress)address;
-            address = (HashTreeAddress)new HashTreeAddress.Builder().withLayerAddress(tmpAddress.getLayerAddress())
+            address = new HashTreeAddress.Builder().withLayerAddress(tmpAddress.getLayerAddress())
                 .withTreeAddress(tmpAddress.getTreeAddress()).withTreeHeight(tmpAddress.getTreeHeight())
                 .withTreeIndex(tmpAddress.getTreeIndex()).withKeyAndMask(1).build();
         }
@@ -120,7 +120,7 @@ public class XMSSNodeUtil
         if (address instanceof LTreeAddress)
         {
             LTreeAddress tmpAddress = (LTreeAddress)address;
-            address = (LTreeAddress)new LTreeAddress.Builder().withLayerAddress(tmpAddress.getLayerAddress())
+            address = new LTreeAddress.Builder().withLayerAddress(tmpAddress.getLayerAddress())
                 .withTreeAddress(tmpAddress.getTreeAddress()).withLTreeAddress(tmpAddress.getLTreeAddress())
                 .withTreeHeight(tmpAddress.getTreeHeight()).withTreeIndex(tmpAddress.getTreeIndex())
                 .withKeyAndMask(2).build();
@@ -128,21 +128,23 @@ public class XMSSNodeUtil
         else if (address instanceof HashTreeAddress)
         {
             HashTreeAddress tmpAddress = (HashTreeAddress)address;
-            address = (HashTreeAddress)new HashTreeAddress.Builder().withLayerAddress(tmpAddress.getLayerAddress())
+            address = new HashTreeAddress.Builder().withLayerAddress(tmpAddress.getLayerAddress())
                 .withTreeAddress(tmpAddress.getTreeAddress()).withTreeHeight(tmpAddress.getTreeHeight())
                 .withTreeIndex(tmpAddress.getTreeIndex()).withKeyAndMask(2).build();
         }
 
         byte[] bitmask1 = wotsPlus.getKhf().PRF(publicSeed, address.toByteArray());
         int n = wotsPlus.getParams().getTreeDigestSize();
+        byte[] leftValue = left.getValue();
+        byte[] rightValue = right.getValue();
         byte[] tmpMask = new byte[2 * n];
         for (int i = 0; i < n; i++)
         {
-            tmpMask[i] = (byte)(left.getValue()[i] ^ bitmask0[i]);
+            tmpMask[i] = (byte)(leftValue[i] ^ bitmask0[i]);
         }
         for (int i = 0; i < n; i++)
         {
-            tmpMask[i + n] = (byte)(right.getValue()[i] ^ bitmask1[i]);
+            tmpMask[i + n] = (byte)(rightValue[i] ^ bitmask1[i]);
         }
         byte[] out = wotsPlus.getKhf().H(key, tmpMask);
         return new XMSSNode(left.getHeight(), out);

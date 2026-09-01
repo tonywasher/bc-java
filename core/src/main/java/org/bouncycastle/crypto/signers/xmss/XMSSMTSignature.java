@@ -11,7 +11,7 @@ import org.bouncycastle.util.Encodable;
 /**
  * XMSS^MT Signature.
  */
-public final class XMSSMTSignature
+final class XMSSMTSignature
     implements Encodable
 {
 
@@ -33,7 +33,7 @@ public final class XMSSMTSignature
         if (signature != null)
         {
             /* import */
-            int len = params.getWOTSPlus().getParams().getLen();
+            int len = params.getLen();
             int indexSize = (int)Math.ceil(params.getHeight() / 8.0);
             int randomSize = n;
             int reducedSignatureSizeSingle = ((params.getHeight() / params.getLayers()) + len) * n;
@@ -149,7 +149,7 @@ public final class XMSSMTSignature
     {
         /* index || random || reduced signatures */
         int n = params.getTreeDigestSize();
-        int len = params.getWOTSPlus().getParams().getLen();
+        int len = params.getLen();
         int indexSize = (int)Math.ceil(params.getHeight() / 8.0);
         int randomSize = n;
         int reducedSignatureSizeSingle = ((params.getHeight() / params.getLayers()) + len) * n;

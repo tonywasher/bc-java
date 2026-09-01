@@ -25,7 +25,7 @@ import org.bouncycastle.crypto.params.XMSSPrivateKeyParameters;
 import org.bouncycastle.crypto.params.XMSSPublicKeyParameters;
 import org.bouncycastle.crypto.signers.xmss.BDS;
 import org.bouncycastle.crypto.signers.xmss.BDSStateMap;
-import org.bouncycastle.crypto.signers.xmss.XMSSUtil;
+import org.bouncycastle.crypto.signers.xmss.XMSSEngine;
 import org.bouncycastle.internal.asn1.isara.IsaraObjectIdentifiers;
 import org.bouncycastle.pqc.asn1.PQCObjectIdentifiers;
 import org.bouncycastle.pqc.asn1.XMSSKeyParams;
@@ -294,7 +294,7 @@ class XmssKeyUtil
 
                 if (xmssPrivateKey.getBdsState() != null)
                 {
-                    BDS bds = (BDS)XMSSUtil.deserialize(xmssPrivateKey.getBdsState(), BDS.class, xmssPrivateKey.getPublicSeed());
+                    BDS bds = XMSSEngine.getBDSFromEncoding(xmssPrivateKey.getBdsState(), xmssPrivateKey.getPublicSeed());
                     keyBuilder.withBDSState(bds.withWOTSDigest(treeDigest));
                 }
 
@@ -329,7 +329,7 @@ class XmssKeyUtil
 
                 if (xmssMtPrivateKey.getBdsState() != null)
                 {
-                    BDSStateMap bdsState = (BDSStateMap)XMSSUtil.deserialize(xmssMtPrivateKey.getBdsState(), BDSStateMap.class, xmssMtPrivateKey.getPublicSeed());
+                    BDSStateMap bdsState = XMSSEngine.getBDSStateMapFromEncoding(xmssMtPrivateKey.getBdsState(), xmssMtPrivateKey.getPublicSeed());
                     keyBuilder.withBDSState(bdsState.withWOTSDigest(treeDigest));
                 }
 
@@ -464,26 +464,26 @@ class XmssKeyUtil
         int rootSize = n;
 
         int position = 0;
-        int index = (int)XMSSUtil.bytesToXBigEndian(keyData, position, indexSize);
-        if (!XMSSUtil.isIndexValid(totalHeight, index))
+        int index = (int)XMSSEngine.bytesToXBigEndian(keyData, position, indexSize);
+        if (!XMSSEngine.isStoredIndexValid(totalHeight, index))
         {
             throw new IllegalArgumentException("index out of bounds");
         }
         position += indexSize;
-        byte[] secretKeySeed = XMSSUtil.extractBytesAtOffset(keyData, position, secretKeySize);
+        byte[] secretKeySeed = XMSSEngine.extractBytesAtOffset(keyData, position, secretKeySize);
         position += secretKeySize;
-        byte[] secretKeyPRF = XMSSUtil.extractBytesAtOffset(keyData, position, secretKeyPRFSize);
+        byte[] secretKeyPRF = XMSSEngine.extractBytesAtOffset(keyData, position, secretKeyPRFSize);
         position += secretKeyPRFSize;
-        byte[] publicSeed = XMSSUtil.extractBytesAtOffset(keyData, position, publicSeedSize);
+        byte[] publicSeed = XMSSEngine.extractBytesAtOffset(keyData, position, publicSeedSize);
         position += publicSeedSize;
-        byte[] root = XMSSUtil.extractBytesAtOffset(keyData, position, rootSize);
+        byte[] root = XMSSEngine.extractBytesAtOffset(keyData, position, rootSize);
         position += rootSize;
         /* import BDS state */
-        byte[] bdsStateBinary = XMSSUtil.extractBytesAtOffset(keyData, position, keyData.length - position);
+        byte[] bdsStateBinary = XMSSEngine.extractBytesAtOffset(keyData, position, keyData.length - position);
         BDS bds;
         try
         {
-            bds = (BDS)XMSSUtil.deserialize(bdsStateBinary, BDS.class, publicSeed);
+            bds = XMSSEngine.getBDSFromEncoding(bdsStateBinary, publicSeed);
         }
         catch (ClassNotFoundException e)
         {
@@ -512,26 +512,26 @@ class XmssKeyUtil
         int rootSize = n;
 
         int position = 0;
-        int index = (int)XMSSUtil.bytesToXBigEndian(keyData, position, indexSize);
-        if (!XMSSUtil.isIndexValid(totalHeight, index))
+        int index = (int)XMSSEngine.bytesToXBigEndian(keyData, position, indexSize);
+        if (!XMSSEngine.isStoredIndexValid(totalHeight, index))
         {
             throw new IllegalArgumentException("index out of bounds");
         }
         position += indexSize;
-        byte[] secretKeySeed = XMSSUtil.extractBytesAtOffset(keyData, position, secretKeySize);
+        byte[] secretKeySeed = XMSSEngine.extractBytesAtOffset(keyData, position, secretKeySize);
         position += secretKeySize;
-        byte[] secretKeyPRF = XMSSUtil.extractBytesAtOffset(keyData, position, secretKeyPRFSize);
+        byte[] secretKeyPRF = XMSSEngine.extractBytesAtOffset(keyData, position, secretKeyPRFSize);
         position += secretKeyPRFSize;
-        byte[] publicSeed = XMSSUtil.extractBytesAtOffset(keyData, position, publicSeedSize);
+        byte[] publicSeed = XMSSEngine.extractBytesAtOffset(keyData, position, publicSeedSize);
         position += publicSeedSize;
-        byte[] root = XMSSUtil.extractBytesAtOffset(keyData, position, rootSize);
+        byte[] root = XMSSEngine.extractBytesAtOffset(keyData, position, rootSize);
         position += rootSize;
         /* import BDS state */
-        byte[] bdsStateBinary = XMSSUtil.extractBytesAtOffset(keyData, position, keyData.length - position);
+        byte[] bdsStateBinary = XMSSEngine.extractBytesAtOffset(keyData, position, keyData.length - position);
         BDSStateMap bds;
         try
         {
-            bds = (BDSStateMap)XMSSUtil.deserialize(bdsStateBinary, BDSStateMap.class, publicSeed);
+            bds = XMSSEngine.getBDSStateMapFromEncoding(bdsStateBinary, publicSeed);
         }
         catch (ClassNotFoundException e)
         {

@@ -7,7 +7,7 @@ import java.util.Map;
 /**
  * XMSSOid^MT class.
  */
-public final class DefaultXMSSMTOid
+final class DefaultXMSSMTOid
     implements XMSSOid
 {
 

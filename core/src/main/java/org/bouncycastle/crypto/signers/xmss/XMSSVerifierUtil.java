@@ -1,6 +1,6 @@
 package org.bouncycastle.crypto.signers.xmss;
 
-public class XMSSVerifierUtil
+class XMSSVerifierUtil
 {
     /**
      * Compute a root node from a tree signature.

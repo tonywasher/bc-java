@@ -27,7 +27,7 @@ import org.bouncycastle.util.Integers;
  * this versioned encoding is a BC private-key implementation detail, not an RFC-defined interchange format.
  * </p>
  */
-public final class BDSStateCodec
+final class BDSStateCodec
 {
     public static final int BDS_STATE_MAGIC = 0x42445300;
     public static final int BDS_STATE_MAP_MAGIC = 0x42444d00;

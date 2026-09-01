@@ -2,7 +2,7 @@ package org.bouncycastle.crypto.params;
 
 import java.io.IOException;
 
-import org.bouncycastle.crypto.signers.xmss.XMSSUtil;
+import org.bouncycastle.crypto.signers.xmss.XMSSEngine;
 import org.bouncycastle.util.Encodable;
 import org.bouncycastle.util.Pack;
 
@@ -22,10 +22,6 @@ public final class XMSSMTPublicKeyParameters
     {
         super(false, builder.params.getTreeDigest());
         params = builder.params;
-        if (params == null)
-        {
-            throw new NullPointerException("params == null");
-        }
         int n = params.getTreeDigestSize();
         byte[] publicKey = builder.publicKey;
         if (publicKey != null)
@@ -39,17 +35,17 @@ public final class XMSSMTPublicKeyParameters
             if (publicKey.length == rootSize + publicSeedSize)
             {
                 oid = 0;
-                root = XMSSUtil.extractBytesAtOffset(publicKey, position, rootSize);
+                root = XMSSEngine.extractBytesAtOffset(publicKey, position, rootSize);
                 position += rootSize;
-                publicSeed = XMSSUtil.extractBytesAtOffset(publicKey, position, publicSeedSize);
+                publicSeed = XMSSEngine.extractBytesAtOffset(publicKey, position, publicSeedSize);
             }
             else if (publicKey.length == oidSize + rootSize + publicSeedSize)
             {
                 oid = Pack.bigEndianToInt(publicKey, 0);
                 position += oidSize;
-                root = XMSSUtil.extractBytesAtOffset(publicKey, position, rootSize);
+                root = XMSSEngine.extractBytesAtOffset(publicKey, position, rootSize);
                 position += rootSize;
-                publicSeed = XMSSUtil.extractBytesAtOffset(publicKey, position, publicSeedSize);
+                publicSeed = XMSSEngine.extractBytesAtOffset(publicKey, position, publicSeedSize);
             }
             else
             {
@@ -59,14 +55,7 @@ public final class XMSSMTPublicKeyParameters
         else
         {
             /* set */
-            if (params.getOid() != null)
-            {
-                this.oid = params.getOid().getOid();
-            }
-            else
-            {
-                this.oid = 0;
-            }
+            this.oid = params.getParameterSetOID();
             byte[] tmpRoot = builder.root;
             if (tmpRoot != null)
             {
@@ -115,24 +104,28 @@ public final class XMSSMTPublicKeyParameters
         public Builder(XMSSMTParameters params)
         {
             super();
+            if (params == null)
+            {
+                throw new NullPointerException("params == null");
+            }
             this.params = params;
         }
 
         public Builder withRoot(byte[] val)
         {
-            root = XMSSUtil.cloneArray(val);
+            root = XMSSEngine.cloneArray(val);
             return this;
         }
 
         public Builder withPublicSeed(byte[] val)
         {
-            publicSeed = XMSSUtil.cloneArray(val);
+            publicSeed = XMSSEngine.cloneArray(val);
             return this;
         }
 
         public Builder withPublicKey(byte[] val)
         {
-            publicKey = XMSSUtil.cloneArray(val);
+            publicKey = XMSSEngine.cloneArray(val);
             return this;
         }
 
@@ -167,21 +160,21 @@ public final class XMSSMTPublicKeyParameters
             out = new byte[rootSize + publicSeedSize];
         }
         /* copy root */
-        XMSSUtil.copyBytesAtOffset(out, root, position);
+        XMSSEngine.copyBytesAtOffset(out, root, position);
         position += rootSize;
         /* copy public seed */
-        XMSSUtil.copyBytesAtOffset(out, publicSeed, position);
+        XMSSEngine.copyBytesAtOffset(out, publicSeed, position);
         return out;
     }
 
     public byte[] getRoot()
     {
-        return XMSSUtil.cloneArray(root);
+        return XMSSEngine.cloneArray(root);
     }
 
     public byte[] getPublicSeed()
     {
-        return XMSSUtil.cloneArray(publicSeed);
+        return XMSSEngine.cloneArray(publicSeed);
     }
 
     public XMSSMTParameters getParameters()

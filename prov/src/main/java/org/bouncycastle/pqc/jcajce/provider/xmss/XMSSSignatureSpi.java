@@ -162,7 +162,18 @@ public class XMSSSignatureSpi
     {
         byte[] hash = DigestUtil.getDigestResult(digest);
 
-        return signer.verifySignature(hash, sigBytes);
+        try
+        {
+            return signer.verifySignature(hash, sigBytes);
+        }
+        catch (Exception e)
+        {
+            if (e instanceof IllegalStateException)
+            {
+                throw new SignatureException(e.getMessage(), e);
+            }
+            throw new SignatureException(e.toString(), e);
+        }
     }
 
     protected void engineSetParameter(AlgorithmParameterSpec params)

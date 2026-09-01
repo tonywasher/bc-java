@@ -5,7 +5,7 @@ import java.io.Serializable;
 /**
  * Binary tree node.
  */
-public final class XMSSNode
+final class XMSSNode
     implements Serializable
 {
     private static final long serialVersionUID = 1L;

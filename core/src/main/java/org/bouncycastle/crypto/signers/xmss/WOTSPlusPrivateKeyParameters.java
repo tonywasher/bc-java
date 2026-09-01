@@ -3,7 +3,7 @@ package org.bouncycastle.crypto.signers.xmss;
 /**
  * WOTS+ private key.
  */
-public final class WOTSPlusPrivateKeyParameters
+final class WOTSPlusPrivateKeyParameters
 {
 
     private final byte[][] privateKey;

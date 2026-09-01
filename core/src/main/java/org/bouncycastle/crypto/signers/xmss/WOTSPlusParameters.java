@@ -6,8 +6,13 @@ import org.bouncycastle.crypto.Digest;
 /**
  * WOTS+ Parameters.
  */
-public final class WOTSPlusParameters
+final class WOTSPlusParameters
 {
+    /**
+     * The Winternitz parameter, fixed at 16 by RFC 8391 sec. 5.
+     */
+    static final int WINTERNITZ_PARAMETER = 16;
+
 
     /**
      * OID.
@@ -62,7 +67,7 @@ public final class WOTSPlusParameters
         }
         this.treeDigest = treeDigest;
         this.digestSize = digestSize;
-        winternitzParameter = 16;
+        winternitzParameter = WINTERNITZ_PARAMETER;
         len1 = (int)Math.ceil((double)(8 * digestSize) / XMSSUtil.log2(winternitzParameter));
         len2 = (int)Math.floor(XMSSUtil.log2(len1 * (winternitzParameter - 1)) / XMSSUtil.log2(winternitzParameter)) + 1;
         len = len1 + len2;

@@ -7,11 +7,7 @@ import org.bouncycastle.crypto.AsymmetricCipherKeyPairGenerator;
 import org.bouncycastle.crypto.KeyGenerationParameters;
 import org.bouncycastle.crypto.params.XMSSKeyGenerationParameters;
 import org.bouncycastle.crypto.params.XMSSParameters;
-import org.bouncycastle.crypto.params.XMSSPrivateKeyParameters;
-import org.bouncycastle.crypto.params.XMSSPublicKeyParameters;
-import org.bouncycastle.crypto.signers.xmss.BDS;
-import org.bouncycastle.crypto.signers.xmss.OTSHashAddress;
-import org.bouncycastle.crypto.signers.xmss.XMSSNode;
+import org.bouncycastle.crypto.signers.xmss.XMSSEngine;
 
 /**
  * Key pair generator for XMSS keys.
@@ -43,40 +39,6 @@ public final class XMSSKeyPairGenerator
      */
     public AsymmetricCipherKeyPair generateKeyPair()
     {
-        /* generate private key */
-        XMSSPrivateKeyParameters privateKey = generatePrivateKey(params, prng);
-        XMSSNode root = privateKey.getBDSState().getRoot();
-
-        privateKey = new XMSSPrivateKeyParameters.Builder(params)
-            .withSecretKeySeed(privateKey.getSecretKeySeed()).withSecretKeyPRF(privateKey.getSecretKeyPRF())
-            .withPublicSeed(privateKey.getPublicSeed()).withRoot(root.getValue())
-            .withBDSState(privateKey.getBDSState()).build();
-
-        XMSSPublicKeyParameters  publicKey = new XMSSPublicKeyParameters.Builder(params).withRoot(root.getValue())
-            .withPublicSeed(privateKey.getPublicSeed()).build();
-
-        return new AsymmetricCipherKeyPair(publicKey, privateKey);
-    }
-
-    /**
-     * Generate an XMSS private key.
-     *
-     * @return XMSS private key.
-     */
-    private XMSSPrivateKeyParameters generatePrivateKey(XMSSParameters params, SecureRandom prng)
-    {
-        int n = params.getTreeDigestSize();
-        byte[] secretKeySeed = new byte[n];
-        prng.nextBytes(secretKeySeed);
-        byte[] secretKeyPRF = new byte[n];
-        prng.nextBytes(secretKeyPRF);
-        byte[] publicSeed = new byte[n];
-        prng.nextBytes(publicSeed);
-
-        XMSSPrivateKeyParameters privateKey = new XMSSPrivateKeyParameters.Builder(params).withSecretKeySeed(secretKeySeed)
-            .withSecretKeyPRF(secretKeyPRF).withPublicSeed(publicSeed)
-            .withBDSState(new BDS(params, publicSeed, secretKeySeed, (OTSHashAddress)new OTSHashAddress.Builder().build())).build();
-
-        return privateKey;
+        return XMSSEngine.generateKeyPair(params, prng);
     }
 }

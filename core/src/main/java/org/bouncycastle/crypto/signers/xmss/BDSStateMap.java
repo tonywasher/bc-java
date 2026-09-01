@@ -12,6 +12,7 @@ import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.crypto.params.XMSSMTParameters;
 import org.bouncycastle.crypto.params.XMSSParameters;
 import org.bouncycastle.util.Integers;
+import org.bouncycastle.util.Pack;
 
 public class BDSStateMap
     implements Serializable
@@ -101,12 +102,12 @@ public class BDSStateMap
         }
     }
 
-    public boolean isEmpty()
+    boolean isEmpty()
     {
         return bdsState.isEmpty();
     }
 
-    public Map<Integer, BDS> getStateMap()
+    Map<Integer, BDS> getStateMap()
     {
         return bdsState;
     }
@@ -138,19 +139,6 @@ public class BDSStateMap
     }
 
     /**
-     * Validate as validate(XMSSMTParameters) and additionally tie each layer's traversal state to
-     * the enclosing private key's index. RFC 8391 sec. 1.1 requires each one-time key to be used
-     * once, and the global index and the per-layer BDS states are two records of the same position,
-     * so a stored key whose index has been rolled back while its state stayed advanced - a partial
-     * write, a restore from backup, a buggy storage layer - is detectable and must be refused: it
-     * would otherwise sign a second message under a one-time key already used, and the signature
-     * would verify. The XMSS side has done this since its own state was tied to its index; this is
-     * the multi-tree counterpart.
-     *
-     * @param params      the parameters of the enclosing key.
-     * @param globalIndex the index the enclosing key declares.
-     */
-    /**
      * Confirm the top layer's root is the one the enclosing private key declares - the top tree's
      * root is the public root. A layer with no state yet is built lazily at signing time and so is
      * not compared (github #2414).
@@ -168,6 +156,19 @@ public class BDSStateMap
         }
     }
 
+    /**
+     * Validate as validate(XMSSMTParameters) and additionally tie each layer's traversal state to
+     * the enclosing private key's index. RFC 8391 sec. 1.1 requires each one-time key to be used
+     * once, and the global index and the per-layer BDS states are two records of the same position,
+     * so a stored key whose index has been rolled back while its state stayed advanced - a partial
+     * write, a restore from backup, a buggy storage layer - is detectable and must be refused: it
+     * would otherwise sign a second message under a one-time key already used, and the signature
+     * would verify. The XMSS side has done this since its own state was tied to its index; this is
+     * the multi-tree counterpart.
+     *
+     * @param params      the parameters of the enclosing key.
+     * @param globalIndex the index the enclosing key declares.
+     */
     public void validate(XMSSMTParameters params, long globalIndex)
     {
         validate(params);
@@ -216,12 +217,12 @@ public class BDSStateMap
         return bdsState.get(Integers.valueOf(index));
     }
 
-    public BDS update(int index, byte[] publicSeed, byte[] secretKeySeed, OTSHashAddress otsHashAddress)
+    BDS update(int index, byte[] publicSeed, byte[] secretKeySeed, OTSHashAddress otsHashAddress)
     {
         return bdsState.put(Integers.valueOf(index), bdsState.get(Integers.valueOf(index)).getNextState(publicSeed, secretKeySeed, otsHashAddress));
     }
 
-    public void put(int index, BDS bds)
+    void put(int index, BDS bds)
     {
         bdsState.put(Integers.valueOf(index), bds);
     }
@@ -251,13 +252,29 @@ public class BDSStateMap
     {
         in.defaultReadObject();
 
-        if (in.available() != 0)
+        // ObjectInputStream.available() is an estimate of what can be read without blocking, not
+        // an end of data test - it answers zero for a stream that cannot supply the next block
+        // header without blocking - so reading a byte is what actually says whether the maximum
+        // index is there: read() returns -1 only at the end of this object's data.
+        int first = in.read();
+
+        if (first < 0)
         {
-            this.maxIndex = in.readLong();
+            // written before the maximum index was recorded. A state map cannot resolve that for
+            // itself, holding no tree height of its own the way BDS does, so it marks it with a
+            // value no state map can really carry and leaves it to XMSSMTPrivateKeyParameters,
+            // which knows the parameter set. Zero, the mark this used to leave, is one a state map
+            // really can carry: it is what a single use key shard taken at index 0 carries.
+            this.maxIndex = -1L;
         }
         else
         {
-            this.maxIndex = 0;
+            byte[] encoded = new byte[8];
+
+            encoded[0] = (byte)first;
+            in.readFully(encoded, 1, encoded.length - 1);
+
+            this.maxIndex = Pack.bigEndianToLong(encoded, 0);
         }
     }
 

@@ -7,10 +7,7 @@ import java.util.Map;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
 import org.bouncycastle.crypto.Digest;
-import org.bouncycastle.crypto.signers.xmss.DefaultXMSSMTOid;
-import org.bouncycastle.crypto.signers.xmss.DigestUtil;
-import org.bouncycastle.crypto.signers.xmss.WOTSPlus;
-import org.bouncycastle.crypto.signers.xmss.XMSSOid;
+import org.bouncycastle.crypto.signers.xmss.XMSSEngine;
 import org.bouncycastle.util.Integers;
 
 /**
@@ -91,7 +88,7 @@ public final class XMSSMTParameters
         paramsLookupTable = Collections.unmodifiableMap(pMap);
     }
 
-    private final XMSSOid oid;
+    private final int parameterSetOID;
     private final XMSSParameters xmssParams;
     private final int height;
     private final int layers;
@@ -105,7 +102,7 @@ public final class XMSSMTParameters
      */
     public XMSSMTParameters(int height, int layers, Digest digest)
     {
-        this(height, layers, DigestUtil.getDigestOID(digest.getAlgorithmName()));
+        this(height, layers, XMSSEngine.getDigestOID(digest.getAlgorithmName()));
     }
 
     /**
@@ -134,7 +131,7 @@ public final class XMSSMTParameters
         this.height = height;
         this.layers = layers;
         this.xmssParams = new XMSSParameters(xmssTreeHeight(height, layers), digestOID, n);
-        oid = DefaultXMSSMTOid.lookup(getTreeDigest(), getTreeDigestSize(), getWinternitzParameter(),
+        parameterSetOID = XMSSEngine.lookupXMSSMTOid(getTreeDigest(), getTreeDigestSize(), getWinternitzParameter(),
             getLen(), getHeight(), layers);
         /*
          * if (oid == null) { throw new InvalidParameterException(); }
@@ -184,11 +181,6 @@ public final class XMSSMTParameters
         return xmssParams;
     }
 
-    public WOTSPlus getWOTSPlus()
-    {
-        return xmssParams.getWOTSPlus();
-    }
-
     public String getTreeDigest()
     {
         return xmssParams.getTreeDigest();
@@ -223,7 +215,7 @@ public final class XMSSMTParameters
      */
     public int getParameterSetOID()
     {
-        return (oid != null) ? oid.getOid() : 0;
+        return parameterSetOID;
     }
 
     /**
@@ -239,11 +231,6 @@ public final class XMSSMTParameters
     public int getLen()
     {
         return xmssParams.getLen();
-    }
-
-    public XMSSOid getOid()
-    {
-        return oid;
     }
 
     public static XMSSMTParameters lookupByOID(int oid)

@@ -13,12 +13,11 @@ import java.util.Set;
 
 import org.bouncycastle.crypto.Digest;
 import org.bouncycastle.util.Arrays;
-import org.bouncycastle.util.encoders.Hex;
 
 /**
  * Utils for XMSS implementation.
  */
-public class XMSSUtil
+class XMSSUtil
 {
 
     /**
@@ -53,29 +52,6 @@ public class XMSSUtil
             value >>>= 8;
         }
         return out;
-    }
-
-    /*
-     * Copy long to byte array in big-endian at specific offset.
-     */
-    public static void longToBigEndian(long value, byte[] in, int offset)
-    {
-        if (in == null)
-        {
-            throw new NullPointerException("in == null");
-        }
-        if ((in.length - offset) < 8)
-        {
-            throw new IllegalArgumentException("not enough space in array");
-        }
-        in[offset] = (byte)((value >> 56) & 0xff);
-        in[offset + 1] = (byte)((value >> 48) & 0xff);
-        in[offset + 2] = (byte)((value >> 40) & 0xff);
-        in[offset + 3] = (byte)((value >> 32) & 0xff);
-        in[offset + 4] = (byte)((value >> 24) & 0xff);
-        in[offset + 5] = (byte)((value >> 16) & 0xff);
-        in[offset + 6] = (byte)((value >> 8) & 0xff);
-        in[offset + 7] = (byte)((value) & 0xff);
     }
 
     /*
@@ -157,25 +133,6 @@ public class XMSSUtil
     }
 
     /**
-     * Dump content of 2d byte array.
-     *
-     * @param x byte array.
-     */
-    public static void dumpByteArray(byte[][] x)
-    {
-        if (hasNullPointer(x))
-        {
-            throw new NullPointerException("x has null pointers");
-        }
-        for (int i = 0; i < x.length; i++)
-        {
-            // -DM Hex.toHexString
-            // -DM System.out.println
-            System.out.println(Hex.toHexString(x[i]));
-        }
-    }
-
-    /**
      * Checks whether 2d byte array has null pointers.
      *
      * @param in 2d byte array.
@@ -222,10 +179,7 @@ public class XMSSUtil
         {
             throw new IllegalArgumentException("src length + offset must not be greater than size of destination");
         }
-        for (int i = 0; i < src.length; i++)
-        {
-            dst[offset + i] = src[i];
-        }
+        System.arraycopy(src, 0, dst, offset, src.length);
     }
 
     /**
@@ -255,10 +209,7 @@ public class XMSSUtil
             throw new IllegalArgumentException("offset + length must not be greater then size of source array");
         }
         byte[] out = new byte[length];
-        for (int i = 0; i < out.length; i++)
-        {
-            out[i] = src[offset + i];
-        }
+        System.arraycopy(src, offset, out, 0, out.length);
         return out;
     }
 

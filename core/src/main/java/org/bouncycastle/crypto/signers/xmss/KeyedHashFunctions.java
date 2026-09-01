@@ -7,7 +7,7 @@ import org.bouncycastle.crypto.Xof;
 /**
  * Crypto functions for XMSS.
  */
-public final class KeyedHashFunctions
+final class KeyedHashFunctions
 {
     private final Digest digest;
     private final int digestSize;

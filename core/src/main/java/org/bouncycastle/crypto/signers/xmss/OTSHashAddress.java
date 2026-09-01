@@ -5,7 +5,7 @@ import org.bouncycastle.util.Pack;
 /**
  * OTS hash address.
  */
-public final class OTSHashAddress
+final class OTSHashAddress
     extends XMSSAddress
 {
 

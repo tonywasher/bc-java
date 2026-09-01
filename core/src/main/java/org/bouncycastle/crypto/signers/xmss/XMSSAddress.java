@@ -5,7 +5,7 @@ import org.bouncycastle.util.Pack;
 /**
  * XMSS address.
  */
-public abstract class XMSSAddress
+abstract class XMSSAddress
 {
 
     private final int layerAddress;

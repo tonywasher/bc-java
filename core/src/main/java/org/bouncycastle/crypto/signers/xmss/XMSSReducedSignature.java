@@ -8,7 +8,7 @@ import java.util.List;
 /**
  * Reduced XMSS Signature.
  */
-public class XMSSReducedSignature
+class XMSSReducedSignature
 {
 
     private final XMSSParameters params;
@@ -24,7 +24,7 @@ public class XMSSReducedSignature
             throw new NullPointerException("params == null");
         }
         int n = params.getTreeDigestSize();
-        int len = params.getWOTSPlus().getParams().getLen();
+        int len = params.getLen();
         int height = params.getHeight();
         byte[] reducedSignature = builder.reducedSignature;
         if (reducedSignature != null)
@@ -44,7 +44,7 @@ public class XMSSReducedSignature
                 wotsPlusSignature[i] = XMSSUtil.extractBytesAtOffset(reducedSignature, position, n);
                 position += n;
             }
-            this.wotsPlusSignature = new WOTSPlusSignature(params.getWOTSPlus().getParams(), wotsPlusSignature);
+            this.wotsPlusSignature = new WOTSPlusSignature(XMSSEngine.newWOTSPlusParameters(params), wotsPlusSignature);
 
             List<XMSSNode> nodeList = new ArrayList<XMSSNode>();
             for (int i = 0; i < height; i++)
@@ -64,7 +64,7 @@ public class XMSSReducedSignature
             }
             else
             {
-                wotsPlusSignature = new WOTSPlusSignature(params.getWOTSPlus().getParams(), new byte[len][n]);
+                wotsPlusSignature = new WOTSPlusSignature(XMSSEngine.newWOTSPlusParameters(params), new byte[len][n]);
             }
             List<XMSSNode> tmpAuthPath = builder.authPath;
             if (tmpAuthPath != null)
@@ -126,7 +126,7 @@ public class XMSSReducedSignature
     {
         /* signature || authentication path */
         int n = params.getTreeDigestSize();
-        int signatureSize = params.getWOTSPlus().getParams().getLen() * n;
+        int signatureSize = params.getLen() * n;
         int authPathSize = params.getHeight() * n;
         int totalSize = signatureSize + authPathSize;
         byte[] out = new byte[totalSize];

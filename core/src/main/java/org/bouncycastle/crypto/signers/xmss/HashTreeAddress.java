@@ -5,7 +5,7 @@ import org.bouncycastle.util.Pack;
 /**
  * Hash tree address.
  */
-public final class HashTreeAddress
+final class HashTreeAddress
     extends XMSSAddress
 {
 

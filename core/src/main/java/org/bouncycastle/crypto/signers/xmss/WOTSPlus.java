@@ -8,7 +8,7 @@ import org.bouncycastle.util.Arrays;
 /**
  * WOTS+.
  */
-public final class WOTSPlus
+final class WOTSPlus
 {
 
     /**

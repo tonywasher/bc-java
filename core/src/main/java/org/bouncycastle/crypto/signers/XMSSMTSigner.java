@@ -3,23 +3,12 @@ package org.bouncycastle.crypto.signers;
 import java.io.ByteArrayOutputStream;
 
 import org.bouncycastle.crypto.CipherParameters;
+import org.bouncycastle.crypto.ExhaustedPrivateKeyException;
 import org.bouncycastle.crypto.Signer;
 import org.bouncycastle.crypto.params.AsymmetricKeyParameter;
-import org.bouncycastle.crypto.params.XMSSMTParameters;
 import org.bouncycastle.crypto.params.XMSSMTPrivateKeyParameters;
 import org.bouncycastle.crypto.params.XMSSMTPublicKeyParameters;
-import org.bouncycastle.crypto.params.XMSSParameters;
-import org.bouncycastle.crypto.signers.xmss.BDS;
-import org.bouncycastle.crypto.signers.xmss.BDSStateMap;
-import org.bouncycastle.crypto.signers.xmss.OTSHashAddress;
-import org.bouncycastle.crypto.signers.xmss.WOTSPlus;
-import org.bouncycastle.crypto.signers.xmss.WOTSPlusSignature;
-import org.bouncycastle.crypto.signers.xmss.XMSSMTSignature;
-import org.bouncycastle.crypto.signers.xmss.XMSSNode;
-import org.bouncycastle.crypto.signers.xmss.XMSSReducedSignature;
-import org.bouncycastle.crypto.signers.xmss.XMSSUtil;
-import org.bouncycastle.crypto.signers.xmss.XMSSVerifierUtil;
-import org.bouncycastle.util.Arrays;
+import org.bouncycastle.crypto.signers.xmss.XMSSEngine;
 
 /**
  * XMSS^MT Signer class.
@@ -30,10 +19,6 @@ public class XMSSMTSigner
     private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
     private XMSSMTPrivateKeyParameters privateKey;
     private XMSSMTPublicKeyParameters publicKey;
-    private XMSSMTParameters params;
-    private XMSSParameters xmssParams;
-
-    private WOTSPlus wotsPlus;
 
     private boolean hasGenerated;
     private boolean initSign;
@@ -46,12 +31,10 @@ public class XMSSMTSigner
             hasGenerated = false;
             privateKey = (XMSSMTPrivateKeyParameters)param;
 
-            params = privateKey.getParameters();
-            xmssParams = params.getXMSSParameters();
             // the public key from a previous verification init must not stay behind, or this signer
             // still verifies against it. The private key is deliberately NOT cleared on a
-            // verification init: getUpdatedPrivateKey() synchronizes on it, and sign then verify
-            // then collect the advanced state is a legitimate sequence.
+            // verification init: sign then verify then collect the advanced state is a legitimate
+            // sequence, and clearing would drop state the caller is obliged to persist.
             publicKey = null;
         }
         else
@@ -59,11 +42,7 @@ public class XMSSMTSigner
             initSign = false;
             publicKey = (XMSSMTPublicKeyParameters)param;
 
-            params = publicKey.getParameters();
-            xmssParams = params.getXMSSParameters();
         }
-        
-        wotsPlus = params.getWOTSPlus();
     }
 
     public byte[] generateSignature(byte[] message)
@@ -73,9 +52,13 @@ public class XMSSMTSigner
             throw new NullPointerException("message == null");
         }
 
+        // take the key once, the way getUpdatedPrivateKey() does: that method can clear the field,
+        // and re-reading it below would then synchronize on null rather than report an absent key
+        XMSSMTPrivateKeyParameters privKey = privateKey;
+
         if (initSign)
         {
-            if (privateKey == null)
+            if (privKey == null)
             {
                 throw new IllegalStateException("signing key no longer usable");
             }
@@ -85,102 +68,22 @@ public class XMSSMTSigner
             throw new IllegalStateException("signer not initialized for signature generation");
         }
 
-        synchronized (privateKey)
+        synchronized (privKey)
         {
-            if (privateKey.getUsagesRemaining() <= 0)
+            if (privKey.getUsagesRemaining() <= 0)
             {
-                throw new IllegalStateException("no usages of private key remaining");
+                throw new ExhaustedPrivateKeyException("no usages of private key remaining");
             }
-            if (privateKey.getBDSState().isEmpty())
+            if (!XMSSEngine.hasTraversalState(privKey))
             {
                 throw new IllegalStateException("not initialized");
             }
 
-            try
-            {
+            // set once the guards above have passed, as the key is rolled from here on whatever
+            // happens: getUpdatedPrivateKey() has to hand back this key rather than advance again
+            hasGenerated = true;
 
-                BDSStateMap bdsState = privateKey.getBDSState();
-
-                // privateKey.increaseIndex(this);
-                final long globalIndex = privateKey.getIndex();
-                final int totalHeight = params.getHeight();
-                final int xmssHeight = xmssParams.getHeight();
-                if (privateKey.getUsagesRemaining() <= 0)
-                {
-                    throw new IllegalStateException("index out of bounds");
-                }
-
-                /* compress message */
-                byte[] random = wotsPlus.getKhf().PRF(privateKey.getSecretKeyPRF(), XMSSUtil.toBytesBigEndian(globalIndex, 32));
-                byte[] concatenated = Arrays.concatenate(random, privateKey.getRoot(),
-                    XMSSUtil.toBytesBigEndian(globalIndex, params.getTreeDigestSize()));
-                byte[] messageDigest = wotsPlus.getKhf().HMsg(concatenated, message);
-
-                hasGenerated = true;
-
-                XMSSMTSignature signature = new XMSSMTSignature.Builder(params).withIndex(globalIndex).withRandom(random).build();
-
-
-                /* layer 0 */
-                long indexTree = XMSSUtil.getTreeIndex(globalIndex, xmssHeight);
-                int indexLeaf = XMSSUtil.getLeafIndex(globalIndex, xmssHeight);
-
-                /* reset xmss */
-                wotsPlus.importKeys(new byte[params.getTreeDigestSize()], privateKey.getPublicSeed());
-                /* create signature with XMSS tree on layer 0 */
-
-                /* adjust addresses */
-                OTSHashAddress otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder().withTreeAddress(indexTree)
-                    .withOTSAddress(indexLeaf).build();
-
-                /* get authentication path from BDS */
-                if (bdsState.get(0) == null || indexLeaf == 0)
-                {
-                    bdsState.put(0, new BDS(xmssParams, privateKey.getPublicSeed(), privateKey.getSecretKeySeed(), otsHashAddress));
-                }
-
-                /* sign message digest */
-                WOTSPlusSignature wotsPlusSignature = wotsSign(messageDigest, otsHashAddress);
-
-                XMSSReducedSignature reducedSignature = new XMSSReducedSignature.Builder(xmssParams)
-                    .withWOTSPlusSignature(wotsPlusSignature).withAuthPath(bdsState.get(0).getAuthenticationPath())
-                    .build();
-
-                signature.getReducedSignatures().add(reducedSignature);
-                /* loop over remaining layers */
-                for (int layer = 1; layer < params.getLayers(); layer++)
-                {
-                    /* get root of layer - 1 */
-                    XMSSNode root = bdsState.get(layer - 1).getRoot();
-
-                    indexLeaf = XMSSUtil.getLeafIndex(indexTree, xmssHeight);
-                    indexTree = XMSSUtil.getTreeIndex(indexTree, xmssHeight);
-
-                    /* adjust addresses */
-                    otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder().withLayerAddress(layer)
-                        .withTreeAddress(indexTree).withOTSAddress(indexLeaf).build();
-
-                    /* sign root digest of layer - 1 */
-                    wotsPlusSignature = wotsSign(root.getValue(), otsHashAddress);
-                    /* get authentication path from BDS */
-                    if (bdsState.get(layer) == null || XMSSUtil.isNewBDSInitNeeded(globalIndex, xmssHeight, layer))
-                    {
-                        bdsState.put(layer, new BDS(xmssParams, privateKey.getPublicSeed(), privateKey.getSecretKeySeed(), otsHashAddress));
-                    }
-
-                    reducedSignature = new XMSSReducedSignature.Builder(xmssParams)
-                        .withWOTSPlusSignature(wotsPlusSignature)
-                        .withAuthPath(bdsState.get(layer).getAuthenticationPath()).build();
-
-                    signature.getReducedSignatures().add(reducedSignature);
-                }
-             
-                return signature.toByteArray();
-            }
-            finally
-            {
-                privateKey.rollKey();
-            }
+            return XMSSEngine.generateMTSignature(privKey, message);
         }
     }
 
@@ -201,74 +104,26 @@ public class XMSSMTSigner
         {
             throw new NullPointerException("signature == null");
         }
-        /* (re)create compressed message */
-        XMSSMTSignature sig;
-        try
-        {
-            sig = new XMSSMTSignature.Builder(params).withSignature(signature).build();
-        }
-        catch (RuntimeException e)
-        {
-            // malformed/truncated signature: do not propagate IllegalArgumentException
-            return false;
-        }
 
-        byte[] concatenated = Arrays.concatenate(sig.getRandom(), publicKey.getRoot(),
-                                         XMSSUtil.toBytesBigEndian(sig.getIndex(), params.getTreeDigestSize()));
-        byte[] messageDigest = wotsPlus.getKhf().HMsg(concatenated, message);
-
-        long globalIndex = sig.getIndex();
-        int xmssHeight = xmssParams.getHeight();
-        long indexTree = XMSSUtil.getTreeIndex(globalIndex, xmssHeight);
-        int indexLeaf = XMSSUtil.getLeafIndex(globalIndex, xmssHeight);
-
-        /* adjust xmss */
-        wotsPlus.importKeys(new byte[params.getTreeDigestSize()], publicKey.getPublicSeed());
-        
-        /* prepare addresses */
-        OTSHashAddress otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder().withTreeAddress(indexTree)
-            .withOTSAddress(indexLeaf).build();
-
-        /* get root node on layer 0 */
-        XMSSReducedSignature xmssMTSignature = sig.getReducedSignatures().get(0);
-        XMSSNode rootNode = XMSSVerifierUtil.getRootNodeFromSignature(wotsPlus, xmssHeight, messageDigest, xmssMTSignature, otsHashAddress, indexLeaf);
-        for (int layer = 1; layer < params.getLayers(); layer++)
-        {
-            xmssMTSignature = sig.getReducedSignatures().get(layer);
-            indexLeaf = XMSSUtil.getLeafIndex(indexTree, xmssHeight);
-            indexTree = XMSSUtil.getTreeIndex(indexTree, xmssHeight);
-
-            /* adjust address */
-            otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder().withLayerAddress(layer)
-                .withTreeAddress(indexTree).withOTSAddress(indexLeaf).build();
-
-            /* get root node */
-            rootNode = XMSSVerifierUtil.getRootNodeFromSignature(wotsPlus, xmssHeight, rootNode.getValue(), xmssMTSignature, otsHashAddress, indexLeaf);
-        }
-
-        /* compare roots */
-        return Arrays.constantTimeAreEqual(rootNode.getValue(), publicKey.getRoot());
+        return XMSSEngine.verifyMTSignature(publicKey, message, signature);
     }
 
-    private WOTSPlusSignature wotsSign(byte[] messageDigest, OTSHashAddress otsHashAddress)
-    {
-        if (messageDigest.length != params.getTreeDigestSize())
-        {
-            throw new IllegalArgumentException("size of messageDigest needs to be equal to size of digest");
-        }
-        if (otsHashAddress == null)
-        {
-            throw new NullPointerException("otsHashAddress == null");
-        }
-        /* (re)initialize WOTS+ instance */
-        wotsPlus.importKeys(wotsPlus.getWOTSPlusSecretKey(privateKey.getSecretKeySeed(), otsHashAddress), privateKey.getPublicSeed());
-        /* create WOTS+ signature */
-        return wotsPlus.sign(messageDigest, otsHashAddress);
-    }
-
+    /**
+     * Return the number of signatures the key this signer holds can still produce. A signer
+     * initialised for verification, or one whose key has already been handed back by
+     * {@link #getUpdatedPrivateKey()}, holds no key and so reports zero - reading the absent key
+     * would otherwise raise a NullPointerException.
+     */
     public long getUsagesRemaining()
     {
-        return privateKey.getUsagesRemaining();
+        XMSSMTPrivateKeyParameters privKey = privateKey;
+
+        if (privKey == null)
+        {
+            return 0;
+        }
+
+        return privKey.getUsagesRemaining();
     }
 
     /**
@@ -312,22 +167,29 @@ public class XMSSMTSigner
     {
         // if we've generated a signature return the last private key generated
         // if we've only initialised leave it in place and return the next one instead.
-        if (hasGenerated)
+        XMSSMTPrivateKeyParameters privKey = privateKey;
+
+        // nothing to hand back: this signer was never initialised for signing, or a previous call
+        // has already taken the key. Reported as an absent key rather than as the
+        // NullPointerException synchronizing on the field below would raise.
+        if (privKey == null)
         {
-            XMSSMTPrivateKeyParameters privKey = privateKey;
-
-            privateKey = null;
-
-            return privKey;
+            return null;
         }
-        else
-        {
-            XMSSMTPrivateKeyParameters privKey = privateKey;
 
-            if (privKey != null)
+        synchronized (privKey)
+        {
+            if (hasGenerated)
             {
-                privateKey = privateKey.getNextKey();
+                privateKey = null;
             }
+            else if (privKey.getUsagesRemaining() > 0)
+            {
+                privateKey = privKey.getNextKey();
+            }
+            // else: a key with nothing left to spend has no next usage to leave behind, and asking
+            // for one reported the shard API's own "usageCount exceeds usages remaining" to a caller
+            // that never asked for a shard. Hand the spent key back so it can still be stored.
 
             return privKey;
         }

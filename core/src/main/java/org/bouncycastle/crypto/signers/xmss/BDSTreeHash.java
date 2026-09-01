@@ -4,7 +4,7 @@ import java.io.Serializable;
 import java.util.Stack;
 
 
-public class BDSTreeHash
+class BDSTreeHash
     implements Serializable, Cloneable
 {
     private static final long serialVersionUID = 1L;

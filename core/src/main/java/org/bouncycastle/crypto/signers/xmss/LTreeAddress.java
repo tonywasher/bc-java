@@ -5,7 +5,7 @@ import org.bouncycastle.util.Pack;
 /**
  * L-tree address.
  */
-public final class LTreeAddress
+final class LTreeAddress
     extends XMSSAddress
 {
 
