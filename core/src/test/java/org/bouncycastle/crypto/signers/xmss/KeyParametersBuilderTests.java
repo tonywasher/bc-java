@@ -203,11 +203,14 @@ public class KeyParametersBuilderTests
         XMSSSigner signer = new XMSSSigner();
 
         signer.init(true, xmssShard);
-        signer.generateSignature(message);
+        signer.update(message, 0, message.length);
+        signer.generateSignature();
+
+        signer.update(message, 0, message.length);
 
         try
         {
-            signer.generateSignature(message);
+            signer.generateSignature();
             fail("no exception");
         }
         catch (ExhaustedPrivateKeyException e)
@@ -235,11 +238,14 @@ public class KeyParametersBuilderTests
         XMSSMTSigner mtSigner = new XMSSMTSigner();
 
         mtSigner.init(true, mtShard);
-        mtSigner.generateSignature(message);
+        mtSigner.update(message, 0, message.length);
+        mtSigner.generateSignature();
+
+        mtSigner.update(message, 0, message.length);
 
         try
         {
-            mtSigner.generateSignature(message);
+            mtSigner.generateSignature();
             fail("no exception");
         }
         catch (ExhaustedPrivateKeyException e)
@@ -301,10 +307,11 @@ public class KeyParametersBuilderTests
         XMSSSigner signer = new XMSSSigner();
 
         signer.init(true, spent);
+        signer.update(new byte[]{ 1, 2, 3 }, 0, 3);
 
         try
         {
-            signer.generateSignature(new byte[]{ 1, 2, 3 });
+            signer.generateSignature();
             fail("spent key signed");
         }
         catch (ExhaustedPrivateKeyException e)

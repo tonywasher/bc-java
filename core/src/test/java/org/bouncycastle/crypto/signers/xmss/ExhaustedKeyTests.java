@@ -142,11 +142,14 @@ public class ExhaustedKeyTests
             .withPrivateKey(exhaustedXMSS(params).getEncoded()).build();
 
         XMSSSigner signer = new XMSSSigner();
+        byte[] message = new byte[]{ 1, 2, 3 };
 
         signer.init(true, restored);
+        signer.update(message, 0, message.length);
+
         try
         {
-            signer.generateSignature(new byte[]{ 1, 2, 3 });
+            signer.generateSignature();
             fail("no exception");
         }
         catch (ExhaustedPrivateKeyException e)
@@ -161,9 +164,11 @@ public class ExhaustedKeyTests
         XMSSMTSigner mtSigner = new XMSSMTSigner();
 
         mtSigner.init(true, mtRestored);
+        mtSigner.update(message, 0, message.length);
+
         try
         {
-            mtSigner.generateSignature(new byte[]{ 1, 2, 3 });
+            mtSigner.generateSignature();
             fail("no exception");
         }
         catch (ExhaustedPrivateKeyException e)

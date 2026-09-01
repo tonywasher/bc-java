@@ -41,12 +41,13 @@ public class XMSSSigner
         }
     }
 
-    public byte[] generateSignature(byte[] message)
+    public byte[] generateSignature()
     {
-        if (message == null)
-        {
-            throw new NullPointerException("message == null");
-        }
+        byte[] message = buffer.toByteArray();
+
+        // the buffered message is consumed whether or not a signature is produced: a call that
+        // fails one of the checks below must not leave bytes behind for the next one to sign
+        reset();
 
         // take the key once, the way getUpdatedPrivateKey() does: that method can clear the field,
         // and re-reading it below would then synchronize on null rather than report an absent key
@@ -101,18 +102,19 @@ public class XMSSSigner
         return privKey.getUsagesRemaining();
     }
 
-    public boolean verifySignature(byte[] message, byte[] signature)
+    public boolean verifySignature(byte[] signature)
     {
+        byte[] message = buffer.toByteArray();
+
+        // consumed whatever the outcome, so a failed verification cannot poison the next one
+        reset();
+
         // covers both a signer initialised for signing and one never initialised at all: the latter
         // used to fall through and report the absent public key as "signature did not verify",
         // because the NullPointerException it caused was swallowed by the malformed-signature catch
         if (initSign || publicKey == null)
         {
             throw new IllegalStateException("signer not initialized for verification");
-        }
-        if (message == null)
-        {
-            throw new NullPointerException("message == null");
         }
         // a missing argument is the caller's mistake rather than a signature that failed to verify:
         // bytes that will not decode are reported as false further down, but there are no bytes
@@ -137,24 +139,6 @@ public class XMSSSigner
     public void update(byte[] in, int off, int len)
     {
         buffer.write(in, off, len);
-    }
-
-    public byte[] generateSignature()
-    {
-        byte[] message = buffer.toByteArray();
-
-        reset();
-
-        return generateSignature(message);
-    }
-
-    public boolean verifySignature(byte[] signature)
-    {
-        byte[] message = buffer.toByteArray();
-
-        reset();
-
-        return verifySignature(message, signature);
     }
 
     public void reset()

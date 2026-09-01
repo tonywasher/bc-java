@@ -46,7 +46,8 @@ public class CorruptedStateTests
         XMSSSigner signer = new XMSSSigner();
 
         signer.init(true, privKey);
-        signer.generateSignature(new byte[]{ 9 });
+        signer.update((byte)9);
+        signer.generateSignature();
     }
 
     /**
@@ -87,10 +88,11 @@ public class CorruptedStateTests
         XMSSSigner signer = new XMSSSigner();
 
         signer.init(true, privKey);
+        signer.update((byte)9);
 
         try
         {
-            signer.generateSignature(new byte[]{ 9 });
+            signer.generateSignature();
             fail("corrupt state signed: " + drop);
         }
         catch (IllegalStateException e)
@@ -118,7 +120,8 @@ public class CorruptedStateTests
 
         for (int i = 0; i != atIndex; i++)
         {
-            signer.generateSignature(new byte[]{ (byte)i });
+            signer.update((byte)i);
+            signer.generateSignature();
         }
 
         byte[] encoded = ((XMSSPrivateKeyParameters)signer.getUpdatedPrivateKey()).getEncoded();

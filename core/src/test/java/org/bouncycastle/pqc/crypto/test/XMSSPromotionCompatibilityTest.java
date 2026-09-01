@@ -83,10 +83,12 @@ public class XMSSPromotionCompatibilityTest
 
     /**
      * The promoted signers implement org.bouncycastle.crypto.Signer rather than the pqc
-     * StateAwareMessageSigner, so the streaming path must produce exactly what the one-shot call
-     * does.
+     * StateAwareMessageSigner, so a message streamed in through update() must sign and verify, and
+     * the buffer must be consumed by each operation rather than carried into the next. That the
+     * streamed signature is byte-identical to the deprecated signer's one-shot output is asserted
+     * by checkXMSS / checkXMSSMT below.
      */
-    public void testStreamingMatchesOneShot()
+    public void testStreamingRoundTrip()
         throws Exception
     {
         org.bouncycastle.crypto.params.XMSSParameters params =
@@ -108,10 +110,11 @@ public class XMSSPromotionCompatibilityTest
         assertTrue("streamed signature did not verify through the streaming path",
             verifier.verifySignature(streamed));
 
-        // generateSignature() resets the buffer, so a second signature over the same message is
-        // over the message alone and not the message twice - it must verify one-shot as well
+        // verifySignature() consumed the buffer, so feeding the same message again verifies the
+        // message alone and not the message twice
         verifier.init(false, kp.getPublic());
-        assertTrue("streamed signature did not verify one-shot", verifier.verifySignature(MESSAGE, streamed));
+        verifier.update(MESSAGE, 0, MESSAGE.length);
+        assertTrue("second streamed verification failed", verifier.verifySignature(streamed));
     }
 
     private void checkXMSS(String label,
@@ -134,7 +137,8 @@ public class XMSSPromotionCompatibilityTest
 
         org.bouncycastle.crypto.signers.XMSSSigner newSigner = new org.bouncycastle.crypto.signers.XMSSSigner();
         newSigner.init(true, newKp.getPrivate());
-        byte[] newSig = newSigner.generateSignature(MESSAGE);
+        newSigner.update(MESSAGE, 0, MESSAGE.length);
+        byte[] newSig = newSigner.generateSignature();
 
         org.bouncycastle.pqc.crypto.xmss.XMSSSigner oldSigner = new org.bouncycastle.pqc.crypto.xmss.XMSSSigner();
         oldSigner.init(true, oldKp.getPrivate());
@@ -144,8 +148,9 @@ public class XMSSPromotionCompatibilityTest
 
         org.bouncycastle.crypto.signers.XMSSSigner newVerifier = new org.bouncycastle.crypto.signers.XMSSSigner();
         newVerifier.init(false, newKp.getPublic());
+        newVerifier.update(MESSAGE, 0, MESSAGE.length);
         assertTrue(label + ": promoted verifier rejected the deprecated signature",
-            newVerifier.verifySignature(MESSAGE, oldSig));
+            newVerifier.verifySignature(oldSig));
 
         org.bouncycastle.pqc.crypto.xmss.XMSSSigner oldVerifier = new org.bouncycastle.pqc.crypto.xmss.XMSSSigner();
         oldVerifier.init(false, oldKp.getPublic());
@@ -173,7 +178,8 @@ public class XMSSPromotionCompatibilityTest
 
         org.bouncycastle.crypto.signers.XMSSMTSigner newSigner = new org.bouncycastle.crypto.signers.XMSSMTSigner();
         newSigner.init(true, newKp.getPrivate());
-        byte[] newSig = newSigner.generateSignature(MESSAGE);
+        newSigner.update(MESSAGE, 0, MESSAGE.length);
+        byte[] newSig = newSigner.generateSignature();
 
         org.bouncycastle.pqc.crypto.xmss.XMSSMTSigner oldSigner = new org.bouncycastle.pqc.crypto.xmss.XMSSMTSigner();
         oldSigner.init(true, oldKp.getPrivate());
@@ -183,8 +189,9 @@ public class XMSSPromotionCompatibilityTest
 
         org.bouncycastle.crypto.signers.XMSSMTSigner newVerifier = new org.bouncycastle.crypto.signers.XMSSMTSigner();
         newVerifier.init(false, newKp.getPublic());
+        newVerifier.update(MESSAGE, 0, MESSAGE.length);
         assertTrue(label + ": promoted verifier rejected the deprecated signature",
-            newVerifier.verifySignature(MESSAGE, oldSig));
+            newVerifier.verifySignature(oldSig));
 
         org.bouncycastle.pqc.crypto.xmss.XMSSMTSigner oldVerifier = new org.bouncycastle.pqc.crypto.xmss.XMSSMTSigner();
         oldVerifier.init(false, oldKp.getPublic());

@@ -56,7 +56,8 @@ public class SignerStateHandoverTests
         XMSSSigner signer = new XMSSSigner();
 
         signer.init(true, kp.getPrivate());
-        signer.generateSignature(new byte[]{ 1, 2, 3 });
+        signer.update(new byte[]{ 1, 2, 3 }, 0, 3);
+        signer.generateSignature();
 
         assertSame(kp.getPrivate(), signer.getUpdatedPrivateKey());
         assertNull(signer.getUpdatedPrivateKey());
@@ -65,7 +66,8 @@ public class SignerStateHandoverTests
         XMSSMTSigner mtSigner = new XMSSMTSigner();
 
         mtSigner.init(true, mtKp.getPrivate());
-        mtSigner.generateSignature(new byte[]{ 1, 2, 3 });
+        mtSigner.update(new byte[]{ 1, 2, 3 }, 0, 3);
+        mtSigner.generateSignature();
 
         assertSame(mtKp.getPrivate(), mtSigner.getUpdatedPrivateKey());
         assertNull(mtSigner.getUpdatedPrivateKey());
@@ -165,8 +167,8 @@ public class SignerStateHandoverTests
     /**
      * An argument that was never supplied is the caller's mistake, not a signature that failed to
      * verify - bytes that will not decode are reported as false, but there are no bytes here. The
-     * XMSS signer used to answer a null message with a NullPointerException raised from inside the
-     * hash function, and a null signature with false; XMSS^MT has always named both.
+     * XMSS signer used to answer a null signature with false; XMSS^MT has always named it. The
+     * message is streamed in through update() and so cannot be absent, only empty.
      */
     public void testVerifyNamesAnAbsentArgument()
     {
@@ -176,57 +178,69 @@ public class SignerStateHandoverTests
         signer.init(true, kp.getPrivate());
 
         byte[] message = new byte[]{ 1, 2, 3 };
-        byte[] signature = signer.generateSignature(message);
+
+        signer.update(message, 0, message.length);
+
+        byte[] signature = signer.generateSignature();
         XMSSSigner verifier = new XMSSSigner();
 
         verifier.init(false, kp.getPublic());
+        verifier.update(message, 0, message.length);
 
-        assertTrue(verifier.verifySignature(message, signature));
-        checkAbsentArgument(verifier, null, signature, "message == null");
-        checkAbsentArgument(verifier, message, null, "signature == null");
+        assertTrue(verifier.verifySignature(signature));
+        checkAbsentSignature(verifier, message);
 
         AsymmetricCipherKeyPair mtKp = xmssMTKeyPair(new XMSSMTParameters(HEIGHT, LAYERS, new SHA256Digest()));
         XMSSMTSigner mtSigner = new XMSSMTSigner();
 
         mtSigner.init(true, mtKp.getPrivate());
 
-        byte[] mtSignature = mtSigner.generateSignature(message);
+        mtSigner.update(message, 0, message.length);
+
+        byte[] mtSignature = mtSigner.generateSignature();
         XMSSMTSigner mtVerifier = new XMSSMTSigner();
 
         mtVerifier.init(false, mtKp.getPublic());
+        mtVerifier.update(message, 0, message.length);
 
-        assertTrue(mtVerifier.verifySignature(message, mtSignature));
-        checkAbsentArgument(mtVerifier, null, mtSignature, "message == null");
-        checkAbsentArgument(mtVerifier, message, null, "signature == null");
+        assertTrue(mtVerifier.verifySignature(mtSignature));
+        checkAbsentSignature(mtVerifier, message);
 
         // a signature that is present but will not decode is still an answer, not an error
-        assertFalse(verifier.verifySignature(message, new byte[0]));
-        assertFalse(mtVerifier.verifySignature(message, new byte[0]));
+        verifier.update(message, 0, message.length);
+        assertFalse(verifier.verifySignature(new byte[0]));
+
+        mtVerifier.update(message, 0, message.length);
+        assertFalse(mtVerifier.verifySignature(new byte[0]));
     }
 
-    private void checkAbsentArgument(XMSSSigner verifier, byte[] message, byte[] signature, String expected)
+    private void checkAbsentSignature(XMSSSigner verifier, byte[] message)
     {
+        verifier.update(message, 0, message.length);
+
         try
         {
-            verifier.verifySignature(message, signature);
-            fail("absent argument accepted: " + expected);
+            verifier.verifySignature(null);
+            fail("absent signature accepted");
         }
         catch (NullPointerException e)
         {
-            assertEquals(expected, e.getMessage());
+            assertEquals("signature == null", e.getMessage());
         }
     }
 
-    private void checkAbsentArgument(XMSSMTSigner verifier, byte[] message, byte[] signature, String expected)
+    private void checkAbsentSignature(XMSSMTSigner verifier, byte[] message)
     {
+        verifier.update(message, 0, message.length);
+
         try
         {
-            verifier.verifySignature(message, signature);
-            fail("absent argument accepted: " + expected);
+            verifier.verifySignature(null);
+            fail("absent signature accepted");
         }
         catch (NullPointerException e)
         {
-            assertEquals(expected, e.getMessage());
+            assertEquals("signature == null", e.getMessage());
         }
     }
 
@@ -254,7 +268,8 @@ public class SignerStateHandoverTests
         // which for a freshly generated key is one signature per leaf of the tree
         assertEquals(1 << HEIGHT, signer.getUsagesRemaining());
 
-        signer.generateSignature(new byte[]{ 1, 2, 3 });
+        signer.update(new byte[]{ 1, 2, 3 }, 0, 3);
+        signer.generateSignature();
         signer.getUpdatedPrivateKey();
 
         assertEquals(0, signer.getUsagesRemaining());
@@ -274,7 +289,8 @@ public class SignerStateHandoverTests
 
         assertEquals(1 << HEIGHT, mtSigner.getUsagesRemaining());
 
-        mtSigner.generateSignature(new byte[]{ 1, 2, 3 });
+        mtSigner.update(new byte[]{ 1, 2, 3 }, 0, 3);
+        mtSigner.generateSignature();
         mtSigner.getUpdatedPrivateKey();
 
         assertEquals(0, mtSigner.getUsagesRemaining());

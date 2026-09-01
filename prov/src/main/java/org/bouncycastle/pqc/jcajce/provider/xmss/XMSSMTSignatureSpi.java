@@ -143,7 +143,9 @@ public class XMSSMTSignatureSpi
 
         try
         {
-            byte[] sig = signer.generateSignature(hash);
+            signer.update(hash, 0, hash.length);
+
+            byte[] sig = signer.generateSignature();
 
             return sig;
         }
@@ -164,7 +166,9 @@ public class XMSSMTSignatureSpi
 
         try
         {
-            return signer.verifySignature(hash, sigBytes);
+            signer.update(hash, 0, hash.length);
+
+            return signer.verifySignature(sigBytes);
         }
         catch (Exception e)
         {

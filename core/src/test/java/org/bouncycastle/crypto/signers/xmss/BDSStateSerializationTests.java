@@ -102,9 +102,12 @@ public class BDSStateSerializationTests
     private void signsOnce(XMSSMTPrivateKeyParameters privKey)
     {
         XMSSMTSigner signer = new XMSSMTSigner();
+        byte[] message = new byte[]{ 1, 2, 3 };
 
         signer.init(true, privKey);
-        assertNotNull(signer.generateSignature(new byte[]{ 1, 2, 3 }));
+        signer.update(message, 0, message.length);
+
+        assertNotNull(signer.generateSignature());
     }
 
     private static byte[] javaSerialize(Object o)
