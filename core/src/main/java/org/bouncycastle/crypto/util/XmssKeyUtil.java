@@ -172,51 +172,47 @@ class XmssKeyUtil
             || algOID.equals(IsaraObjectIdentifiers.id_alg_xmssmt)
             || algOID.equals(IANAObjectIdentifiers.id_alg_xmssmt_hashsig))
         {
-            XMSSMTKeyParams keyParams = XMSSMTKeyParams.getInstance(keyInfo.getAlgorithm().getParameters());
-
-            if (keyParams != null)
+            // Every step the encoding drives sits inside the try, the getInstance() calls included:
+            // this method's contract is throws IOException, and a getInstance() left outside it
+            // hands the caller an IllegalArgumentException from a key it merely tried to read.
+            try
             {
-                ASN1ObjectIdentifier treeDigest = keyParams.getTreeDigest().getAlgorithm();
+                XMSSMTKeyParams keyParams = XMSSMTKeyParams.getInstance(keyInfo.getAlgorithm().getParameters());
 
-                XMSSPublicKey xmssMtPublicKey = XMSSPublicKey.getInstance(keyInfo.parsePublicKey());
-
-                try
+                if (keyParams != null)
                 {
+                    ASN1ObjectIdentifier treeDigest = keyParams.getTreeDigest().getAlgorithm();
+
+                    XMSSPublicKey xmssMtPublicKey = XMSSPublicKey.getInstance(keyInfo.parsePublicKey());
+
                     return new XMSSMTPublicKeyParameters
                         .Builder(new XMSSMTParameters(keyParams.getHeight(), keyParams.getLayers(), getDigest(treeDigest)))
                         .withPublicSeed(xmssMtPublicKey.getPublicSeed())
                         .withRoot(xmssMtPublicKey.getRoot()).build();
                 }
-                catch (IllegalArgumentException e)
+
+                // RFC 9802 carries the raw RFC 8391 key; the legacy draft form wrapped it in an OCTET STRING.
+                byte[] keyEnc = rawPublicKey(keyInfo);
+
+                if (keyEnc.length < 4)
                 {
-                    // the height and layer count are whatever the key's parameters said they were
-                    throw new IOException("malformed XMSS^MT public key: " + e.getMessage());
+                    throw new IOException("XMSS^MT public key data too short");
                 }
-            }
 
-            // RFC 9802 carries the raw RFC 8391 key; the legacy draft form wrapped it in an OCTET STRING.
-            byte[] keyEnc = rawPublicKey(keyInfo);
+                XMSSMTParameters parameters = XMSSMTParameters.lookupByOID(Pack.bigEndianToInt(keyEnc, 0));
+                if (parameters == null)
+                {
+                    throw new IOException("unknown XMSS^MT public key OID: " + Pack.bigEndianToInt(keyEnc, 0));
+                }
 
-            if (keyEnc.length < 4)
-            {
-                throw new IOException("XMSS^MT public key data too short");
-            }
-
-            XMSSMTParameters parameters = XMSSMTParameters.lookupByOID(Pack.bigEndianToInt(keyEnc, 0));
-            if (parameters == null)
-            {
-                throw new IOException("unknown XMSS^MT public key OID: " + Pack.bigEndianToInt(keyEnc, 0));
-            }
-
-            try
-            {
                 return new XMSSMTPublicKeyParameters
                     .Builder(parameters)
                     .withPublicKey(keyEnc).build();
             }
             catch (IllegalArgumentException e)
             {
-                throw new IOException("malformed XMSS^MT public key: " + e.getMessage());
+                // the height and layer count are whatever the key's parameters said they were
+                throw Exceptions.ioException("malformed XMSS^MT public key: " + e.getMessage(), e);
             }
         }
 
@@ -224,50 +220,44 @@ class XmssKeyUtil
             || algOID.equals(IsaraObjectIdentifiers.id_alg_xmss)
             || algOID.equals(IANAObjectIdentifiers.id_alg_xmss_hashsig))
         {
-            XMSSKeyParams keyParams = XMSSKeyParams.getInstance(keyInfo.getAlgorithm().getParameters());
-
-            if (keyParams != null)
+            // as in the XMSS^MT branch above: the whole decode is inside the try
+            try
             {
-                ASN1ObjectIdentifier treeDigest = keyParams.getTreeDigest().getAlgorithm();
-                XMSSPublicKey xmssPublicKey = XMSSPublicKey.getInstance(keyInfo.parsePublicKey());
+                XMSSKeyParams keyParams = XMSSKeyParams.getInstance(keyInfo.getAlgorithm().getParameters());
 
-                try
+                if (keyParams != null)
                 {
+                    ASN1ObjectIdentifier treeDigest = keyParams.getTreeDigest().getAlgorithm();
+                    XMSSPublicKey xmssPublicKey = XMSSPublicKey.getInstance(keyInfo.parsePublicKey());
+
                     return new XMSSPublicKeyParameters
                         .Builder(new XMSSParameters(keyParams.getHeight(), getDigest(treeDigest)))
                         .withPublicSeed(xmssPublicKey.getPublicSeed())
                         .withRoot(xmssPublicKey.getRoot()).build();
                 }
-                catch (IllegalArgumentException e)
+
+                // RFC 9802 carries the raw RFC 8391 key; the legacy draft form wrapped it in an OCTET STRING.
+                byte[] keyEnc = rawPublicKey(keyInfo);
+
+                if (keyEnc.length < 4)
                 {
-                    // the height is whatever the key's parameters said it was
-                    throw new IOException("malformed XMSS public key: " + e.getMessage());
+                    throw new IOException("XMSS public key data too short");
                 }
-            }
 
-            // RFC 9802 carries the raw RFC 8391 key; the legacy draft form wrapped it in an OCTET STRING.
-            byte[] keyEnc = rawPublicKey(keyInfo);
+                XMSSParameters parameters = XMSSParameters.lookupByOID(Pack.bigEndianToInt(keyEnc, 0));
+                if (parameters == null)
+                {
+                    throw new IOException("unknown XMSS public key OID: " + Pack.bigEndianToInt(keyEnc, 0));
+                }
 
-            if (keyEnc.length < 4)
-            {
-                throw new IOException("XMSS public key data too short");
-            }
-
-            XMSSParameters parameters = XMSSParameters.lookupByOID(Pack.bigEndianToInt(keyEnc, 0));
-            if (parameters == null)
-            {
-                throw new IOException("unknown XMSS public key OID: " + Pack.bigEndianToInt(keyEnc, 0));
-            }
-
-            try
-            {
                 return new XMSSPublicKeyParameters
                     .Builder(parameters)
                     .withPublicKey(keyEnc).build();
             }
             catch (IllegalArgumentException e)
             {
-                throw new IOException("malformed XMSS public key: " + e.getMessage());
+                // the height is whatever the key's parameters said it was
+                throw Exceptions.ioException("malformed XMSS public key: " + e.getMessage(), e);
             }
         }
 
@@ -286,13 +276,20 @@ class XmssKeyUtil
         if (algOID.equals(PQCObjectIdentifiers.xmss)
             || algOID.equals(IsaraObjectIdentifiers.id_alg_xmss))
         {
-            XMSSKeyParams keyParams = XMSSKeyParams.getInstance(keyInfo.getPrivateKeyAlgorithm().getParameters());
-            ASN1ObjectIdentifier treeDigest = keyParams.getTreeDigest().getAlgorithm();
-
-            XMSSPrivateKey xmssPrivateKey = XMSSPrivateKey.getInstance(keyInfo.parsePrivateKey());
-
+            // as in createPublicKey: the getInstance() calls belong inside the try, and so does the
+            // parameters lookup that follows them - this OID form must carry XMSSKeyParams, and
+            // reading the tree digest off an absent one is a NullPointerException past throws IOException
             try
             {
+                XMSSKeyParams keyParams = XMSSKeyParams.getInstance(keyInfo.getPrivateKeyAlgorithm().getParameters());
+                if (keyParams == null)
+                {
+                    throw new IOException("no parameters found in XMSS private key");
+                }
+                ASN1ObjectIdentifier treeDigest = keyParams.getTreeDigest().getAlgorithm();
+
+                XMSSPrivateKey xmssPrivateKey = XMSSPrivateKey.getInstance(keyInfo.parsePrivateKey());
+
                 XMSSPrivateKeyParameters.Builder keyBuilder = new XMSSPrivateKeyParameters
                     .Builder(new XMSSParameters(keyParams.getHeight(), getDigest(treeDigest)))
                     .withIndex(xmssPrivateKey.getIndex())
@@ -321,17 +318,28 @@ class XmssKeyUtil
             catch (IllegalArgumentException e)
             {
                 // the height is whatever the key's parameters said it was
-                throw new IOException("malformed XMSS private key: " + e.getMessage());
+                throw Exceptions.ioException("malformed XMSS private key: " + e.getMessage(), e);
+            }
+            catch (IllegalStateException e)
+            {
+                // the stored BDS state is whatever the key carried: BDS.validate() rejects one that
+                // does not match its own tree, and build() rejects a key missing a seed
+                throw Exceptions.ioException("malformed XMSS private key: " + e.getMessage(), e);
             }
         }
         if (algOID.equals(PQCObjectIdentifiers.xmss_mt)
             || algOID.equals(IsaraObjectIdentifiers.id_alg_xmssmt))
         {
-            XMSSMTKeyParams keyParams = XMSSMTKeyParams.getInstance(keyInfo.getPrivateKeyAlgorithm().getParameters());
-            ASN1ObjectIdentifier treeDigest = keyParams.getTreeDigest().getAlgorithm();
-
+            // as in the XMSS branch above
             try
             {
+                XMSSMTKeyParams keyParams = XMSSMTKeyParams.getInstance(keyInfo.getPrivateKeyAlgorithm().getParameters());
+                if (keyParams == null)
+                {
+                    throw new IOException("no parameters found in XMSS^MT private key");
+                }
+                ASN1ObjectIdentifier treeDigest = keyParams.getTreeDigest().getAlgorithm();
+
                 XMSSMTPrivateKey xmssMtPrivateKey = XMSSMTPrivateKey.getInstance(keyInfo.parsePrivateKey());
 
                 XMSSMTPrivateKeyParameters.Builder keyBuilder = new XMSSMTPrivateKeyParameters
@@ -362,7 +370,12 @@ class XmssKeyUtil
             catch (IllegalArgumentException e)
             {
                 // the height and layer count are whatever the key's parameters said they were
-                throw new IOException("malformed XMSSMT private key: " + e.getMessage());
+                throw Exceptions.ioException("malformed XMSS^MT private key: " + e.getMessage(), e);
+            }
+            catch (IllegalStateException e)
+            {
+                // as in the XMSS branch: the stored per-layer BDS states are the key's own
+                throw Exceptions.ioException("malformed XMSS^MT private key: " + e.getMessage(), e);
             }
         }
         if (algOID.equals(IANAObjectIdentifiers.id_alg_xmss_hashsig))
@@ -370,48 +383,50 @@ class XmssKeyUtil
             // RFC 9802 form used for the SP 800-208 sets: the private key octets are the 4-octet
             // parameter-set OID followed by the raw XMSSPrivateKeyParameters encoding, recovered
             // via lookupByOID so the full parameter set (including n) is restored.
-            byte[] keyEnc = ASN1OctetString.getInstance(keyInfo.parsePrivateKey()).getOctets();
-            if (keyEnc.length < 4)
-            {
-                throw new IOException("XMSS private key data too short");
-            }
-            int paramSet = Pack.bigEndianToInt(keyEnc, 0);
-            XMSSParameters xmssParams = XMSSParameters.lookupByOID(paramSet);
-            if (xmssParams == null)
-            {
-                throw new IOException("unknown XMSS private key OID: " + paramSet);
-            }
             try
             {
+                byte[] keyEnc = ASN1OctetString.getInstance(keyInfo.parsePrivateKey()).getOctets();
+                if (keyEnc.length < 4)
+                {
+                    throw new IOException("XMSS private key data too short");
+                }
+                int paramSet = Pack.bigEndianToInt(keyEnc, 0);
+                XMSSParameters xmssParams = XMSSParameters.lookupByOID(paramSet);
+                if (xmssParams == null)
+                {
+                    throw new IOException("unknown XMSS private key OID: " + paramSet);
+                }
+
                 return new XMSSPrivateKeyParameters.Builder(xmssParams)
                     .withPrivateKey(Arrays.copyOfRange(keyEnc, 4, keyEnc.length)).build();
             }
             catch (IllegalArgumentException e)
             {
-                throw new IOException("malformed XMSS private key: " + e.getMessage());
+                throw Exceptions.ioException("malformed XMSS private key: " + e.getMessage(), e);
             }
         }
         if (algOID.equals(IANAObjectIdentifiers.id_alg_xmssmt_hashsig))
         {
-            byte[] keyEnc = ASN1OctetString.getInstance(keyInfo.parsePrivateKey()).getOctets();
-            if (keyEnc.length < 4)
-            {
-                throw new IOException("XMSSMT private key data too short");
-            }
-            int paramSet = Pack.bigEndianToInt(keyEnc, 0);
-            XMSSMTParameters xmssmtParams = XMSSMTParameters.lookupByOID(paramSet);
-            if (xmssmtParams == null)
-            {
-                throw new IOException("unknown XMSSMT private key OID: " + paramSet);
-            }
             try
             {
+                byte[] keyEnc = ASN1OctetString.getInstance(keyInfo.parsePrivateKey()).getOctets();
+                if (keyEnc.length < 4)
+                {
+                    throw new IOException("XMSS^MT private key data too short");
+                }
+                int paramSet = Pack.bigEndianToInt(keyEnc, 0);
+                XMSSMTParameters xmssmtParams = XMSSMTParameters.lookupByOID(paramSet);
+                if (xmssmtParams == null)
+                {
+                    throw new IOException("unknown XMSS^MT private key OID: " + paramSet);
+                }
+
                 return new XMSSMTPrivateKeyParameters.Builder(xmssmtParams)
                     .withPrivateKey(Arrays.copyOfRange(keyEnc, 4, keyEnc.length)).build();
             }
             catch (IllegalArgumentException e)
             {
-                throw new IOException("malformed XMSSMT private key: " + e.getMessage());
+                throw Exceptions.ioException("malformed XMSS^MT private key: " + e.getMessage(), e);
             }
         }
 
