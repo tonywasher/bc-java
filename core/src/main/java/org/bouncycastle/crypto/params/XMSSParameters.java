@@ -53,6 +53,12 @@ public final class XMSSParameters
         paramsLookupTable = Collections.unmodifiableMap(pMap);
     }
 
+    /**
+     * The tallest tree whose leaves an int index can count. Shared with BDS.validate(), which
+     * refuses a traversal state outside it.
+     */
+    public static final int MAX_HEIGHT = 30;
+
     private final int parameterSetOID;
     private final int height;
     private final int k;
@@ -97,6 +103,17 @@ public final class XMSSParameters
         if (height < 2)
         {
             throw new IllegalArgumentException("height must be >= 2");
+        }
+        // the one time key index, and the maximum index bounding it, are both ints, so a tree
+        // taller than this cannot count its own leaves: (1 << height) - 1 wraps. It wraps to a
+        // negative for a height 31 above a multiple of 32, which leaves the traversal state with
+        // no leaves to build from and surfaces as an EmptyStackException out of key generation,
+        // and to a smaller positive for most of the rest, which is worse - the key generated is a
+        // shorter tree than the one asked for, with nothing to say so. BDS.validate() refuses a
+        // state outside the same bound on the way back in.
+        if (height > MAX_HEIGHT)
+        {
+            throw new IllegalArgumentException("height must be <= " + MAX_HEIGHT);
         }
         if (treeDigestOID == null)
         {

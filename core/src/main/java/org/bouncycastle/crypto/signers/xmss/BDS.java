@@ -499,7 +499,7 @@ public final class BDS
         {
             throw new IllegalStateException("keep == null");
         }
-        if (treeHeight < 2 || treeHeight > 30)
+        if (treeHeight < 2 || treeHeight > XMSSParameters.MAX_HEIGHT)
         {
             throw new IllegalStateException("treeHeight in BDS state out of bounds");
         }

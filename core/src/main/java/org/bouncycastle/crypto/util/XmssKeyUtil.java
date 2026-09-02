@@ -180,10 +180,18 @@ class XmssKeyUtil
 
                 XMSSPublicKey xmssMtPublicKey = XMSSPublicKey.getInstance(keyInfo.parsePublicKey());
 
-                return new XMSSMTPublicKeyParameters
-                    .Builder(new XMSSMTParameters(keyParams.getHeight(), keyParams.getLayers(), getDigest(treeDigest)))
-                    .withPublicSeed(xmssMtPublicKey.getPublicSeed())
-                    .withRoot(xmssMtPublicKey.getRoot()).build();
+                try
+                {
+                    return new XMSSMTPublicKeyParameters
+                        .Builder(new XMSSMTParameters(keyParams.getHeight(), keyParams.getLayers(), getDigest(treeDigest)))
+                        .withPublicSeed(xmssMtPublicKey.getPublicSeed())
+                        .withRoot(xmssMtPublicKey.getRoot()).build();
+                }
+                catch (IllegalArgumentException e)
+                {
+                    // the height and layer count are whatever the key's parameters said they were
+                    throw new IOException("malformed XMSS^MT public key: " + e.getMessage());
+                }
             }
 
             // RFC 9802 carries the raw RFC 8391 key; the legacy draft form wrapped it in an OCTET STRING.
@@ -223,10 +231,18 @@ class XmssKeyUtil
                 ASN1ObjectIdentifier treeDigest = keyParams.getTreeDigest().getAlgorithm();
                 XMSSPublicKey xmssPublicKey = XMSSPublicKey.getInstance(keyInfo.parsePublicKey());
 
-                return new XMSSPublicKeyParameters
-                    .Builder(new XMSSParameters(keyParams.getHeight(), getDigest(treeDigest)))
-                    .withPublicSeed(xmssPublicKey.getPublicSeed())
-                    .withRoot(xmssPublicKey.getRoot()).build();
+                try
+                {
+                    return new XMSSPublicKeyParameters
+                        .Builder(new XMSSParameters(keyParams.getHeight(), getDigest(treeDigest)))
+                        .withPublicSeed(xmssPublicKey.getPublicSeed())
+                        .withRoot(xmssPublicKey.getRoot()).build();
+                }
+                catch (IllegalArgumentException e)
+                {
+                    // the height is whatever the key's parameters said it was
+                    throw new IOException("malformed XMSS public key: " + e.getMessage());
+                }
             }
 
             // RFC 9802 carries the raw RFC 8391 key; the legacy draft form wrapped it in an OCTET STRING.
@@ -302,6 +318,11 @@ class XmssKeyUtil
             {
                 throw Exceptions.ioException("ClassNotFoundException processing BDS state: " + e.getMessage(), e);
             }
+            catch (IllegalArgumentException e)
+            {
+                // the height is whatever the key's parameters said it was
+                throw new IOException("malformed XMSS private key: " + e.getMessage());
+            }
         }
         if (algOID.equals(PQCObjectIdentifiers.xmss_mt)
             || algOID.equals(IsaraObjectIdentifiers.id_alg_xmssmt))
@@ -337,6 +358,11 @@ class XmssKeyUtil
             catch (ClassNotFoundException e)
             {
                 throw Exceptions.ioException("ClassNotFoundException processing BDS state: " + e.getMessage(), e);
+            }
+            catch (IllegalArgumentException e)
+            {
+                // the height and layer count are whatever the key's parameters said they were
+                throw new IOException("malformed XMSSMT private key: " + e.getMessage());
             }
         }
         if (algOID.equals(IANAObjectIdentifiers.id_alg_xmss_hashsig))

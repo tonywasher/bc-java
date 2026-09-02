@@ -21,6 +21,7 @@ public class AllTests
         suite.addTestSuite(AddressTests.class);
         suite.addTestSuite(WOTSPlusTests.class);
         suite.addTestSuite(KeyParametersBuilderTests.class);
+        suite.addTestSuite(ParameterBoundsTests.class);
         suite.addTestSuite(ExhaustedKeyTests.class);
         suite.addTestSuite(SignerStateHandoverTests.class);
         suite.addTestSuite(SignerMessageBufferTests.class);
