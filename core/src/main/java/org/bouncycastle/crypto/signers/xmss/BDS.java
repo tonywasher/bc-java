@@ -774,6 +774,7 @@ public final class BDS
         {
             Integer height = it.next();
 
+            // as with retain above: a null key is not merely absent state, TreeMap.get(null) throws
             if (height == null || keep.get(height) == null)
             {
                 throw new IOException("incomplete BDS state");
