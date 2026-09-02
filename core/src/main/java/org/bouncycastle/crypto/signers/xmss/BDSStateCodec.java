@@ -306,7 +306,7 @@ final class BDSStateCodec
         for (int i = 0; i < keepCount; i++)
         {
             int height = dataIn.readInt();
-            if (height <= previousKeepHeight || height < 0 || height > treeHeight - 2)
+            if (height <= previousKeepHeight || height > treeHeight - 2)
             {
                 throw new IOException("invalid BDS keep height");
             }

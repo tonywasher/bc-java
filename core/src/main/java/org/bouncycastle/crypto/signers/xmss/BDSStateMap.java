@@ -115,8 +115,7 @@ public class BDSStateMap
     public void validate(XMSSMTParameters params)
     {
         long maxIndexLimit = (1L << params.getHeight()) - 1;
-        if (bdsState == null || maxIndex < 0 || maxIndex > maxIndexLimit
-            || bdsState.size() > params.getLayers())
+        if (maxIndex < 0 || maxIndex > maxIndexLimit || bdsState.size() > params.getLayers())
         {
             throw new IllegalStateException("BDS state map does not match XMSSMT parameters");
         }
