@@ -452,12 +452,11 @@ final class BDSStateCodec
         int bodyLength = encoding.length - CHECKSUM_SIZE;
         byte[] expected = checksum(encoding, bodyLength, publicSeed);
 
-        for (int i = 0; i != CHECKSUM_SIZE; i++)
+        // an error-detecting checksum over material that is not secret, so a plain comparison is
+        // what is wanted here - see the note on checksum()
+        if (!Arrays.areEqual(expected, 0, CHECKSUM_SIZE, encoding, bodyLength, encoding.length))
         {
-            if (expected[i] != encoding[bodyLength + i])
-            {
-                throw new IOException("BDS state checksum does not match");
-            }
+            throw new IOException("BDS state checksum does not match");
         }
 
         return bodyLength;
