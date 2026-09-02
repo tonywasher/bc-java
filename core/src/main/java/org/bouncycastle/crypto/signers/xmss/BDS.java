@@ -699,19 +699,27 @@ public final class BDS
         return result;
     }
 
+    /*
+     * These three hand out a copy, as getAuthenticationPath() and getRetain() beside them do and
+     * as the constructors do when they take a state apart: what they are copying is the live
+     * traversal state of a one-time key, and a caller that changed it would corrupt the signing
+     * position with nothing to catch it. They copy to the same depth the constructors do - the
+     * collection, and each tree hash instance, but not the nodes, which are read-only in practice.
+     */
+
     Stack<XMSSNode> getStack()
     {
-        return stack;
+        return cloneStack(stack);
     }
 
     List<BDSTreeHash> getTreeHashInstances()
     {
-        return treeHashInstances;
+        return cloneTreeHashInstances(treeHashInstances);
     }
 
     Map<Integer, XMSSNode> getKeep()
     {
-        return keep;
+        return new TreeMap<Integer, XMSSNode>(keep);
     }
 
     public BDS withWOTSDigest(ASN1ObjectIdentifier digestName)

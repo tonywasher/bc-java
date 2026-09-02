@@ -23,11 +23,11 @@ final class WOTSPlus
     /**
      * WOTS+ secret key seed.
      */
-    private byte[] secretKeySeed;
+    private final byte[] secretKeySeed;
     /**
      * WOTS+ public seed.
      */
-    private byte[] publicSeed;
+    private final byte[] publicSeed;
 
     /**
      * Constructs a new WOTS+ one-time signature system based on the given WOTS+
@@ -73,8 +73,13 @@ final class WOTSPlus
         {
             throw new IllegalArgumentException("size of publicSeed needs to be equal to size of digest");
         }
-        this.secretKeySeed = secretKeySeed;
-        this.publicSeed = publicSeed;
+        // copy in rather than take the caller's arrays by reference: getSecretKeySeed() and
+        // getPublicSeed() hand out clones, so holding the originals was the one way live WOTS+ key
+        // material could still be changed from outside. The destinations are allocated once, in
+        // the constructor, and the lengths have just been checked against n, so this costs nothing
+        // on the per-leaf walk that calls this for every one-time key in a tree.
+        System.arraycopy(secretKeySeed, 0, this.secretKeySeed, 0, this.secretKeySeed.length);
+        System.arraycopy(publicSeed, 0, this.publicSeed, 0, this.publicSeed.length);
     }
 
     /**
