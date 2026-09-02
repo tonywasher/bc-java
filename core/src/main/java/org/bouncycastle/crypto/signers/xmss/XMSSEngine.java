@@ -182,9 +182,28 @@ public final class XMSSEngine
 
     /**
      * Generate an XMSS signature over {@code message} and advance the key's traversal state
-     * (RFC 8391 sec. 4.1.9). The caller holds the lock on {@code privateKey}.
+     * (RFC 8391 sec. 4.1.9).
+     * <p>
+     * The key is held locked across the whole check, sign and advance sequence. RFC 8391 sec. 1.1
+     * requires each one-time key to be used exactly once, and this method both reads the index and
+     * rolls the key past it: two threads entering with the same key and nothing serializing them
+     * sign different messages under the same one-time key, and a WOTS+ key used twice discloses
+     * enough of itself to forge. The key's own accessors are individually synchronized, which does
+     * not make the compound sequence atomic, so the lock is taken here rather than left to the
+     * caller - this is a public entry point and cannot assume one. {@code XMSSSigner} holds the
+     * same monitor and Java monitors are reentrant, so that path is unchanged; LMS takes the
+     * equivalent lock inside the key itself.
+     * </p>
      */
     public static byte[] generateSignature(XMSSPrivateKeyParameters privateKey, byte[] message)
+    {
+        synchronized (privateKey)
+        {
+            return doGenerateSignature(privateKey, message);
+        }
+    }
+
+    private static byte[] doGenerateSignature(XMSSPrivateKeyParameters privateKey, byte[] message)
     {
         XMSSParameters params = privateKey.getParameters();
         WOTSPlus wotsPlus = newWOTSPlus(params);
@@ -272,9 +291,18 @@ public final class XMSSEngine
 
     /**
      * Generate an XMSS^MT signature over {@code message} and advance the key's traversal state
-     * (RFC 8391 sec. 4.2.7). The caller holds the lock on {@code privateKey}.
+     * (RFC 8391 sec. 4.2.7). The key is held locked for the whole sequence, for the reason given on
+     * {@link #generateSignature(XMSSPrivateKeyParameters, byte[])}.
      */
     public static byte[] generateMTSignature(XMSSMTPrivateKeyParameters privateKey, byte[] message)
+    {
+        synchronized (privateKey)
+        {
+            return doGenerateMTSignature(privateKey, message);
+        }
+    }
+
+    private static byte[] doGenerateMTSignature(XMSSMTPrivateKeyParameters privateKey, byte[] message)
     {
         XMSSMTParameters params = privateKey.getParameters();
         XMSSParameters xmssParams = params.getXMSSParameters();

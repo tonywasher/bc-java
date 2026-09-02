@@ -27,6 +27,7 @@ public class AllTests
         suite.addTestSuite(BDSStateSerializationTests.class);
         suite.addTestSuite(CorruptedStateTests.class);
         suite.addTestSuite(BDSStateMapIndexEnumerationTests.class);
+        suite.addTestSuite(OneTimeKeyReuseTests.class);
 
         return new BCTestSetup(suite);
     }
