@@ -325,10 +325,6 @@ public final class XMSSEngine
 
             final long globalIndex = privateKey.getIndex();
             final int xmssHeight = xmssParams.getHeight();
-            if (privateKey.getUsagesRemaining() <= 0)
-            {
-                throw new IllegalStateException("index out of bounds");
-            }
 
             /* compress message */
             byte[] random = wotsPlus.getKhf().PRF(privateKey.getSecretKeyPRF(), XMSSUtil.toBytesBigEndian(globalIndex, 32));
