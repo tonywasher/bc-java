@@ -407,6 +407,7 @@ public final class XMSSEngine
         }
         finally
         {
+            privateKey.getBDSState().markUsed();
             privateKey.rollKey();
         }
     }

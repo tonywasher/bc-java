@@ -168,4 +168,50 @@ public class OneTimeKeyReuseTests
             }
         }
     }
+
+    /**
+     * Both paths record on the traversal state that its one-time key has signed. The record is
+     * only still there to see where the roll leaves that state in place, which is the last leaf
+     * of a subtree: everywhere else the roll installs a fresh state, sitting on a leaf that has
+     * not signed yet. The XMSS^MT path did not make the record at all, so its state said no leaf
+     * had ever signed.
+     */
+    public void testSignatureMarksTheOneTimeKeyItSpent()
+        throws Exception
+    {
+        XMSSMTParameters mtParams = new XMSSMTParameters(HEIGHT, LAYERS, new SHA256Digest());
+        XMSSMTKeyPairGenerator mtKpg = new XMSSMTKeyPairGenerator();
+
+        mtKpg.init(new XMSSMTKeyGenerationParameters(mtParams, new SecureRandom()));
+
+        XMSSMTPrivateKeyParameters mtKey =
+            (XMSSMTPrivateKeyParameters)mtKpg.generateKeyPair().getPrivate();
+        int leaves = 1 << mtParams.getXMSSParameters().getHeight();
+
+        for (int i = 1; i <= leaves; i++)
+        {
+            XMSSEngine.generateMTSignature(mtKey, new byte[]{(byte)i});
+
+            assertEquals("XMSS^MT layer zero after signature " + i, i == leaves,
+                mtKey.getBDSState().get(0).isUsed());
+        }
+
+        // the XMSS twin, whose record this was mirrored from: its whole tree is the subtree, so
+        // the state is left in place only on the very last leaf, where it is the exhausted key
+        // placeholder
+        XMSSParameters params = new XMSSParameters(HEIGHT, new SHA256Digest());
+        XMSSKeyPairGenerator kpg = new XMSSKeyPairGenerator();
+
+        kpg.init(new XMSSKeyGenerationParameters(params, new SecureRandom()));
+
+        XMSSPrivateKeyParameters key = (XMSSPrivateKeyParameters)kpg.generateKeyPair().getPrivate();
+
+        for (int i = 1; i <= (1 << HEIGHT); i++)
+        {
+            XMSSEngine.generateSignature(key, new byte[]{(byte)i});
+
+            assertEquals("XMSS after signature " + i, i == (1 << HEIGHT),
+                key.getBDSState().isUsed());
+        }
+    }
 }

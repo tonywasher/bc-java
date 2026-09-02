@@ -221,6 +221,27 @@ public class BDSStateMap
         return bdsState.get(Integers.valueOf(index));
     }
 
+    /**
+     * Record that the one-time key this state is sitting on has signed, as the XMSS path does.
+     * <p>
+     * Only the layer zero state is marked. Its leaf signs the message digest, so it is the one
+     * one-time key a second signature must never reuse - the leaves above it sign the root of the
+     * subtree below, which does not change while that subtree is being signed through, so those
+     * layers legitimately produce the same signature again and are not used up by it.
+     * </p>
+     */
+    void markUsed()
+    {
+        BDS layerZero = bdsState.get(Integers.valueOf(0));
+
+        // the state is put in place before the signature is built, but the signature can fail
+        // before that happens and this runs from the finally that covers it
+        if (layerZero != null)
+        {
+            layerZero.markUsed();
+        }
+    }
+
     BDS update(int index, byte[] publicSeed, byte[] secretKeySeed, OTSHashAddress otsHashAddress)
     {
         return bdsState.put(Integers.valueOf(index), bdsState.get(Integers.valueOf(index)).getNextState(publicSeed, secretKeySeed, otsHashAddress));
