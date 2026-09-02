@@ -218,13 +218,22 @@ public final class XMSSMTPrivateKeyParameters
 
         public Builder withBDSState(BDSStateMap val)
         {
+            //
+            // Copy, do not adopt: a state map is mutable and this key advances it in place, so a
+            // caller that keeps the map it passed - or passes one it took off another key with
+            // getBDSState() - leaves two keys driving one state while each tracks its own index.
+            // Signing with one then moves the shared state without moving the other key's index,
+            // and that key's next signature is under a one-time key already used, against RFC 8391
+            // sec. 1.1 - and it verifies. The XMSS side needs no copy for this: its BDS is replaced
+            // on each roll (getNextState) rather than advanced in place, so nothing is shared.
+            //
             if (val.getMaxIndex() < 0)   // check for legacy state maps
             {
                 bdsState = new BDSStateMap(val, (1L << params.getHeight()) - 1);
             }
             else
             {
-                bdsState = val;
+                bdsState = new BDSStateMap(val, val.getMaxIndex());
             }
             return this;
         }

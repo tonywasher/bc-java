@@ -214,4 +214,52 @@ public class OneTimeKeyReuseTests
                 key.getBDSState().isUsed());
         }
     }
+
+    private static XMSSMTPrivateKeyParameters mtKey(XMSSMTParameters params)
+    {
+        XMSSMTKeyPairGenerator kpg = new XMSSMTKeyPairGenerator();
+
+        kpg.init(new XMSSMTKeyGenerationParameters(params, new SecureRandom()));
+
+        return (XMSSMTPrivateKeyParameters)kpg.generateKeyPair().getPrivate();
+    }
+
+    /**
+     * A state map is mutable and the XMSS^MT key advances it in place, so the builder has to copy
+     * one it is handed rather than adopt it. Adopting it puts two keys on one state while each
+     * keeps its own index, and signing with either then moves the state out from under the other -
+     * whose next signature is under a one-time key already spent.
+     * <p>
+     * The XMSS side has no equivalent: its BDS is replaced on each roll rather than advanced in
+     * place, so a shared one is never mutated.
+     * </p>
+     */
+    public void testKeyBuilderCopiesTheTraversalStateItIsGiven()
+        throws Exception
+    {
+        XMSSMTParameters params = new XMSSMTParameters(HEIGHT, LAYERS, new SHA256Digest());
+        XMSSMTPrivateKeyParameters key = mtKey(params);
+
+        // sign once so layer zero is populated and its position is something to watch
+        XMSSEngine.generateMTSignature(key, new byte[]{0x01});
+        assertEquals(1L, key.getIndex());
+
+        XMSSMTPrivateKeyParameters shard = new XMSSMTPrivateKeyParameters.Builder(params)
+            .withSecretKeySeed(key.getSecretKeySeed()).withSecretKeyPRF(key.getSecretKeyPRF())
+            .withPublicSeed(key.getPublicSeed()).withRoot(key.getRoot())
+            .withIndex(key.getIndex())
+            .withBDSState(key.getBDSState()).build();
+
+        assertNotSame("the builder must copy the state map it is given, not adopt it",
+            key.getBDSState(), shard.getBDSState());
+
+        int before = shard.getBDSState().get(0).getIndex();
+
+        XMSSEngine.generateMTSignature(key, new byte[]{0x02});
+
+        assertEquals("the other key's index moved", 2L, key.getIndex());
+        assertEquals("the shard's index did not", 1L, shard.getIndex());
+        assertEquals("nor may its traversal state, or it would sign again under the key at index 1",
+            before, shard.getBDSState().get(0).getIndex());
+    }
 }
