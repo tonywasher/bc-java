@@ -123,7 +123,7 @@ final class BDSStateCodec
         for (int i = 0; i < stateCount; i++)
         {
             int layer = dataIn.readInt();
-            if (layer < 0 || layer <= previousLayer)
+            if (layer <= previousLayer)
             {
                 throw new IOException("invalid BDS state map layer");
             }
@@ -251,7 +251,7 @@ final class BDSStateCodec
         for (int i = 0; i < retainCount; i++)
         {
             int height = dataIn.readInt();
-            if (height <= previousRetainHeight || height < treeHeight - k || height > treeHeight - 2)
+            if (height <= previousRetainHeight || height > treeHeight - 2)
             {
                 throw new IOException("invalid BDS retain height");
             }
