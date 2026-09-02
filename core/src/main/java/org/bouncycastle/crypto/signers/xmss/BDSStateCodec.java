@@ -15,6 +15,7 @@ import java.util.TreeMap;
 
 import org.bouncycastle.crypto.Digest;
 import org.bouncycastle.crypto.digests.SHA256Digest;
+import org.bouncycastle.crypto.params.XMSSParameters;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Exceptions;
 import org.bouncycastle.util.Integers;
@@ -34,7 +35,10 @@ final class BDSStateCodec
 
     private static final int STATE_VERSION = 1;
     private static final int MAX_ENCODED_STATE_SIZE = 4 * 1024 * 1024;
-    private static final int MAX_TREE_HEIGHT = 30;
+    // the tallest tree a BDS state can belong to is the tallest tree a parameter set can ask for:
+    // taken from there rather than restated, so the bound this codec allocates against cannot drift
+    // from the bound the key that owns the state was built under
+    private static final int MAX_TREE_HEIGHT = XMSSParameters.MAX_HEIGHT;
     private static final int MAX_DIGEST_SIZE = 64;
     private static final int MAX_STATE_MAP_ENTRIES = 64;
     private static final int MAX_NODES = 4096;
