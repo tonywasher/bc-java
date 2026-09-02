@@ -88,6 +88,12 @@ public final class XMSSMTParameters
         paramsLookupTable = Collections.unmodifiableMap(pMap);
     }
 
+    /**
+     * The tallest hypertree whose leaves a long index can count. The per layer trees are bounded
+     * separately, and more tightly, by {@link XMSSParameters#MAX_HEIGHT}.
+     */
+    public static final int MAX_HEIGHT = 62;
+
     private final int parameterSetOID;
     private final XMSSParameters xmssParams;
     private final int height;
@@ -144,6 +150,21 @@ public final class XMSSMTParameters
         if (height < 2)
         {
             throw new IllegalArgumentException("totalHeight must be > 1");
+        }
+        // the one time key index across the whole hypertree is a long, and isIndexValid() bounds
+        // it by comparing against 1L << totalHeight, so a total height past this leaves that shift
+        // negative or wrapped: every index reads as invalid at 63, and at 64 the maximum index
+        // comes out as 0 - a key claiming 2^64 one time keys that in fact carries one
+        if (height > MAX_HEIGHT)
+        {
+            throw new IllegalArgumentException("totalHeight must be <= " + MAX_HEIGHT);
+        }
+        // layers is a divisor below, and a zero one is an ArithmeticException rather than a
+        // report of the parameter that was wrong; a negative one divides to a negative height,
+        // which is then complained about as a height
+        if (layers < 1)
+        {
+            throw new IllegalArgumentException("layers must be >= 1");
         }
         if (height % layers != 0)
         {

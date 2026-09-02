@@ -10,11 +10,13 @@ import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.crypto.generators.XMSSKeyPairGenerator;
 import org.bouncycastle.crypto.params.XMSSKeyGenerationParameters;
+import org.bouncycastle.crypto.params.XMSSMTParameters;
 import org.bouncycastle.crypto.params.XMSSParameters;
 import org.bouncycastle.crypto.util.PrivateKeyFactory;
 import org.bouncycastle.crypto.util.PublicKeyFactory;
 import org.bouncycastle.pqc.asn1.PQCObjectIdentifiers;
 import org.bouncycastle.pqc.asn1.XMSSKeyParams;
+import org.bouncycastle.pqc.asn1.XMSSMTKeyParams;
 import org.bouncycastle.pqc.asn1.XMSSPrivateKey;
 import org.bouncycastle.pqc.asn1.XMSSPublicKey;
 
@@ -97,6 +99,86 @@ public class ParameterBoundsTests
         catch (IOException e)
         {
             assertEquals("malformed XMSS private key: height must be <= 30", e.getMessage());
+        }
+    }
+
+    public void testLayerCountRefused()
+    {
+        // zero divided into the total height, and a negative that divides into it cleanly
+        int[][] cases = new int[][]{{4, 0}, {2, 0}, {4, -1}, {4, -2}, {60, Integer.MIN_VALUE}};
+
+        for (int i = 0; i != cases.length; i++)
+        {
+            try
+            {
+                new XMSSMTParameters(cases[i][0], cases[i][1], NISTObjectIdentifiers.id_sha256);
+                fail("layers " + cases[i][1] + " accepted");
+            }
+            catch (IllegalArgumentException e)
+            {
+                assertEquals("layers must be >= 1", e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * As for the XMSS height, the layer count reaches the parameter set straight off the wire.
+     */
+    public void testLayerCountFromEncodedKeyReported()
+        throws Exception
+    {
+        AlgorithmIdentifier treeDigest = new AlgorithmIdentifier(NISTObjectIdentifiers.id_sha256);
+        AlgorithmIdentifier algId = new AlgorithmIdentifier(PQCObjectIdentifiers.xmss_mt,
+            new XMSSMTKeyParams(4, 0, treeDigest));
+
+        try
+        {
+            PublicKeyFactory.createKey(new SubjectPublicKeyInfo(algId,
+                new XMSSPublicKey(new byte[32], new byte[32])));
+            fail("zero layers in public key parameters accepted");
+        }
+        catch (IOException e)
+        {
+            assertEquals("malformed XMSS^MT public key: layers must be >= 1", e.getMessage());
+        }
+    }
+
+    public void testTotalHeightAboveMaximumRefused()
+    {
+        // a total height of 63 leaves every index reading as invalid, and 64 wraps the maximum
+        // index to 0 - both silent, so neither shows up as a failure to build the key
+        int[][] cases = new int[][]{{63, 3}, {64, 4}, {640, 64}, {1200, 120}};
+
+        for (int i = 0; i != cases.length; i++)
+        {
+            try
+            {
+                new XMSSMTParameters(cases[i][0], cases[i][1], NISTObjectIdentifiers.id_sha256);
+                fail("total height " + cases[i][0] + " accepted");
+            }
+            catch (IllegalArgumentException e)
+            {
+                assertEquals("totalHeight must be <= 62", e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Every parameter set RFC 8391 sec. 5.3 registers has to remain constructible - the bounds
+     * are on what the arithmetic can carry, not a narrowing of the registered sets.
+     */
+    public void testRegisteredHypertreeSetsStillConstruct()
+    {
+        int[][] cases = new int[][]{{20, 2}, {20, 4}, {40, 2}, {40, 4}, {40, 8}, {60, 3}, {60, 6},
+            {60, 12}};
+
+        for (int i = 0; i != cases.length; i++)
+        {
+            XMSSMTParameters params = new XMSSMTParameters(cases[i][0], cases[i][1],
+                NISTObjectIdentifiers.id_sha256);
+
+            assertEquals(cases[i][0], params.getHeight());
+            assertEquals(cases[i][1], params.getLayers());
         }
     }
 
