@@ -55,11 +55,7 @@ class BDSTreeHash
             throw new IllegalStateException("finished or not initialized");
         }
             /* prepare addresses */
-        otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder()
-            .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
-            .withOTSAddress(nextIndex).withChainAddress(otsHashAddress.getChainAddress())
-            .withHashAddress(otsHashAddress.getHashAddress()).withKeyAndMask(otsHashAddress.getKeyAndMask())
-            .build();
+        otsHashAddress = XMSSNodeUtil.withOTSAddress(otsHashAddress, nextIndex);
         LTreeAddress lTreeAddress = (LTreeAddress)new LTreeAddress.Builder()
             .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
             .withLTreeAddress(nextIndex).build();
@@ -74,20 +70,12 @@ class BDSTreeHash
         while (!stack.isEmpty() && stack.peek().getHeight() == node.getHeight()
             && stack.peek().getHeight() != initialHeight)
         {
-            hashTreeAddress = (HashTreeAddress)new HashTreeAddress.Builder()
-                .withLayerAddress(hashTreeAddress.getLayerAddress())
-                .withTreeAddress(hashTreeAddress.getTreeAddress())
-                .withTreeHeight(hashTreeAddress.getTreeHeight())
-                .withTreeIndex((hashTreeAddress.getTreeIndex() - 1) / 2)
-                .withKeyAndMask(hashTreeAddress.getKeyAndMask()).build();
+            hashTreeAddress = XMSSNodeUtil.withTreeIndex(hashTreeAddress,
+                (hashTreeAddress.getTreeIndex() - 1) / 2);
             node = XMSSNodeUtil.randomizeHash(wotsPlus, stack.pop(), node, hashTreeAddress);
             node = node.incrementHeight();
-            hashTreeAddress = (HashTreeAddress)new HashTreeAddress.Builder()
-                .withLayerAddress(hashTreeAddress.getLayerAddress())
-                .withTreeAddress(hashTreeAddress.getTreeAddress())
-                .withTreeHeight(hashTreeAddress.getTreeHeight() + 1)
-                .withTreeIndex(hashTreeAddress.getTreeIndex()).withKeyAndMask(hashTreeAddress.getKeyAndMask())
-                .build();
+            hashTreeAddress = XMSSNodeUtil.withTreeHeight(hashTreeAddress,
+                hashTreeAddress.getTreeHeight() + 1);
         }
 
         if (tailNode == null)
@@ -98,21 +86,13 @@ class BDSTreeHash
         {
             if (tailNode.getHeight() == node.getHeight())
             {
-                hashTreeAddress = (HashTreeAddress)new HashTreeAddress.Builder()
-                    .withLayerAddress(hashTreeAddress.getLayerAddress())
-                    .withTreeAddress(hashTreeAddress.getTreeAddress())
-                    .withTreeHeight(hashTreeAddress.getTreeHeight())
-                    .withTreeIndex((hashTreeAddress.getTreeIndex() - 1) / 2)
-                    .withKeyAndMask(hashTreeAddress.getKeyAndMask()).build();
+                hashTreeAddress = XMSSNodeUtil.withTreeIndex(hashTreeAddress,
+                    (hashTreeAddress.getTreeIndex() - 1) / 2);
                 node = XMSSNodeUtil.randomizeHash(wotsPlus, tailNode, node, hashTreeAddress);
                 node = node.incrementHeight();
                 tailNode = node;
-                hashTreeAddress = (HashTreeAddress)new HashTreeAddress.Builder()
-                    .withLayerAddress(hashTreeAddress.getLayerAddress())
-                    .withTreeAddress(hashTreeAddress.getTreeAddress())
-                    .withTreeHeight(hashTreeAddress.getTreeHeight() + 1)
-                    .withTreeIndex(hashTreeAddress.getTreeIndex())
-                    .withKeyAndMask(hashTreeAddress.getKeyAndMask()).build();
+                hashTreeAddress = XMSSNodeUtil.withTreeHeight(hashTreeAddress,
+                    hashTreeAddress.getTreeHeight() + 1);
             }
             else
             {

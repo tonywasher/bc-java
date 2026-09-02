@@ -267,23 +267,19 @@ public final class BDS
         for (int indexLeaf = 0; indexLeaf < (1 << treeHeight); indexLeaf++)
         {
             /* generate leaf */
-            otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder()
-                .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
-                .withOTSAddress(indexLeaf).withChainAddress(otsHashAddress.getChainAddress())
-                .withHashAddress(otsHashAddress.getHashAddress()).withKeyAndMask(otsHashAddress.getKeyAndMask())
-                .build();
+            otsHashAddress = XMSSNodeUtil.withOTSAddress(otsHashAddress, indexLeaf);
             /*
              * import WOTSPlusSecretKey as its needed to calculate the public
              * key on the fly
              */
             wotsPlus.importKeys(wotsPlus.getWOTSPlusSecretKey(secretSeed, otsHashAddress), publicSeed);
             WOTSPlusPublicKeyParameters wotsPlusPublicKey = wotsPlus.getPublicKey(otsHashAddress);
-            lTreeAddress = (LTreeAddress)new LTreeAddress.Builder().withLayerAddress(lTreeAddress.getLayerAddress())
-                .withTreeAddress(lTreeAddress.getTreeAddress()).withLTreeAddress(indexLeaf)
-                .withTreeHeight(lTreeAddress.getTreeHeight()).withTreeIndex(lTreeAddress.getTreeIndex())
-                .withKeyAndMask(lTreeAddress.getKeyAndMask()).build();
+            lTreeAddress = withLTreeAddress(lTreeAddress, indexLeaf);
             XMSSNode node = XMSSNodeUtil.lTree(wotsPlus, wotsPlusPublicKey, lTreeAddress);
 
+            // NOT XMSSNodeUtil.withTreeIndex: the tree height is deliberately left out, so that it
+            // resets to 0 for the new leaf. The loop below walks it back up, so carrying it over
+            // here would start each leaf at the height the previous one finished at.
             hashTreeAddress = (HashTreeAddress)new HashTreeAddress.Builder()
                 .withLayerAddress(hashTreeAddress.getLayerAddress())
                 .withTreeAddress(hashTreeAddress.getTreeAddress()).withTreeIndex(indexLeaf)
@@ -315,20 +311,12 @@ public final class BDS
                         retain.get(node.getHeight()).add(node);
                     }
                 }
-                hashTreeAddress = (HashTreeAddress)new HashTreeAddress.Builder()
-                    .withLayerAddress(hashTreeAddress.getLayerAddress())
-                    .withTreeAddress(hashTreeAddress.getTreeAddress())
-                    .withTreeHeight(hashTreeAddress.getTreeHeight())
-                    .withTreeIndex((hashTreeAddress.getTreeIndex() - 1) / 2)
-                    .withKeyAndMask(hashTreeAddress.getKeyAndMask()).build();
+                hashTreeAddress = XMSSNodeUtil.withTreeIndex(hashTreeAddress,
+                    (hashTreeAddress.getTreeIndex() - 1) / 2);
                 node = XMSSNodeUtil.randomizeHash(wotsPlus, stack.pop(), node, hashTreeAddress);
                 node = node.incrementHeight();
-                hashTreeAddress = (HashTreeAddress)new HashTreeAddress.Builder()
-                    .withLayerAddress(hashTreeAddress.getLayerAddress())
-                    .withTreeAddress(hashTreeAddress.getTreeAddress())
-                    .withTreeHeight(hashTreeAddress.getTreeHeight() + 1)
-                    .withTreeIndex(hashTreeAddress.getTreeIndex()).withKeyAndMask(hashTreeAddress.getKeyAndMask())
-                    .build();
+                hashTreeAddress = XMSSNodeUtil.withTreeHeight(hashTreeAddress,
+                    hashTreeAddress.getTreeHeight() + 1);
             }
             /* push to stack */
             stack.push(node);
@@ -370,27 +358,21 @@ public final class BDS
         /* leaf is a left node */
         if (tau == 0)
         {
-            otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder()
-                .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
-                .withOTSAddress(index).withChainAddress(otsHashAddress.getChainAddress())
-                .withHashAddress(otsHashAddress.getHashAddress()).withKeyAndMask(otsHashAddress.getKeyAndMask())
-                .build();
+            otsHashAddress = XMSSNodeUtil.withOTSAddress(otsHashAddress, index);
             /*
              * import WOTSPlusSecretKey as its needed to calculate the public
              * key on the fly
              */
             wotsPlus.importKeys(wotsPlus.getWOTSPlusSecretKey(secretSeed, otsHashAddress), publicSeed);
             WOTSPlusPublicKeyParameters wotsPlusPublicKey = wotsPlus.getPublicKey(otsHashAddress);
-            lTreeAddress = (LTreeAddress)new LTreeAddress.Builder().withLayerAddress(lTreeAddress.getLayerAddress())
-                .withTreeAddress(lTreeAddress.getTreeAddress()).withLTreeAddress(index)
-                .withTreeHeight(lTreeAddress.getTreeHeight()).withTreeIndex(lTreeAddress.getTreeIndex())
-                .withKeyAndMask(lTreeAddress.getKeyAndMask()).build();
+            lTreeAddress = withLTreeAddress(lTreeAddress, index);
             XMSSNode node = XMSSNodeUtil.lTree(wotsPlus, wotsPlusPublicKey, lTreeAddress);
             authenticationPath.set(0, node);
         }
         else
         {
             /* add new left node on height tau to authentication path */
+            // two fields at once, so neither of the single-field helpers fits
             hashTreeAddress = (HashTreeAddress)new HashTreeAddress.Builder()
                 .withLayerAddress(hashTreeAddress.getLayerAddress())
                 .withTreeAddress(hashTreeAddress.getTreeAddress()).withTreeHeight(tau - 1)
@@ -797,5 +779,22 @@ public final class BDS
         out.defaultWriteObject();
 
         out.writeInt(this.maxIndex);
+    }
+
+    /**
+     * The given address with its L-tree address replaced and every other field carried over, as
+     * the leaf walks in initialize() and nextAuthenticationPath() need when they step to the next
+     * leaf. An XMSS address is immutable, so setting one field means rebuilding the whole address.
+     *
+     * @param address      L-tree address to copy.
+     * @param lTreeAddress L-tree address value to set.
+     * @return address with the given L-tree address.
+     */
+    private static LTreeAddress withLTreeAddress(LTreeAddress address, int lTreeAddress)
+    {
+        return (LTreeAddress)new LTreeAddress.Builder()
+            .withLayerAddress(address.getLayerAddress()).withTreeAddress(address.getTreeAddress())
+            .withLTreeAddress(lTreeAddress).withTreeHeight(address.getTreeHeight())
+            .withTreeIndex(address.getTreeIndex()).withKeyAndMask(address.getKeyAndMask()).build();
     }
 }
