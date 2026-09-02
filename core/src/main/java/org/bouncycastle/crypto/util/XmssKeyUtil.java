@@ -488,21 +488,18 @@ class XmssKeyUtil
         position += publicSeedSize;
         byte[] root = XMSSEngine.extractBytesAtOffset(keyData, position, rootSize);
         position += rootSize;
-        /* import BDS state */
+        /* the serialized BDS state is the tail of the encoding */
         byte[] bdsStateBinary = XMSSEngine.extractBytesAtOffset(keyData, position, keyData.length - position);
-        BDS bds;
-        try
-        {
-            bds = XMSSEngine.getBDSFromEncoding(bdsStateBinary, publicSeed);
-        }
-        catch (ClassNotFoundException e)
-        {
-            throw Exceptions.ioException("cannot parse BDS: " + e.getMessage(), e);
-        }
 
-        if ((bds.getMaxIndex() != (1 << totalHeight) - 1))
+        // read the maximum index off the state itself rather than off the bytes just written from
+        // it: parsing them back to recover a field the key is holding is a whole deserialization,
+        // checksum included, for one number, and it makes the value the ASN.1 records depend on
+        // the codec having preserved it rather than on the key that owns it
+        int maxIndex = keyParams.getBDSState().getMaxIndex();
+
+        if (maxIndex != (1 << totalHeight) - 1)
         {
-            return new XMSSPrivateKey(index, secretKeySeed, secretKeyPRF, publicSeed, root, bdsStateBinary, bds.getMaxIndex());
+            return new XMSSPrivateKey(index, secretKeySeed, secretKeyPRF, publicSeed, root, bdsStateBinary, maxIndex);
         }
 
         return new XMSSPrivateKey(index, secretKeySeed, secretKeyPRF, publicSeed, root, bdsStateBinary);
@@ -541,21 +538,16 @@ class XmssKeyUtil
         position += publicSeedSize;
         byte[] root = XMSSEngine.extractBytesAtOffset(keyData, position, rootSize);
         position += rootSize;
-        /* import BDS state */
+        /* the serialized BDS state is the tail of the encoding */
         byte[] bdsStateBinary = XMSSEngine.extractBytesAtOffset(keyData, position, keyData.length - position);
-        BDSStateMap bds;
-        try
-        {
-            bds = XMSSEngine.getBDSStateMapFromEncoding(bdsStateBinary, publicSeed);
-        }
-        catch (ClassNotFoundException e)
-        {
-            throw Exceptions.ioException("cannot parse BDSStateMap: " + e.getMessage(), e);
-        }
 
-        if ((bds.getMaxIndex() != (1L << totalHeight) - 1))
+        // as above: off the state, not off the bytes written from it - and here the parse being
+        // dropped is of every layer's traversal state, up to twelve of them
+        long maxIndex = keyParams.getBDSState().getMaxIndex();
+
+        if (maxIndex != (1L << totalHeight) - 1)
         {
-            return new XMSSMTPrivateKey(index, secretKeySeed, secretKeyPRF, publicSeed, root, bdsStateBinary, bds.getMaxIndex());
+            return new XMSSMTPrivateKey(index, secretKeySeed, secretKeyPRF, publicSeed, root, bdsStateBinary, maxIndex);
         }
 
         return new XMSSMTPrivateKey(index, secretKeySeed, secretKeyPRF, publicSeed, root, bdsStateBinary);
