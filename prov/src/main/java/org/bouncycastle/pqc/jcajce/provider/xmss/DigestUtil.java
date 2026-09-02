@@ -3,64 +3,25 @@ package org.bouncycastle.pqc.jcajce.provider.xmss;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
 import org.bouncycastle.crypto.Digest;
-import org.bouncycastle.crypto.digests.SHA256Digest;
-import org.bouncycastle.crypto.digests.SHA512Digest;
 import org.bouncycastle.crypto.digests.SHAKEDigest;
+import org.bouncycastle.crypto.signers.xmss.XMSSEngine;
 import org.bouncycastle.pqc.jcajce.spec.XMSSParameterSpec;
 
 class DigestUtil
 {
-    static Digest getDigest(ASN1ObjectIdentifier oid)
-    {
-        if (oid.equals(NISTObjectIdentifiers.id_sha256))
-        {
-            return new SHA256Digest();
-        }
-        if (oid.equals(NISTObjectIdentifiers.id_sha512))
-        {
-            return new SHA512Digest();
-        }
-        if (oid.equals(NISTObjectIdentifiers.id_shake128))
-        {
-            return new SHAKEDigest(128);
-        }
-        if (oid.equals(NISTObjectIdentifiers.id_shake256))
-        {
-            return new SHAKEDigest(256);
-        }
-        if (oid.equals(NISTObjectIdentifiers.id_shake256_len))
-        {
-            return new SHAKEDigest(256);
-        }
-
-        throw new IllegalArgumentException("unrecognized digest OID: " + oid);
-    }
-
+    /**
+     * The tree-digest OID for a lightweight tree-digest name, including the SHAKE256-LEN of the
+     * SP 800-208 SHAKE256/256 and SHAKE256/192 sets.
+     * <p>
+     * The names are the ones the lightweight key parameters report, so the table belongs to the
+     * implementation that produces them rather than being kept a second time here: a copy of it
+     * here was a copy that could be one parameter set behind. The digest-instance table beside
+     * it, a third copy of the same five entries, had no caller at all.
+     * </p>
+     */
     static ASN1ObjectIdentifier getDigestOID(String digest)
     {
-        if (digest.equals("SHA-256"))
-        {
-            return NISTObjectIdentifiers.id_sha256;
-        }
-        if (digest.equals("SHA-512"))
-        {
-            return NISTObjectIdentifiers.id_sha512;
-        }
-        if (digest.equals("SHAKE128"))
-        {
-            return NISTObjectIdentifiers.id_shake128;
-        }
-        if (digest.equals("SHAKE256"))
-        {
-            return NISTObjectIdentifiers.id_shake256;
-        }
-        // lightweight tree-digest name for the SP 800-208 SHAKE256/256 and SHAKE256/192 sets
-        if (digest.equals("SHAKE256-LEN"))
-        {
-            return NISTObjectIdentifiers.id_shake256_len;
-        }
-
-        throw new IllegalArgumentException("unrecognized digest: " + digest);
+        return XMSSEngine.getDigestOID(digest);
     }
 
     public static byte[] getDigestResult(Digest digest)
