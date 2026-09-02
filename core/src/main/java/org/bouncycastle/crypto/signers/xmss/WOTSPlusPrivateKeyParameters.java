@@ -15,26 +15,7 @@ final class WOTSPlusPrivateKeyParameters
         {
             throw new NullPointerException("params == null");
         }
-        if (privateKey == null)
-        {
-            throw new NullPointerException("privateKey == null");
-        }
-        if (XMSSUtil.hasNullPointer(privateKey))
-        {
-            throw new NullPointerException("privateKey byte array == null");
-        }
-        if (privateKey.length != params.getLen())
-        {
-            throw new IllegalArgumentException("wrong privateKey format");
-        }
-        for (int i = 0; i < privateKey.length; i++)
-        {
-            if (privateKey[i].length != params.getTreeDigestSize())
-            {
-                throw new IllegalArgumentException("wrong privateKey format");
-            }
-        }
-        this.privateKey = XMSSUtil.cloneArray(privateKey);
+        this.privateKey = params.checkedClone(privateKey, "privateKey");
     }
 
     public byte[][] toByteArray()

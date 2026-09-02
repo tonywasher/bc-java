@@ -106,4 +106,67 @@ public class WOTSPlusTests
         assertEquals(131, XMSSEngine.getWOTSPlusLen(NISTObjectIdentifiers.id_sha512, 64));
         assertEquals(16, XMSSEngine.getWinternitzParameter());
     }
+
+    /**
+     * A WOTS+ secret key, public key and signature are the same len-by-n array, and the three
+     * classes carrying one had a copy each of the check on that shape. They had drifted: the
+     * secret key called a wrong element count a "format" problem where the other two called it a
+     * "size" one. Written as a pair of tables so the two halves have to keep agreeing.
+     */
+    public void testWOTSPlusShapeRejectionsAgree()
+    {
+        WOTSPlusParameters params = new WOTSPlusParameters(NISTObjectIdentifiers.id_sha256);
+        int len = params.getLen();
+        int n = params.getTreeDigestSize();
+
+        byte[][] shortArray = new byte[len - 1][n];
+        byte[][] shortElement = new byte[len][n];
+        byte[][] nullElement = new byte[len][];
+
+        shortElement[len - 1] = new byte[n - 1];
+        nullElement[0] = new byte[n];
+
+        byte[][][] bad = new byte[][][]{null, nullElement, shortArray, shortElement};
+        String[] expected = new String[]{" == null", " byte array == null", " size", " format"};
+
+        for (int i = 0; i != bad.length; i++)
+        {
+            assertEquals("privateKey" + expected[i], rejection(params, bad[i], 0));
+            assertEquals("publicKey" + expected[i], rejection(params, bad[i], 1));
+            assertEquals("signature" + expected[i], rejection(params, bad[i], 2));
+        }
+    }
+
+    /**
+     * The message the class at {@code which} rejects {@code value} with, with the leading "wrong "
+     * of the size and format messages dropped so all four read as a suffix of the field's name.
+     */
+    private static String rejection(WOTSPlusParameters params, byte[][] value, int which)
+    {
+        try
+        {
+            switch (which)
+            {
+            case 0:
+                new WOTSPlusPrivateKeyParameters(params, value);
+                break;
+            case 1:
+                new WOTSPlusPublicKeyParameters(params, value);
+                break;
+            default:
+                new WOTSPlusSignature(params, value);
+                break;
+            }
+        }
+        catch (NullPointerException e)
+        {
+            return e.getMessage();
+        }
+        catch (IllegalArgumentException e)
+        {
+            return e.getMessage().substring("wrong ".length());
+        }
+
+        return "accepted";
+    }
 }

@@ -15,26 +15,7 @@ final class WOTSPlusSignature
         {
             throw new NullPointerException("params == null");
         }
-        if (signature == null)
-        {
-            throw new NullPointerException("signature == null");
-        }
-        if (XMSSUtil.hasNullPointer(signature))
-        {
-            throw new NullPointerException("signature byte array == null");
-        }
-        if (signature.length != params.getLen())
-        {
-            throw new IllegalArgumentException("wrong signature size");
-        }
-        for (int i = 0; i < signature.length; i++)
-        {
-            if (signature[i].length != params.getTreeDigestSize())
-            {
-                throw new IllegalArgumentException("wrong signature format");
-            }
-        }
-        this.signature = XMSSUtil.cloneArray(signature);
+        this.signature = params.checkedClone(signature, "signature");
     }
 
     public byte[][] toByteArray()
