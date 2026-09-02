@@ -19,6 +19,7 @@ import org.bouncycastle.crypto.digests.SHAKEDigest;
 import org.bouncycastle.crypto.params.ParametersWithRandom;
 import org.bouncycastle.crypto.params.XMSSPrivateKeyParameters;
 import org.bouncycastle.crypto.signers.XMSSSigner;
+import org.bouncycastle.jcajce.provider.util.SecurityExceptions;
 import org.bouncycastle.pqc.jcajce.interfaces.StateAwareSignature;
 
 public class XMSSSignatureSpi
@@ -153,9 +154,9 @@ public class XMSSSignatureSpi
         {
             if (e instanceof IllegalStateException)
             {
-                throw new SignatureException(e.getMessage(), e);
+                throw SecurityExceptions.signatureException(e.getMessage(), e);
             }
-            throw new SignatureException(e.toString(), e);
+            throw SecurityExceptions.signatureException(e.toString(), e);
         }
     }
 
@@ -174,9 +175,9 @@ public class XMSSSignatureSpi
         {
             if (e instanceof IllegalStateException)
             {
-                throw new SignatureException(e.getMessage(), e);
+                throw SecurityExceptions.signatureException(e.getMessage(), e);
             }
-            throw new SignatureException(e.toString(), e);
+            throw SecurityExceptions.signatureException(e.toString(), e);
         }
     }
 
