@@ -12,9 +12,6 @@ import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.crypto.Digest;
-import org.bouncycastle.crypto.digests.SHA256Digest;
-import org.bouncycastle.crypto.digests.SHA512Digest;
-import org.bouncycastle.crypto.digests.SHAKEDigest;
 import org.bouncycastle.crypto.params.AsymmetricKeyParameter;
 import org.bouncycastle.crypto.params.XMSSKeyParameters;
 import org.bouncycastle.crypto.params.XMSSMTParameters;
@@ -404,30 +401,15 @@ class XmssKeyUtil
     }
 
     /**
-     * The tree digest for a tree-digest OID. Held here rather than taken from Utils because the
-     * SP 800-208 SHAKE256/192 and SHAKE256/256 sets name id-shake256-len, which no other algorithm
-     * in this package uses.
+     * The tree digest for a tree-digest OID. Taken from the signer package rather than from Utils
+     * because the SP 800-208 SHAKE256/192 and SHAKE256/256 sets name id-shake256-len, which no
+     * other algorithm in this package uses - and taken from there rather than kept here so that
+     * the set of digests a key can be written and read under cannot drift from the set it can be
+     * generated and signed with.
      */
     private static Digest getDigest(ASN1ObjectIdentifier oid)
     {
-        if (oid.equals(NISTObjectIdentifiers.id_sha256))
-        {
-            return new SHA256Digest();
-        }
-        if (oid.equals(NISTObjectIdentifiers.id_sha512))
-        {
-            return new SHA512Digest();
-        }
-        if (oid.equals(NISTObjectIdentifiers.id_shake128))
-        {
-            return new SHAKEDigest(128);
-        }
-        if (oid.equals(NISTObjectIdentifiers.id_shake256) || oid.equals(NISTObjectIdentifiers.id_shake256_len))
-        {
-            return new SHAKEDigest(256);
-        }
-
-        throw new IllegalArgumentException("unrecognized digest OID: " + oid);
+        return XMSSEngine.getDigest(oid);
     }
 
     private static AlgorithmIdentifier lookupTreeAlgID(String treeDigest)

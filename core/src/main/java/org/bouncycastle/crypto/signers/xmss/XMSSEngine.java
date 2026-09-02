@@ -5,6 +5,7 @@ import java.security.SecureRandom;
 
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.crypto.AsymmetricCipherKeyPair;
+import org.bouncycastle.crypto.Digest;
 import org.bouncycastle.crypto.ExhaustedPrivateKeyException;
 import org.bouncycastle.crypto.params.XMSSMTParameters;
 import org.bouncycastle.crypto.params.XMSSMTPrivateKeyParameters;
@@ -53,6 +54,15 @@ public final class XMSSEngine
     public static int getDigestSize(ASN1ObjectIdentifier oid)
     {
         return XMSSUtil.getDigestSize(DigestUtil.getDigest(oid));
+    }
+
+    /**
+     * A tree digest by its OID. Note the SP 800-208 SHAKE256/192 and SHAKE256/256 parameter sets
+     * name id-shake256-len, which no other algorithm in this package uses.
+     */
+    public static Digest getDigest(ASN1ObjectIdentifier oid)
+    {
+        return DigestUtil.getDigest(oid);
     }
 
     /**
