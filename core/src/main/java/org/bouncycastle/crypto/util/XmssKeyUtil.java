@@ -512,7 +512,12 @@ class XmssKeyUtil
         int rootSize = n;
 
         int position = 0;
-        int index = (int)XMSSEngine.bytesToXBigEndian(keyData, position, indexSize);
+        // read as a long: indexSize is up to eight bytes for a tree taller than 32, and the index
+        // is a long the whole way through - XMSSMTPrivateKey carries one and isStoredIndexValid
+        // takes one. Narrowing to int here truncated silently and did so *before* the bounds check,
+        // so an out-of-range index was not rejected but wrapped into an in-range one, and the key
+        // was then exported and re-imported at a position it had already signed from.
+        long index = XMSSEngine.bytesToXBigEndian(keyData, position, indexSize);
         if (!XMSSEngine.isStoredIndexValid(totalHeight, index))
         {
             throw new IllegalArgumentException("index out of bounds");
