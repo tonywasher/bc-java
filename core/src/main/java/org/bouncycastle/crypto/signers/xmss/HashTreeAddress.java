@@ -72,11 +72,6 @@ final class HashTreeAddress
         return byteRepresentation;
     }
 
-    public int getPadding()
-    {
-        return padding;
-    }
-
     public int getTreeHeight()
     {
         return treeHeight;

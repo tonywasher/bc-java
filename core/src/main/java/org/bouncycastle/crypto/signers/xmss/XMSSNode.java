@@ -29,4 +29,14 @@ final class XMSSNode
     {
         return XMSSUtil.cloneArray(value);
     }
+
+    /**
+     * This node's own value, one height further up the tree. Every caller computes this from a
+     * node it is about to discard, so reusing the value directly - rather than round-tripping it
+     * through the defensive copy {@link #getValue()} - avoids a clone nothing needs.
+     */
+    XMSSNode incrementHeight()
+    {
+        return new XMSSNode(height + 1, value);
+    }
 }

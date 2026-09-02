@@ -292,6 +292,8 @@ public final class XMSSEngine
         try
         {
             BDSStateMap bdsState = privateKey.getBDSState();
+            byte[] publicSeed = privateKey.getPublicSeed();
+            byte[] secretKeySeed = privateKey.getSecretKeySeed();
 
             final long globalIndex = privateKey.getIndex();
             final int xmssHeight = xmssParams.getHeight();
@@ -313,7 +315,7 @@ public final class XMSSEngine
             int indexLeaf = XMSSUtil.getLeafIndex(globalIndex, xmssHeight);
 
             /* reset xmss */
-            wotsPlus.importKeys(new byte[params.getTreeDigestSize()], privateKey.getPublicSeed());
+            wotsPlus.importKeys(new byte[params.getTreeDigestSize()], publicSeed);
 
             /* create signature with XMSS tree on layer 0 */
 
@@ -324,12 +326,12 @@ public final class XMSSEngine
             /* get authentication path from BDS */
             if (bdsState.get(0) == null || indexLeaf == 0)
             {
-                bdsState.put(0, new BDS(xmssParams, privateKey.getPublicSeed(), privateKey.getSecretKeySeed(), otsHashAddress));
+                bdsState.put(0, new BDS(xmssParams, publicSeed, secretKeySeed, otsHashAddress));
             }
 
             /* sign message digest */
-            WOTSPlusSignature wotsPlusSignature = wotsSign(wotsPlus, params, privateKey.getSecretKeySeed(),
-                privateKey.getPublicSeed(), messageDigest, otsHashAddress);
+            WOTSPlusSignature wotsPlusSignature = wotsSign(wotsPlus, params, secretKeySeed,
+                publicSeed, messageDigest, otsHashAddress);
 
             XMSSReducedSignature reducedSignature = new XMSSReducedSignature.Builder(xmssParams)
                 .withWOTSPlusSignature(wotsPlusSignature).withAuthPath(bdsState.get(0).getAuthenticationPath())
@@ -351,13 +353,13 @@ public final class XMSSEngine
                     .withTreeAddress(indexTree).withOTSAddress(indexLeaf).build();
 
                 /* sign root digest of layer - 1 */
-                wotsPlusSignature = wotsSign(wotsPlus, params, privateKey.getSecretKeySeed(),
-                    privateKey.getPublicSeed(), root.getValue(), otsHashAddress);
+                wotsPlusSignature = wotsSign(wotsPlus, params, secretKeySeed,
+                    publicSeed, root.getValue(), otsHashAddress);
 
                 /* get authentication path from BDS */
                 if (bdsState.get(layer) == null || XMSSUtil.isNewBDSInitNeeded(globalIndex, xmssHeight, layer))
                 {
-                    bdsState.put(layer, new BDS(xmssParams, privateKey.getPublicSeed(), privateKey.getSecretKeySeed(), otsHashAddress));
+                    bdsState.put(layer, new BDS(xmssParams, publicSeed, secretKeySeed, otsHashAddress));
                 }
 
                 reducedSignature = new XMSSReducedSignature.Builder(xmssParams)

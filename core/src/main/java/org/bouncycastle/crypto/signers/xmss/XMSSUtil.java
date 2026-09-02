@@ -83,9 +83,7 @@ class XMSSUtil
         {
             throw new NullPointerException("in == null");
         }
-        byte[] out = new byte[in.length];
-        System.arraycopy(in, 0, out, 0, in.length);
-        return out;
+        return Arrays.clone(in);
     }
 
     /**
@@ -100,13 +98,7 @@ class XMSSUtil
         {
             throw new NullPointerException("in has null pointers");
         }
-        byte[][] out = new byte[in.length][];
-        for (int i = 0; i < in.length; i++)
-        {
-            out[i] = new byte[in[i].length];
-            System.arraycopy(in[i], 0, out[i], 0, in[i].length);
-        }
-        return out;
+        return Arrays.clone(in);
     }
 
     /**
@@ -208,9 +200,7 @@ class XMSSUtil
         {
             throw new IllegalArgumentException("offset + length must not be greater then size of source array");
         }
-        byte[] out = new byte[length];
-        System.arraycopy(src, offset, out, 0, out.length);
-        return out;
+        return Arrays.copyOfRange(src, offset, offset + length);
     }
 
     /**

@@ -26,6 +26,7 @@ public class AllTests
         suite.addTestSuite(SignerMessageBufferTests.class);
         suite.addTestSuite(BDSStateSerializationTests.class);
         suite.addTestSuite(CorruptedStateTests.class);
+        suite.addTestSuite(BDSStateMapIndexEnumerationTests.class);
 
         return new BCTestSetup(suite);
     }

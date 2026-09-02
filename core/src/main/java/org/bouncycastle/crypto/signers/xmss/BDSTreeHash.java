@@ -81,7 +81,7 @@ class BDSTreeHash
                 .withTreeIndex((hashTreeAddress.getTreeIndex() - 1) / 2)
                 .withKeyAndMask(hashTreeAddress.getKeyAndMask()).build();
             node = XMSSNodeUtil.randomizeHash(wotsPlus, stack.pop(), node, hashTreeAddress);
-            node = new XMSSNode(node.getHeight() + 1, node.getValue());
+            node = node.incrementHeight();
             hashTreeAddress = (HashTreeAddress)new HashTreeAddress.Builder()
                 .withLayerAddress(hashTreeAddress.getLayerAddress())
                 .withTreeAddress(hashTreeAddress.getTreeAddress())
@@ -105,7 +105,7 @@ class BDSTreeHash
                     .withTreeIndex((hashTreeAddress.getTreeIndex() - 1) / 2)
                     .withKeyAndMask(hashTreeAddress.getKeyAndMask()).build();
                 node = XMSSNodeUtil.randomizeHash(wotsPlus, tailNode, node, hashTreeAddress);
-                node = new XMSSNode(tailNode.getHeight() + 1, node.getValue());
+                node = node.incrementHeight();
                 tailNode = node;
                 hashTreeAddress = (HashTreeAddress)new HashTreeAddress.Builder()
                     .withLayerAddress(hashTreeAddress.getLayerAddress())

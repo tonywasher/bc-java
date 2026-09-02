@@ -97,21 +97,7 @@ final class WOTSPlus
         {
             throw new NullPointerException("otsHashAddress == null");
         }
-        List<Integer> baseWMessage = convertToBaseW(messageDigest, params.getWinternitzParameter(), params.getLen1());
-        /* create checksum */
-        int checksum = 0;
-        for (int i = 0; i < params.getLen1(); i++)
-        {
-            checksum += params.getWinternitzParameter() - 1 - baseWMessage.get(i);
-        }
-        checksum <<= (8 - ((params.getLen2() * XMSSUtil.log2(params.getWinternitzParameter())) % 8));
-        int len2Bytes = (int)Math
-            .ceil((double)(params.getLen2() * XMSSUtil.log2(params.getWinternitzParameter())) / 8);
-        List<Integer> baseWChecksum = convertToBaseW(XMSSUtil.toBytesBigEndian(checksum, len2Bytes),
-            params.getWinternitzParameter(), params.getLen2());
-
-        /* msg || checksum */
-        baseWMessage.addAll(baseWChecksum);
+        List<Integer> baseWMessage = baseWMessageWithChecksum(messageDigest);
 
         /* create signature */
         byte[][] signature = new byte[params.getLen()][];
@@ -154,21 +140,7 @@ final class WOTSPlus
         {
             throw new NullPointerException("otsHashAddress == null");
         }
-        List<Integer> baseWMessage = convertToBaseW(messageDigest, params.getWinternitzParameter(), params.getLen1());
-        /* create checksum */
-        int checksum = 0;
-        for (int i = 0; i < params.getLen1(); i++)
-        {
-            checksum += params.getWinternitzParameter() - 1 - baseWMessage.get(i);
-        }
-        checksum <<= (8 - ((params.getLen2() * XMSSUtil.log2(params.getWinternitzParameter())) % 8));
-        int len2Bytes = (int)Math
-            .ceil((double)(params.getLen2() * XMSSUtil.log2(params.getWinternitzParameter())) / 8);
-        List<Integer> baseWChecksum = convertToBaseW(XMSSUtil.toBytesBigEndian(checksum, len2Bytes),
-            params.getWinternitzParameter(), params.getLen2());
-
-        /* msg || checksum */
-        baseWMessage.addAll(baseWChecksum);
+        List<Integer> baseWMessage = baseWMessageWithChecksum(messageDigest);
 
         byte[][] publicKey = new byte[params.getLen()][];
         for (int i = 0; i < params.getLen(); i++)
@@ -241,6 +213,34 @@ final class WOTSPlus
         }
         tmp = khf.F(key, tmpMasked);
         return tmp;
+    }
+
+    /**
+     * The len = len1 + len2 base-w digits WOTS+ signs: the digest's own len1 digits followed by
+     * the len2 digits of their checksum (RFC 8391 sec. 3.1.1 algorithm 1, steps 1-3). Signing and
+     * public-key recovery both need exactly this sequence - one to sign it, the other to verify
+     * against it - so it is derived once here rather than in each caller.
+     */
+    private List<Integer> baseWMessageWithChecksum(byte[] messageDigest)
+    {
+        List<Integer> baseWMessage = convertToBaseW(messageDigest, params.getWinternitzParameter(), params.getLen1());
+
+        /* create checksum */
+        int checksum = 0;
+        for (int i = 0; i < params.getLen1(); i++)
+        {
+            checksum += params.getWinternitzParameter() - 1 - baseWMessage.get(i);
+        }
+        checksum <<= (8 - ((params.getLen2() * XMSSUtil.log2(params.getWinternitzParameter())) % 8));
+        int len2Bytes = (int)Math
+            .ceil((double)(params.getLen2() * XMSSUtil.log2(params.getWinternitzParameter())) / 8);
+        List<Integer> baseWChecksum = convertToBaseW(XMSSUtil.toBytesBigEndian(checksum, len2Bytes),
+            params.getWinternitzParameter(), params.getLen2());
+
+        /* msg || checksum */
+        baseWMessage.addAll(baseWChecksum);
+
+        return baseWMessage;
     }
 
     /**

@@ -127,16 +127,16 @@ public final class BDS
         this.index = index;
         this.used = used;
         this.root = root;
-        this.authenticationPath = authenticationPath;
+        this.authenticationPath = cloneAuthenticationPath(authenticationPath);
         this.retain = new TreeMap<Integer, List<XMSSNode>>();
         for (Iterator<Integer> it = retain.keySet().iterator(); it.hasNext();)
         {
             Integer height = it.next();
             this.retain.put(height, new LinkedList<XMSSNode>(retain.get(height)));
         }
-        this.stack = stack;
-        this.treeHashInstances = treeHashInstances;
-        this.keep = keep;
+        this.stack = cloneStack(stack);
+        this.treeHashInstances = cloneTreeHashInstances(treeHashInstances);
+        this.keep = new TreeMap<Integer, XMSSNode>(keep);
         this.validate();
     }
 
@@ -322,7 +322,7 @@ public final class BDS
                     .withTreeIndex((hashTreeAddress.getTreeIndex() - 1) / 2)
                     .withKeyAndMask(hashTreeAddress.getKeyAndMask()).build();
                 node = XMSSNodeUtil.randomizeHash(wotsPlus, stack.pop(), node, hashTreeAddress);
-                node = new XMSSNode(node.getHeight() + 1, node.getValue());
+                node = node.incrementHeight();
                 hashTreeAddress = (HashTreeAddress)new HashTreeAddress.Builder()
                     .withLayerAddress(hashTreeAddress.getLayerAddress())
                     .withTreeAddress(hashTreeAddress.getTreeAddress())
@@ -410,7 +410,7 @@ public final class BDS
                 throw new IllegalStateException("missing keep node in BDS state");
             }
             XMSSNode node = XMSSNodeUtil.randomizeHash(wotsPlus, authenticationPath.get(tau - 1), keptNode, hashTreeAddress);
-            node = new XMSSNode(node.getHeight() + 1, node.getValue());
+            node = node.incrementHeight();
             authenticationPath.set(tau, node);
             keep.remove(tau - 1);
 
