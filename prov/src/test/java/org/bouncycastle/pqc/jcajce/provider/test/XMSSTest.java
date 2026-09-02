@@ -15,6 +15,7 @@ import java.security.SecureRandom;
 import java.security.Security;
 import java.security.Signature;
 import java.security.SignatureException;
+import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.HashSet;
@@ -328,6 +329,42 @@ public class XMSSTest
         signer.update(msg, 0, msg.length);
 
         assertFalse("truncated signature accepted", signer.verify(Arrays.copyOfRange(sig, 0, sig.length - 1)));
+    }
+
+    /**
+     * A key spec the factory cannot decode is reported with what went wrong attached, as the LMS
+     * key factory beside it does - the XMSS and XMSS^MT ones folded the underlying exception into
+     * their own message text and dropped it, leaving a caller walking getCause() with nothing.
+     */
+    public void testKeyFactoryReportsTheCause()
+        throws Exception
+    {
+        String[] algorithms = new String[]{"XMSS", "XMSSMT"};
+
+        for (int i = 0; i != algorithms.length; i++)
+        {
+            KeyFactory kFact = KeyFactory.getInstance(algorithms[i], "BCPQC");
+
+            try
+            {
+                kFact.generatePrivate(new PKCS8EncodedKeySpec(new byte[]{0x30, 0x01, 0x00}));
+                fail("malformed private key spec accepted");
+            }
+            catch (InvalidKeySpecException e)
+            {
+                assertNotNull(algorithms[i] + " private key spec cause dropped", e.getCause());
+            }
+
+            try
+            {
+                kFact.generatePublic(new X509EncodedKeySpec(new byte[]{0x30, 0x01, 0x00}));
+                fail("malformed public key spec accepted");
+            }
+            catch (InvalidKeySpecException e)
+            {
+                assertNotNull(algorithms[i] + " public key spec cause dropped", e.getCause());
+            }
+        }
     }
 
     /**
