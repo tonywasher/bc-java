@@ -128,12 +128,7 @@ public final class BDS
         this.used = used;
         this.root = root;
         this.authenticationPath = cloneAuthenticationPath(authenticationPath);
-        this.retain = new TreeMap<Integer, List<XMSSNode>>();
-        for (Iterator<Integer> it = retain.keySet().iterator(); it.hasNext();)
-        {
-            Integer height = it.next();
-            this.retain.put(height, new LinkedList<XMSSNode>(retain.get(height)));
-        }
+        this.retain = cloneRetain(retain);
         this.stack = cloneStack(stack);
         this.treeHashInstances = cloneTreeHashInstances(treeHashInstances);
         this.keep = new TreeMap<Integer, XMSSNode>(keep);
