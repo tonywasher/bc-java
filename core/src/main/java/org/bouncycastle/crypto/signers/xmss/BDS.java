@@ -770,6 +770,15 @@ public final class BDS
                 throw new IOException("incomplete BDS state");
             }
         }
+        for (Iterator<Integer> it = keep.keySet().iterator(); it.hasNext();)
+        {
+            Integer height = it.next();
+
+            if (height == null || keep.get(height) == null)
+            {
+                throw new IOException("incomplete BDS state");
+            }
+        }
         for (Iterator<BDSTreeHash> it = treeHashInstances.iterator(); it.hasNext();)
         {
             if (it.next() == null)

@@ -1,9 +1,15 @@
 package org.bouncycastle.crypto.signers.xmss;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.lang.reflect.Field;
 import java.security.SecureRandom;
+import java.util.Map;
+import java.util.TreeMap;
 
 import junit.framework.TestCase;
 import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
@@ -15,10 +21,12 @@ import org.bouncycastle.crypto.params.XMSSKeyGenerationParameters;
 import org.bouncycastle.crypto.params.XMSSMTKeyGenerationParameters;
 import org.bouncycastle.crypto.params.XMSSMTParameters;
 import org.bouncycastle.crypto.params.XMSSParameters;
+import org.bouncycastle.crypto.params.XMSSPrivateKeyParameters;
 import org.bouncycastle.crypto.util.PrivateKeyFactory;
 import org.bouncycastle.crypto.util.PrivateKeyInfoFactory;
 import org.bouncycastle.pqc.asn1.XMSSMTPrivateKey;
 import org.bouncycastle.pqc.asn1.XMSSPrivateKey;
+import org.bouncycastle.util.Arrays;
 
 /**
  * A private key written before the versioned BDSStateCodec form carries its BDS traversal state as
@@ -129,6 +137,96 @@ public class CraftedLegacyStateTests
         catch (IOException e)
         {
             assertEquals("incomplete BDS state", e.getMessage());
+        }
+    }
+
+    /**
+     * A TreeMap holding a single null key, which put() would refuse. Its readObject() reads the
+     * entries across in the order the stream gives them and so never compares a key to anything,
+     * which is what lets a crafted stream carry one - and why the null survives to be walked by
+     * whatever reads the map afterwards. Built by patching the serialized form of an empty one:
+     * its writeObject() trailer is an entry count followed by that many key/value pairs.
+     */
+    private static Map craftedNullKeyMap()
+        throws Exception
+    {
+        ByteArrayOutputStream bOut = new ByteArrayOutputStream();
+        ObjectOutputStream oOut = new ObjectOutputStream(bOut);
+
+        oOut.writeObject(new TreeMap());
+        oOut.close();
+
+        byte[] empty = bOut.toByteArray();
+        byte[] emptyTrailer = new byte[]{TC_BLOCKDATA, 4, 0, 0, 0, 0, TC_ENDBLOCKDATA};
+
+        assertTrue("unexpected TreeMap serial form", Arrays.areEqual(emptyTrailer,
+            Arrays.copyOfRange(empty, empty.length - emptyTrailer.length, empty.length)));
+
+        byte[] crafted = Arrays.concatenate(
+            Arrays.copyOf(empty, empty.length - emptyTrailer.length),
+            new byte[]{TC_BLOCKDATA, 4, 0, 0, 0, 1, TC_NULL, TC_NULL, TC_ENDBLOCKDATA});
+
+        return (Map)new ObjectInputStream(new ByteArrayInputStream(crafted)).readObject();
+    }
+
+    /**
+     * A real BDS, serialized with one of its two maps replaced by one holding a null key.
+     */
+    private static PrivateKeyInfo keyWithNullKeyIn(String field)
+        throws Exception
+    {
+        XMSSParameters params = new XMSSParameters(4, NISTObjectIdentifiers.id_sha256);
+        XMSSKeyPairGenerator kpg = new XMSSKeyPairGenerator();
+
+        kpg.init(new XMSSKeyGenerationParameters(params, new SecureRandom()));
+
+        AsymmetricCipherKeyPair kp = kpg.generateKeyPair();
+
+        // take the key apart while its state is still sound - getBDSState() hands back the live
+        // state, so corrupting it first would leave nothing able to encode the key it came from
+        PrivateKeyInfo info = PrivateKeyInfoFactory.createPrivateKeyInfo(kp.getPrivate());
+        XMSSPrivateKey asn1 = XMSSPrivateKey.getInstance(info.parsePrivateKey());
+
+        BDS bds = ((XMSSPrivateKeyParameters)kp.getPrivate()).getBDSState();
+
+        Field f = BDS.class.getDeclaredField(field);
+
+        f.setAccessible(true);
+        f.set(bds, craftedNullKeyMap());
+
+        ByteArrayOutputStream bOut = new ByteArrayOutputStream();
+        ObjectOutputStream oOut = new ObjectOutputStream(bOut);
+
+        oOut.writeObject(bds);
+        oOut.close();
+
+        return new PrivateKeyInfo(info.getPrivateKeyAlgorithm(),
+            new XMSSPrivateKey(asn1.getIndex(), asn1.getSecretKeySeed(), asn1.getSecretKeyPRF(),
+                asn1.getPublicSeed(), asn1.getRoot(), bOut.toByteArray()));
+    }
+
+    /**
+     * The keep map is walked by the rebuild the import path runs before anything validates the
+     * state, exactly as the retain map beside it is, so both are refused where the stream enters.
+     * Left to the rebuild, a null key is a NullPointerException out of the middle of it rather
+     * than the IOException a caller of PrivateKeyFactory.createKey is already handling.
+     */
+    public void testCraftedNullKeyInStateMapsReported()
+        throws Exception
+    {
+        String[] fields = new String[]{"keep", "retain"};
+
+        for (int i = 0; i != fields.length; i++)
+        {
+            try
+            {
+                PrivateKeyFactory.createKey(keyWithNullKeyIn(fields[i]));
+                fail("null key in " + fields[i] + " accepted");
+            }
+            catch (IOException e)
+            {
+                assertEquals("incomplete BDS state", e.getMessage());
+            }
         }
     }
 
