@@ -262,4 +262,66 @@ public class OneTimeKeyReuseTests
         assertEquals("nor may its traversal state, or it would sign again under the key at index 1",
             before, shard.getBDSState().get(0).getIndex());
     }
+
+    /**
+     * XMSSEngine.rollState has to be public - the key parameters class is in another package - so a
+     * caller can reach it with a state map taken off a live key. It therefore checks rather than
+     * trusts: the state must be sitting on the index it is told to advance off.
+     */
+    public void testStateCannotBeRolledToAnIndexOfTheHoldersChoosing()
+        throws Exception
+    {
+        XMSSMTParameters params = new XMSSMTParameters(HEIGHT, LAYERS, new SHA256Digest());
+        XMSSMTPrivateKeyParameters key = mtKey(params);
+
+        XMSSEngine.generateMTSignature(key, new byte[]{0x01});
+
+        try
+        {
+            XMSSEngine.rollState(key.getBDSState(), key.getParameters(), key.getIndex() + 3,
+                key.getPublicSeed(), key.getSecretKeySeed());
+            fail("rolled the state to an index of the caller's choosing");
+        }
+        catch (IllegalStateException e)
+        {
+            assertTrue(e.getMessage(), e.getMessage().startsWith("BDS state has wrong index"));
+        }
+
+        // and the refused roll left the state where it was: the key still signs
+        assertEquals(1L, key.getIndex());
+        XMSSEngine.generateMTSignature(key, new byte[]{0x02});
+        assertEquals(2L, key.getIndex());
+    }
+
+    /**
+     * What the check on rollState cannot see is a caller passing the key's own index, advancing the
+     * state one step behind the key's back. The signer is where that is caught: the one-time key it
+     * is about to derive comes from the index and the authentication path from the state, so it
+     * refuses to sign with the two apart rather than spend an index the state has moved past.
+     */
+    public void testSigningRefusesAKeyWhoseStateHasMovedWithoutIt()
+        throws Exception
+    {
+        XMSSMTParameters params = new XMSSMTParameters(HEIGHT, LAYERS, new SHA256Digest());
+        XMSSMTPrivateKeyParameters key = mtKey(params);
+
+        XMSSEngine.generateMTSignature(key, new byte[]{0x01});
+
+        // the state moves, the key's index does not
+        XMSSEngine.rollState(key.getBDSState(), key.getParameters(), key.getIndex(),
+            key.getPublicSeed(), key.getSecretKeySeed());
+
+        try
+        {
+            XMSSEngine.generateMTSignature(key, new byte[]{0x02});
+            fail("signed at an index the traversal state had already moved past");
+        }
+        catch (IllegalStateException e)
+        {
+            assertTrue(e.getMessage(), e.getMessage().startsWith("BDS state has wrong index"));
+        }
+
+        // refused before anything was spent: the index is where it was
+        assertEquals(1L, key.getIndex());
+    }
 }

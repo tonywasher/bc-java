@@ -326,6 +326,16 @@ public final class XMSSEngine
         {
             throw new IllegalStateException("not initialized");
         }
+        //
+        // The index and the traversal state are two records of the same position, and this is the
+        // point where their disagreeing does the damage: the one-time key about to be derived comes
+        // from the index, the authentication path from the state, so signing with the two apart
+        // either signs under a one-time key the state has already moved past - RFC 8391 sec. 1.1,
+        // and the second signature verifies - or emits a path that does not match the signature.
+        // Checked here as well as on load and on roll because the state is reachable through
+        // getBDSState() and so can be moved by its holder; the signer is what must not act on it.
+        //
+        privateKey.getBDSState().validate(params, privateKey.getIndex());
 
         try
         {
@@ -543,11 +553,24 @@ public final class XMSSEngine
      * caller can obtain from a live private key: advancing the state on its own would leave it
      * past the index the key still reports, and a key whose two records of its position disagree
      * signs twice under one one-time key. Rolling the state is the key's to do, not its holder's.
+     * </p><p>
+     * Being public does not make it the holder's, though - the key parameters class is in another
+     * package and Java has no way to say "callable from these two packages only" - so this checks
+     * rather than trusts: the state must be sitting on {@code globalIndex} before it is advanced
+     * off it. A holder calling this with a state it took from a live key can therefore no longer
+     * move that state to an index of its choosing, and a state whose position had already drifted
+     * from its key's is refused here rather than rolled further. What that check cannot see is a
+     * caller passing the key's true index to advance the state one step behind the key's back;
+     * {@link #generateMTSignature} is where that is caught, before it can reuse a one-time key.
      * </p>
+     *
+     * @throws IllegalStateException if the state is not sitting on {@code globalIndex}.
      */
     public static void rollState(BDSStateMap bdsState, XMSSMTParameters params, long globalIndex,
         byte[] publicSeed, byte[] secretKeySeed)
     {
+        bdsState.validate(params, globalIndex);
+
         bdsState.updateState(params, globalIndex, publicSeed, secretKeySeed);
     }
 
