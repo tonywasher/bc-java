@@ -30,6 +30,7 @@ public class AllTests
         suite.addTestSuite(OneTimeKeyReuseTests.class);
         suite.addTestSuite(LargeIndexEncodingTests.class);
         suite.addTestSuite(CraftedLegacyStateTests.class);
+        suite.addTestSuite(IsaraOidKeyTests.class);
 
         return new BCTestSetup(suite);
     }

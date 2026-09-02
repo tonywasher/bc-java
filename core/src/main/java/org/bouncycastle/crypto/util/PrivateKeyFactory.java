@@ -57,6 +57,7 @@ import org.bouncycastle.crypto.params.SLHDSAPrivateKeyParameters;
 import org.bouncycastle.crypto.params.X25519PrivateKeyParameters;
 import org.bouncycastle.crypto.params.X448PrivateKeyParameters;
 import org.bouncycastle.internal.asn1.edec.EdECObjectIdentifiers;
+import org.bouncycastle.internal.asn1.isara.IsaraObjectIdentifiers;
 import org.bouncycastle.internal.asn1.iso.ISOIECObjectIdentifiers;
 import org.bouncycastle.internal.asn1.oiw.ElGamalParameter;
 import org.bouncycastle.internal.asn1.oiw.OIWObjectIdentifiers;
@@ -265,6 +266,8 @@ public class PrivateKeyFactory
         }
         else if (algOID.equals(PQCObjectIdentifiers.xmss)
             || algOID.equals(PQCObjectIdentifiers.xmss_mt)
+            || algOID.equals(IsaraObjectIdentifiers.id_alg_xmss)
+            || algOID.equals(IsaraObjectIdentifiers.id_alg_xmssmt)
             || algOID.equals(IANAObjectIdentifiers.id_alg_xmss_hashsig)
             || algOID.equals(IANAObjectIdentifiers.id_alg_xmssmt_hashsig))
         {

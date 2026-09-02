@@ -270,7 +270,8 @@ class XmssKeyUtil
     {
         ASN1ObjectIdentifier algOID = keyInfo.getPrivateKeyAlgorithm().getAlgorithm();
 
-        if (algOID.equals(PQCObjectIdentifiers.xmss))
+        if (algOID.equals(PQCObjectIdentifiers.xmss)
+            || algOID.equals(IsaraObjectIdentifiers.id_alg_xmss))
         {
             XMSSKeyParams keyParams = XMSSKeyParams.getInstance(keyInfo.getPrivateKeyAlgorithm().getParameters());
             ASN1ObjectIdentifier treeDigest = keyParams.getTreeDigest().getAlgorithm();
@@ -305,7 +306,8 @@ class XmssKeyUtil
                 throw Exceptions.ioException("ClassNotFoundException processing BDS state: " + e.getMessage(), e);
             }
         }
-        if (algOID.equals(PQCObjectIdentifiers.xmss_mt))
+        if (algOID.equals(PQCObjectIdentifiers.xmss_mt)
+            || algOID.equals(IsaraObjectIdentifiers.id_alg_xmssmt))
         {
             XMSSMTKeyParams keyParams = XMSSMTKeyParams.getInstance(keyInfo.getPrivateKeyAlgorithm().getParameters());
             ASN1ObjectIdentifier treeDigest = keyParams.getTreeDigest().getAlgorithm();
