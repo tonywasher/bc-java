@@ -745,6 +745,36 @@ public final class BDS
     {
         in.defaultReadObject();
 
+        // Java deserialization does not run field initializers, so a crafted stream that declares
+        // no fields leaves every collection this state is made of null, and one that declares them
+        // can put nulls inside them. The import path rebuilds a state around the digest its key
+        // names before anything validates it - withWOTSDigest() clones all five collections - so
+        // the matching checks in validate() are reached too late to be what rejects this. Refuse it
+        // here, where the stream enters. The nodes those collections hold are validate()'s to check:
+        // it is reached with them, and it reports a null one rather than dereferencing it.
+        if (authenticationPath == null || retain == null || stack == null
+            || treeHashInstances == null || keep == null)
+        {
+            throw new IOException("incomplete BDS state");
+        }
+        for (Iterator<Integer> it = retain.keySet().iterator(); it.hasNext();)
+        {
+            Integer height = it.next();
+
+            // a null key is not merely absent state: TreeMap.get(null) throws in its own right
+            if (height == null || retain.get(height) == null)
+            {
+                throw new IOException("incomplete BDS state");
+            }
+        }
+        for (Iterator<BDSTreeHash> it = treeHashInstances.iterator(); it.hasNext();)
+        {
+            if (it.next() == null)
+            {
+                throw new IOException("incomplete BDS state");
+            }
+        }
+
         // as in BDSStateMap.readObject(): ObjectInputStream.available() is an estimate of what can
         // be read without blocking rather than an end of data test, and taking a state that does
         // carry a maximum index for one that does not would widen a key shard back to the whole

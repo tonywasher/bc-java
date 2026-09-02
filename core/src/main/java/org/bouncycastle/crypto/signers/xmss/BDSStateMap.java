@@ -251,6 +251,26 @@ public class BDSStateMap
     {
         in.defaultReadObject();
 
+        // Java deserialization does not run field initializers, so a crafted stream that declares
+        // no bdsState field at all leaves it null, and one that declares it can put nulls in it.
+        // The import path rebuilds a state map around the digest its key names before anything
+        // validates it - withWOTSDigest() walks the map - so validate()'s own null checks are
+        // reached too late to be what rejects this. Refuse it here, where the stream enters.
+        if (bdsState == null)
+        {
+            throw new IOException("no state in BDS state map");
+        }
+        for (Iterator<Integer> it = bdsState.keySet().iterator(); it.hasNext();)
+        {
+            Integer layer = it.next();
+
+            // a null key is not merely absent state: TreeMap.get(null) throws in its own right
+            if (layer == null || bdsState.get(layer) == null)
+            {
+                throw new IOException("null state in BDS state map");
+            }
+        }
+
         // ObjectInputStream.available() is an estimate of what can be read without blocking, not
         // an end of data test - it answers zero for a stream that cannot supply the next block
         // header without blocking - so reading a byte is what actually says whether the maximum

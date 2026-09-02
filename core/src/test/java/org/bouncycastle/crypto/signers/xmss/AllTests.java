@@ -29,6 +29,7 @@ public class AllTests
         suite.addTestSuite(BDSStateMapIndexEnumerationTests.class);
         suite.addTestSuite(OneTimeKeyReuseTests.class);
         suite.addTestSuite(LargeIndexEncodingTests.class);
+        suite.addTestSuite(CraftedLegacyStateTests.class);
 
         return new BCTestSetup(suite);
     }
