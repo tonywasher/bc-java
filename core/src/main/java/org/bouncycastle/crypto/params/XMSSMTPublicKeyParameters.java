@@ -54,8 +54,8 @@ public final class XMSSMTPublicKeyParameters
         {
             /* set */
             this.oid = params.getParameterSetOID();
-            root = XmssFieldUtil.validateOrAllocate(builder.root, n, "root");
-            publicSeed = XmssFieldUtil.validateOrAllocate(builder.publicSeed, n, "publicSeed");
+            root = XMSSEngine.validateOrAllocate(builder.root, n, "root");
+            publicSeed = XMSSEngine.validateOrAllocate(builder.publicSeed, n, "publicSeed");
         }
     }
 

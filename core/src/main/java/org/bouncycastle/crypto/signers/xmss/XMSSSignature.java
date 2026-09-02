@@ -20,19 +20,7 @@ final class XMSSSignature
         super(builder);
         index = builder.index;
         int n = getParams().getTreeDigestSize();
-        byte[] tmpRandom = builder.random;
-        if (tmpRandom != null)
-        {
-            if (tmpRandom.length != n)
-            {
-                throw new IllegalArgumentException("size of random needs to be equal to size of digest");
-            }
-            random = tmpRandom;
-        }
-        else
-        {
-            random = new byte[n];
-        }
+        random = XMSSUtil.validateOrAllocate(builder.random, n, "random");
     }
 
     public byte[] getEncoded()

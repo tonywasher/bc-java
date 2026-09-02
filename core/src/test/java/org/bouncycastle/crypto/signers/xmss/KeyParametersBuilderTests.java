@@ -91,14 +91,34 @@ public class KeyParametersBuilderTests
     }
 
     /**
-     * All four builders take the same n-byte fields on the same terms, so a wrong-sized one has to
-     * be reported the same way. The two public key builders carried their own copy of the check
-     * and had drifted to a different wording for it.
+     * All four key builders, and the two signature builders beside them, take the same optional
+     * n-byte fields on the same terms, so a wrong-sized one has to be reported the same way. Each
+     * carried its own copy of the check and they had drifted into two wordings.
      */
     public void testWrongSizedFieldRejectedByBuilder()
     {
         byte[] shortSeed = new byte[31];
         byte[] seed = new byte[32];
+
+        try
+        {
+            new XMSSSignature.Builder(xmssParams()).withRandom(shortSeed).build();
+            fail("no exception");
+        }
+        catch (IllegalArgumentException e)
+        {
+            assertEquals("size of random needs to be equal to size of digest", e.getMessage());
+        }
+
+        try
+        {
+            new XMSSMTSignature.Builder(xmssMTParams()).withRandom(shortSeed).build();
+            fail("no exception");
+        }
+        catch (IllegalArgumentException e)
+        {
+            assertEquals("size of random needs to be equal to size of digest", e.getMessage());
+        }
 
         try
         {
@@ -108,7 +128,7 @@ public class KeyParametersBuilderTests
         }
         catch (IllegalArgumentException e)
         {
-            assertEquals("size of root needs to be equal size of digest", e.getMessage());
+            assertEquals("size of root needs to be equal to size of digest", e.getMessage());
         }
 
         try
@@ -119,7 +139,7 @@ public class KeyParametersBuilderTests
         }
         catch (IllegalArgumentException e)
         {
-            assertEquals("size of publicSeed needs to be equal size of digest", e.getMessage());
+            assertEquals("size of publicSeed needs to be equal to size of digest", e.getMessage());
         }
 
         try
@@ -130,7 +150,7 @@ public class KeyParametersBuilderTests
         }
         catch (IllegalArgumentException e)
         {
-            assertEquals("size of secretKeySeed needs to be equal size of digest", e.getMessage());
+            assertEquals("size of secretKeySeed needs to be equal to size of digest", e.getMessage());
         }
 
         try
@@ -141,7 +161,7 @@ public class KeyParametersBuilderTests
         }
         catch (IllegalArgumentException e)
         {
-            assertEquals("size of secretKeyPRF needs to be equal size of digest", e.getMessage());
+            assertEquals("size of secretKeyPRF needs to be equal to size of digest", e.getMessage());
         }
     }
 

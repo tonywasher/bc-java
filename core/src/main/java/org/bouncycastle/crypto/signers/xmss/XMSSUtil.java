@@ -87,6 +87,30 @@ class XMSSUtil
     }
 
     /**
+     * Return {@code value} once it is confirmed to be {@code size} bytes long, or a freshly
+     * allocated all-zero array of that size if {@code value} is null.
+     * <p>
+     * The optional n-byte fields of the key parameter classes and of the two signature classes
+     * are all taken on these terms, and there had been a copy of the check per class - six of
+     * them, in two packages, already saying two different things about the same mistake. The
+     * wording here is the one the rest of the package uses.
+     * </p>
+     */
+    public static byte[] validateOrAllocate(byte[] value, int size, String name)
+    {
+        if (value == null)
+        {
+            return new byte[size];
+        }
+        if (value.length != size)
+        {
+            throw new IllegalArgumentException("size of " + name + " needs to be equal to size of digest");
+        }
+
+        return value;
+    }
+
+    /**
      * Clone a 2d byte array.
      *
      * @param in 2d byte array.

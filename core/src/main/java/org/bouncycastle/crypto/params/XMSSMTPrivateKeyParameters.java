@@ -99,13 +99,13 @@ public final class XMSSMTPrivateKeyParameters
             /* set */
             index = builder.index;
             byte[] tmpSecretKeySeed = builder.secretKeySeed;
-            secretKeySeed = XmssFieldUtil.validateOrAllocate(tmpSecretKeySeed, n, "secretKeySeed");
+            secretKeySeed = XMSSEngine.validateOrAllocate(tmpSecretKeySeed, n, "secretKeySeed");
             byte[] tmpSecretKeyPRF = builder.secretKeyPRF;
-            secretKeyPRF = XmssFieldUtil.validateOrAllocate(tmpSecretKeyPRF, n, "secretKeyPRF");
+            secretKeyPRF = XMSSEngine.validateOrAllocate(tmpSecretKeyPRF, n, "secretKeyPRF");
             byte[] tmpPublicSeed = builder.publicSeed;
-            publicSeed = XmssFieldUtil.validateOrAllocate(tmpPublicSeed, n, "publicSeed");
+            publicSeed = XMSSEngine.validateOrAllocate(tmpPublicSeed, n, "publicSeed");
             byte[] tmpRoot = builder.root;
-            root = XmssFieldUtil.validateOrAllocate(tmpRoot, n, "root");
+            root = XMSSEngine.validateOrAllocate(tmpRoot, n, "root");
             BDSStateMap tmpBDSState = builder.bdsState;
             if (tmpBDSState != null)
             {

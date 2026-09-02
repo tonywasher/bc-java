@@ -638,6 +638,21 @@ public final class XMSSEngine
         return XMSSUtil.extractBytesAtOffset(src, offset, length);
     }
 
+    /**
+     * Return {@code value} once it is confirmed to be {@code size} bytes long, or a freshly
+     * allocated all-zero array of that size if {@code value} is null. {@code name} is how the
+     * field is named in the message a wrong-sized one is refused with.
+     * <p>
+     * Shared by the four key parameter classes and the two signature classes, which take their
+     * optional n-byte fields on the same terms and so must say the same thing about one that is
+     * the wrong size.
+     * </p>
+     */
+    public static byte[] validateOrAllocate(byte[] value, int size, String name)
+    {
+        return XMSSUtil.validateOrAllocate(value, size, name);
+    }
+
     static WOTSPlus newWOTSPlus(XMSSParameters params)
     {
         return new WOTSPlus(newWOTSPlusParameters(params));

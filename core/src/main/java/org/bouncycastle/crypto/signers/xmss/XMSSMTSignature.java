@@ -65,19 +65,7 @@ final class XMSSMTSignature
         {
             /* set */
             index = builder.index;
-            byte[] tmpRandom = builder.random;
-            if (tmpRandom != null)
-            {
-                if (tmpRandom.length != n)
-                {
-                    throw new IllegalArgumentException("size of random needs to be equal to size of digest");
-                }
-                random = tmpRandom;
-            }
-            else
-            {
-                random = new byte[n];
-            }
+            random = XMSSUtil.validateOrAllocate(builder.random, n, "random");
             reducedSignatures = new ArrayList<XMSSReducedSignature>();
         }
     }
