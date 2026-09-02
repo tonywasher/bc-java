@@ -1,5 +1,7 @@
 package org.bouncycastle.crypto.signers.xmss;
 
+import org.bouncycastle.util.Bytes;
+
 class XMSSNodeUtil
 {
     /**
@@ -86,14 +88,8 @@ class XMSSNodeUtil
         byte[] leftValue = left.getValue();
         byte[] rightValue = right.getValue();
         byte[] tmpMask = new byte[2 * n];
-        for (int i = 0; i < n; i++)
-        {
-            tmpMask[i] = (byte)(leftValue[i] ^ bitmask0[i]);
-        }
-        for (int i = 0; i < n; i++)
-        {
-            tmpMask[i + n] = (byte)(rightValue[i] ^ bitmask1[i]);
-        }
+        Bytes.xor(n, leftValue, bitmask0, tmpMask);
+        Bytes.xor(n, rightValue, bitmask1, tmpMask, n);
         byte[] out = wotsPlus.getKhf().H(key, tmpMask);
         return new XMSSNode(left.getHeight(), out);
     }

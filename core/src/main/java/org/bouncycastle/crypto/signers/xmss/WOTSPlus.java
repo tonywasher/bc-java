@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.bouncycastle.util.Arrays;
+import org.bouncycastle.util.Bytes;
 
 /**
  * WOTS+.
@@ -180,10 +181,7 @@ final class WOTSPlus
         otsHashAddress = withHashAddress(otsHashAddress, hashAddress, 1);
         byte[] bitmask = khf.PRF(publicSeed, otsHashAddress.toByteArray());
         byte[] tmpMasked = new byte[n];
-        for (int i = 0; i < n; i++)
-        {
-            tmpMasked[i] = (byte)(tmp[i] ^ bitmask[i]);
-        }
+        Bytes.xor(n, tmp, bitmask, tmpMasked);
         tmp = khf.F(key, tmpMasked);
         return tmp;
     }
