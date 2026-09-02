@@ -48,15 +48,14 @@ class XMSSVerifierUtil
                 hashTreeAddress = XMSSNodeUtil.withTreeIndex(hashTreeAddress,
                     hashTreeAddress.getTreeIndex() / 2);
                 node[1] = XMSSNodeUtil.randomizeHash(wotsPlus, node[0], signature.getAuthPath().get(k), hashTreeAddress);
-                node[1] = node[1].incrementHeight();
             }
             else
             {
                 hashTreeAddress = XMSSNodeUtil.withTreeIndex(hashTreeAddress,
                     (hashTreeAddress.getTreeIndex() - 1) / 2);
                 node[1] = XMSSNodeUtil.randomizeHash(wotsPlus, signature.getAuthPath().get(k), node[0], hashTreeAddress);
-                node[1] = node[1].incrementHeight();
             }
+            node[1] = node[1].incrementHeight();
             node[0] = node[1];
         }
         return node[0];

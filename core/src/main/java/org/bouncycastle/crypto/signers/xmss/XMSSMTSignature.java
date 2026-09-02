@@ -1,6 +1,5 @@
 package org.bouncycastle.crypto.signers.xmss;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -35,10 +34,9 @@ final class XMSSMTSignature
             /* import */
             int len = params.getLen();
             int indexSize = (int)Math.ceil(params.getHeight() / 8.0);
-            int randomSize = n;
             int reducedSignatureSizeSingle = ((params.getHeight() / params.getLayers()) + len) * n;
             int reducedSignaturesSizeTotal = reducedSignatureSizeSingle * params.getLayers();
-            int totalSize = indexSize + randomSize + reducedSignaturesSizeTotal;
+            int totalSize = indexSize + n + reducedSignaturesSizeTotal;
             if (signature.length != totalSize)
             {
                 throw new IllegalArgumentException("signature has wrong size");
@@ -51,8 +49,8 @@ final class XMSSMTSignature
                 throw new IllegalArgumentException("index out of bounds");
             }
             position += indexSize;
-            random = XMSSUtil.extractBytesAtOffset(signature, position, randomSize);
-            position += randomSize;
+            random = XMSSUtil.extractBytesAtOffset(signature, position, n);
+            position += n;
             reducedSignatures = new ArrayList<XMSSReducedSignature>();
             while (position < signature.length)
             {
@@ -80,20 +78,11 @@ final class XMSSMTSignature
             {
                 random = new byte[n];
             }
-            List<XMSSReducedSignature> tmpReducedSignatures = builder.reducedSignatures;
-            if (tmpReducedSignatures != null)
-            {
-                reducedSignatures = tmpReducedSignatures;
-            }
-            else
-            {
-                reducedSignatures = new ArrayList<XMSSReducedSignature>();
-            }
+            reducedSignatures = new ArrayList<XMSSReducedSignature>();
         }
     }
 
     public byte[] getEncoded()
-        throws IOException
     {
         return toByteArray();
     }
@@ -106,7 +95,7 @@ final class XMSSMTSignature
         /* optional */
         private long index = 0L;
         private byte[] random = null;
-        private List<XMSSReducedSignature> reducedSignatures = null;
+
         private byte[] signature = null;
 
         public Builder(XMSSMTParameters params)
@@ -124,12 +113,6 @@ final class XMSSMTSignature
         public Builder withRandom(byte[] val)
         {
             random = XMSSUtil.cloneArray(val);
-            return this;
-        }
-
-        public Builder withReducedSignatures(List<XMSSReducedSignature> val)
-        {
-            reducedSignatures = val;
             return this;
         }
 
@@ -151,10 +134,9 @@ final class XMSSMTSignature
         int n = params.getTreeDigestSize();
         int len = params.getLen();
         int indexSize = (int)Math.ceil(params.getHeight() / 8.0);
-        int randomSize = n;
         int reducedSignatureSizeSingle = ((params.getHeight() / params.getLayers()) + len) * n;
         int reducedSignaturesSizeTotal = reducedSignatureSizeSingle * params.getLayers();
-        int totalSize = indexSize + randomSize + reducedSignaturesSizeTotal;
+        int totalSize = indexSize + n + reducedSignaturesSizeTotal;
         byte[] out = new byte[totalSize];
         int position = 0;
         /* copy index */
@@ -163,7 +145,7 @@ final class XMSSMTSignature
         position += indexSize;
         /* copy random */
         XMSSUtil.copyBytesAtOffset(out, random, position);
-        position += randomSize;
+        position += n;
         /* copy reduced signatures */
         for (XMSSReducedSignature reducedSignature : reducedSignatures)
         {

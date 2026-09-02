@@ -1,7 +1,6 @@
 package org.bouncycastle.crypto.signers.xmss;
 
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
-import org.bouncycastle.crypto.Digest;
 
 /**
  * WOTS+ Parameters.

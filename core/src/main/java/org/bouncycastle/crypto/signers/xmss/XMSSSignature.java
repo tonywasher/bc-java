@@ -1,7 +1,5 @@
 package org.bouncycastle.crypto.signers.xmss;
 
-import java.io.IOException;
-
 import org.bouncycastle.crypto.params.XMSSParameters;
 import org.bouncycastle.util.Encodable;
 import org.bouncycastle.util.Pack;
@@ -38,7 +36,6 @@ final class XMSSSignature
     }
 
     public byte[] getEncoded()
-        throws IOException
     {
         return toByteArray();
     }
@@ -80,10 +77,9 @@ final class XMSSSignature
             int len = params.getLen();
             int height = params.getHeight();
             int indexSize = 4;
-            int randomSize = n;
             int signatureSize = len * n;
             int authPathSize = height * n;
-            int totalSize = indexSize + randomSize + signatureSize + authPathSize;
+            int totalSize = indexSize + n + signatureSize + authPathSize;
             if (val.length != totalSize)
             {
                 /* an XMSS signature is a fixed-size encoding - anything longer or shorter, in
@@ -96,8 +92,8 @@ final class XMSSSignature
             index = Pack.bigEndianToInt(val, position);
             position += indexSize;
             /* extract random */
-            random = XMSSUtil.extractBytesAtOffset(val, position, randomSize);
-            position += randomSize;
+            random = XMSSUtil.extractBytesAtOffset(val, position, n);
+            position += n;
             withReducedSignature(XMSSUtil.extractBytesAtOffset(val, position, signatureSize + authPathSize));
             return this;
         }
@@ -110,17 +106,15 @@ final class XMSSSignature
 
     /**
      * @deprecated use getEncoded() this method will become private.
-     * @return
      */
     public byte[] toByteArray()
     {
         /* index || random || signature || authentication path */
         int n = getParams().getTreeDigestSize();
         int indexSize = 4;
-        int randomSize = n;
         int signatureSize = getParams().getLen() * n;
         int authPathSize = getParams().getHeight() * n;
-        int totalSize = indexSize + randomSize + signatureSize + authPathSize;
+        int totalSize = indexSize + n + signatureSize + authPathSize;
         byte[] out = new byte[totalSize];
         int position = 0;
         /* copy index */
@@ -128,7 +122,7 @@ final class XMSSSignature
         position += indexSize;
         /* copy random */
         XMSSUtil.copyBytesAtOffset(out, random, position);
-        position += randomSize;
+        position += n;
         /* copy signature */
         byte[][] signature = getWOTSPlusSignature().toByteArray();
         for (int i = 0; i < signature.length; i++)

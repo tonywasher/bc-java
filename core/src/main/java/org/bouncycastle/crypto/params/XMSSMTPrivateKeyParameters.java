@@ -23,7 +23,6 @@ public final class XMSSMTPrivateKeyParameters
 
     private volatile long index;
     private volatile BDSStateMap bdsState;
-    private volatile boolean used;
 
     private XMSSMTPrivateKeyParameters(Builder builder)
     {
@@ -41,10 +40,6 @@ public final class XMSSMTPrivateKeyParameters
             /* import */
             int totalHeight = params.getHeight();
             int indexSize = (totalHeight + 7) / 8;
-            int secretKeySize = n;
-            int secretKeyPRFSize = n;
-            int publicSeedSize = n;
-            int rootSize = n;
             /*
             int totalSize = indexSize + secretKeySize + secretKeyPRFSize + publicSeedSize + rootSize;
             if (privateKey.length != totalSize) {
@@ -58,14 +53,14 @@ public final class XMSSMTPrivateKeyParameters
                 throw new IllegalArgumentException("index out of bounds");
             }
             position += indexSize;
-            secretKeySeed = XMSSEngine.extractBytesAtOffset(privateKey, position, secretKeySize);
-            position += secretKeySize;
-            secretKeyPRF = XMSSEngine.extractBytesAtOffset(privateKey, position, secretKeyPRFSize);
-            position += secretKeyPRFSize;
-            publicSeed = XMSSEngine.extractBytesAtOffset(privateKey, position, publicSeedSize);
-            position += publicSeedSize;
-            root = XMSSEngine.extractBytesAtOffset(privateKey, position, rootSize);
-            position += rootSize;
+            secretKeySeed = XMSSEngine.extractBytesAtOffset(privateKey, position, n);
+            position += n;
+            secretKeyPRF = XMSSEngine.extractBytesAtOffset(privateKey, position, n);
+            position += n;
+            publicSeed = XMSSEngine.extractBytesAtOffset(privateKey, position, n);
+            position += n;
+            root = XMSSEngine.extractBytesAtOffset(privateKey, position, n);
+            position += n;
             /* import BDS state */
             byte[] bdsStateBinary = XMSSEngine.extractBytesAtOffset(privateKey, position, privateKey.length - position);
 
@@ -262,11 +257,7 @@ public final class XMSSMTPrivateKeyParameters
             /* index || secretKeySeed || secretKeyPRF || publicSeed || root */
             int n = params.getTreeDigestSize();
             int indexSize = (params.getHeight() + 7) / 8;
-            int secretKeySize = n;
-            int secretKeyPRFSize = n;
-            int publicSeedSize = n;
-            int rootSize = n;
-            int totalSize = indexSize + secretKeySize + secretKeyPRFSize + publicSeedSize + rootSize;
+            int totalSize = indexSize + n + n + n + n;
             byte[] out = new byte[totalSize];
             int position = 0;
             /* copy index */
@@ -275,13 +266,13 @@ public final class XMSSMTPrivateKeyParameters
             position += indexSize;
             /* copy secretKeySeed */
             XMSSEngine.copyBytesAtOffset(out, secretKeySeed, position);
-            position += secretKeySize;
+            position += n;
             /* copy secretKeyPRF */
             XMSSEngine.copyBytesAtOffset(out, secretKeyPRF, position);
-            position += secretKeyPRFSize;
+            position += n;
             /* copy publicSeed */
             XMSSEngine.copyBytesAtOffset(out, publicSeed, position);
-            position += publicSeedSize;
+            position += n;
             /* copy root */
             XMSSEngine.copyBytesAtOffset(out, root, position);
             /* concatenate bdsState */
@@ -355,13 +346,11 @@ public final class XMSSMTPrivateKeyParameters
             {
                 bdsState.updateState(params, index, publicSeed, secretKeySeed);
                 index = index + 1;
-                used = false;
             }
             else
             {
                 index = bdsState.getMaxIndex() + 1;
                 bdsState = new BDSStateMap(bdsState.getMaxIndex());
-                used = false;
             }
 
             return this;

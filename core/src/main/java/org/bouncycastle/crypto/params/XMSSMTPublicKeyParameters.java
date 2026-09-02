@@ -28,24 +28,22 @@ public final class XMSSMTPublicKeyParameters
         {
             /* import */
             int oidSize = 4;
-            int rootSize = n;
-            int publicSeedSize = n;
             int position = 0;
             // pre-rfc final key without OID.
-            if (publicKey.length == rootSize + publicSeedSize)
+            if (publicKey.length == n + n)
             {
                 oid = 0;
-                root = XMSSEngine.extractBytesAtOffset(publicKey, position, rootSize);
-                position += rootSize;
-                publicSeed = XMSSEngine.extractBytesAtOffset(publicKey, position, publicSeedSize);
+                root = XMSSEngine.extractBytesAtOffset(publicKey, position, n);
+                position += n;
+                publicSeed = XMSSEngine.extractBytesAtOffset(publicKey, position, n);
             }
-            else if (publicKey.length == oidSize + rootSize + publicSeedSize)
+            else if (publicKey.length == oidSize + n + n)
             {
                 oid = Pack.bigEndianToInt(publicKey, 0);
                 position += oidSize;
-                root = XMSSEngine.extractBytesAtOffset(publicKey, position, rootSize);
-                position += rootSize;
-                publicSeed = XMSSEngine.extractBytesAtOffset(publicKey, position, publicSeedSize);
+                root = XMSSEngine.extractBytesAtOffset(publicKey, position, n);
+                position += n;
+                publicSeed = XMSSEngine.extractBytesAtOffset(publicKey, position, n);
             }
             else
             {

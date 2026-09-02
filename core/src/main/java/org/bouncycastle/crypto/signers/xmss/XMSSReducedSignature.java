@@ -82,9 +82,8 @@ class XMSSReducedSignature
         }
     }
 
-    public static class Builder
+    static class Builder
     {
-
         /* mandatory */
         private final XMSSParameters params;
         /* optional */
