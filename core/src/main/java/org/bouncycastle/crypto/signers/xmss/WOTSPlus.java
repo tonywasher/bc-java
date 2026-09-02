@@ -85,14 +85,7 @@ final class WOTSPlus
      */
     public WOTSPlusSignature sign(byte[] messageDigest, OTSHashAddress otsHashAddress)
     {
-        if (messageDigest == null)
-        {
-            throw new NullPointerException("messageDigest == null");
-        }
-        if (messageDigest.length != params.getTreeDigestSize())
-        {
-            throw new IllegalArgumentException("size of messageDigest needs to be equal to size of digest");
-        }
+        checkMessageDigest(messageDigest);
         if (otsHashAddress == null)
         {
             throw new NullPointerException("otsHashAddress == null");
@@ -103,11 +96,7 @@ final class WOTSPlus
         byte[][] signature = new byte[params.getLen()][];
         for (int i = 0; i < params.getLen(); i++)
         {
-            otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder()
-                .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
-                .withOTSAddress(otsHashAddress.getOTSAddress()).withChainAddress(i)
-                .withHashAddress(otsHashAddress.getHashAddress()).withKeyAndMask(otsHashAddress.getKeyAndMask())
-                .build();
+            otsHashAddress = withChainAddress(otsHashAddress, i);
             signature[i] = chain(expandSecretKeySeed(i), 0, baseWMessage.get(i), otsHashAddress);
         }
         return new WOTSPlusSignature(params, signature);
@@ -124,14 +113,7 @@ final class WOTSPlus
     public WOTSPlusPublicKeyParameters getPublicKeyFromSignature(byte[] messageDigest, WOTSPlusSignature signature,
                                                                     OTSHashAddress otsHashAddress)
     {
-        if (messageDigest == null)
-        {
-            throw new NullPointerException("messageDigest == null");
-        }
-        if (messageDigest.length != params.getTreeDigestSize())
-        {
-            throw new IllegalArgumentException("size of messageDigest needs to be equal to size of digest");
-        }
+        checkMessageDigest(messageDigest);
         if (signature == null)
         {
             throw new NullPointerException("signature == null");
@@ -145,11 +127,7 @@ final class WOTSPlus
         byte[][] publicKey = new byte[params.getLen()][];
         for (int i = 0; i < params.getLen(); i++)
         {
-            otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder()
-                .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
-                .withOTSAddress(otsHashAddress.getOTSAddress()).withChainAddress(i)
-                .withHashAddress(otsHashAddress.getHashAddress()).withKeyAndMask(otsHashAddress.getKeyAndMask())
-                .build();
+            otsHashAddress = withChainAddress(otsHashAddress, i);
             publicKey[i] = chain(signature.toByteArray()[i], baseWMessage.get(i),
                 params.getWinternitzParameter() - 1 - baseWMessage.get(i), otsHashAddress);
         }
@@ -196,15 +174,10 @@ final class WOTSPlus
         }
 
         byte[] tmp = chain(startHash, startIndex, steps - 1, otsHashAddress);
-        otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder()
-            .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
-            .withOTSAddress(otsHashAddress.getOTSAddress()).withChainAddress(otsHashAddress.getChainAddress())
-            .withHashAddress(startIndex + steps - 1).withKeyAndMask(0).build();
+        int hashAddress = startIndex + steps - 1;
+        otsHashAddress = withHashAddress(otsHashAddress, hashAddress, 0);
         byte[] key = khf.PRF(publicSeed, otsHashAddress.toByteArray());
-        otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder()
-            .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
-            .withOTSAddress(otsHashAddress.getOTSAddress()).withChainAddress(otsHashAddress.getChainAddress())
-            .withHashAddress(otsHashAddress.getHashAddress()).withKeyAndMask(1).build();
+        otsHashAddress = withHashAddress(otsHashAddress, hashAddress, 1);
         byte[] bitmask = khf.PRF(publicSeed, otsHashAddress.toByteArray());
         byte[] tmpMasked = new byte[n];
         for (int i = 0; i < n; i++)
@@ -213,6 +186,60 @@ final class WOTSPlus
         }
         tmp = khf.F(key, tmpMasked);
         return tmp;
+    }
+
+    /**
+     * The given address with its chain address replaced and every other field carried over. An
+     * XMSS address is immutable, so setting one field means rebuilding the whole address, and the
+     * three loops that walk the len chains of a WOTS+ key all step the chain address this way.
+     *
+     * @param otsHashAddress OTS hash address to copy.
+     * @param chainAddress   Chain address to set.
+     * @return otsHashAddress with the given chain address.
+     */
+    private static OTSHashAddress withChainAddress(OTSHashAddress otsHashAddress, int chainAddress)
+    {
+        return (OTSHashAddress)new OTSHashAddress.Builder()
+            .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
+            .withOTSAddress(otsHashAddress.getOTSAddress()).withChainAddress(chainAddress)
+            .withHashAddress(otsHashAddress.getHashAddress()).withKeyAndMask(otsHashAddress.getKeyAndMask())
+            .build();
+    }
+
+    /**
+     * The given address with its hash address and key-and-mask replaced and every other field
+     * carried over, as chain() needs for the two PRF calls - key, then bitmask - it makes at each
+     * step of a chain.
+     *
+     * @param otsHashAddress OTS hash address to copy.
+     * @param hashAddress    Hash address to set.
+     * @param keyAndMask     Key and mask to set.
+     * @return otsHashAddress with the given hash address and key and mask.
+     */
+    private static OTSHashAddress withHashAddress(OTSHashAddress otsHashAddress, int hashAddress, int keyAndMask)
+    {
+        return (OTSHashAddress)new OTSHashAddress.Builder()
+            .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
+            .withOTSAddress(otsHashAddress.getOTSAddress()).withChainAddress(otsHashAddress.getChainAddress())
+            .withHashAddress(hashAddress).withKeyAndMask(keyAndMask)
+            .build();
+    }
+
+    /**
+     * Checks the message digest argument shared by sign() and getPublicKeyFromSignature().
+     *
+     * @param messageDigest Digest to check.
+     */
+    private void checkMessageDigest(byte[] messageDigest)
+    {
+        if (messageDigest == null)
+        {
+            throw new NullPointerException("messageDigest == null");
+        }
+        if (messageDigest.length != params.getTreeDigestSize())
+        {
+            throw new IllegalArgumentException("size of messageDigest needs to be equal to size of digest");
+        }
     }
 
     /**
@@ -384,11 +411,7 @@ final class WOTSPlus
         /* derive public key from secretKeySeed */
         for (int i = 0; i < params.getLen(); i++)
         {
-            otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder()
-                .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
-                .withOTSAddress(otsHashAddress.getOTSAddress()).withChainAddress(i)
-                .withHashAddress(otsHashAddress.getHashAddress()).withKeyAndMask(otsHashAddress.getKeyAndMask())
-                .build();
+            otsHashAddress = withChainAddress(otsHashAddress, i);
             publicKey[i] = chain(expandSecretKeySeed(i), 0, params.getWinternitzParameter() - 1, otsHashAddress);
         }
         return new WOTSPlusPublicKeyParameters(params, publicKey);
