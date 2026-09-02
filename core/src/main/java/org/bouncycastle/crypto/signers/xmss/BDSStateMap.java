@@ -53,7 +53,12 @@ public class BDSStateMap
         return maxIndex;
     }
 
-    public void updateState(XMSSMTParameters params, long globalIndex, byte[] publicSeed, byte[] secretKeySeed)
+    /**
+     * Package-private: advancing the traversal state is the owning key's to do, and it does it
+     * through {@link XMSSEngine#rollState} so that the index it reports moves with it. See that
+     * method for why this is not on the handle a caller can reach.
+     */
+    void updateState(XMSSMTParameters params, long globalIndex, byte[] publicSeed, byte[] secretKeySeed)
     {
         XMSSParameters xmssParams = params.getXMSSParameters();
         int xmssHeight = xmssParams.getHeight();

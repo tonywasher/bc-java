@@ -344,7 +344,7 @@ public final class XMSSMTPrivateKeyParameters
         {
             if (this.getIndex() < bdsState.getMaxIndex())
             {
-                bdsState.updateState(params, index, publicSeed, secretKeySeed);
+                XMSSEngine.rollState(bdsState, params, index, publicSeed, secretKeySeed);
                 index = index + 1;
             }
             else

@@ -535,6 +535,22 @@ public final class XMSSEngine
     }
 
     /**
+     * Advance an XMSS^MT traversal state to the leaf after {@code globalIndex}, for the key
+     * parameters class rolling its own key on.
+     * <p>
+     * This sits here rather than on {@link BDSStateMap} because that type is an opaque handle a
+     * caller can obtain from a live private key: advancing the state on its own would leave it
+     * past the index the key still reports, and a key whose two records of its position disagree
+     * signs twice under one one-time key. Rolling the state is the key's to do, not its holder's.
+     * </p>
+     */
+    public static void rollState(BDSStateMap bdsState, XMSSMTParameters params, long globalIndex,
+        byte[] publicSeed, byte[] secretKeySeed)
+    {
+        bdsState.updateState(params, globalIndex, publicSeed, secretKeySeed);
+    }
+
+    /**
      * Recover an XMSS BDS traversal state from a private key encoding, checking its checksum
      * against the owning key's public seed (github #2414).
      */
