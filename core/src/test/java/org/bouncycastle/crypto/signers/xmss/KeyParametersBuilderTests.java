@@ -91,6 +91,61 @@ public class KeyParametersBuilderTests
     }
 
     /**
+     * All four builders take the same n-byte fields on the same terms, so a wrong-sized one has to
+     * be reported the same way. The two public key builders carried their own copy of the check
+     * and had drifted to a different wording for it.
+     */
+    public void testWrongSizedFieldRejectedByBuilder()
+    {
+        byte[] shortSeed = new byte[31];
+        byte[] seed = new byte[32];
+
+        try
+        {
+            new XMSSPublicKeyParameters.Builder(xmssParams()).withRoot(shortSeed)
+                .withPublicSeed(seed).build();
+            fail("no exception");
+        }
+        catch (IllegalArgumentException e)
+        {
+            assertEquals("size of root needs to be equal size of digest", e.getMessage());
+        }
+
+        try
+        {
+            new XMSSMTPublicKeyParameters.Builder(xmssMTParams()).withRoot(seed)
+                .withPublicSeed(shortSeed).build();
+            fail("no exception");
+        }
+        catch (IllegalArgumentException e)
+        {
+            assertEquals("size of publicSeed needs to be equal size of digest", e.getMessage());
+        }
+
+        try
+        {
+            new XMSSPrivateKeyParameters.Builder(xmssParams()).withSecretKeySeed(shortSeed)
+                .withSecretKeyPRF(seed).withPublicSeed(seed).withRoot(seed).build();
+            fail("no exception");
+        }
+        catch (IllegalArgumentException e)
+        {
+            assertEquals("size of secretKeySeed needs to be equal size of digest", e.getMessage());
+        }
+
+        try
+        {
+            new XMSSMTPrivateKeyParameters.Builder(xmssMTParams()).withSecretKeySeed(seed)
+                .withSecretKeyPRF(shortSeed).withPublicSeed(seed).withRoot(seed).build();
+            fail("no exception");
+        }
+        catch (IllegalArgumentException e)
+        {
+            assertEquals("size of secretKeyPRF needs to be equal size of digest", e.getMessage());
+        }
+    }
+
+    /**
      * Neither private key builder will hand back a key whose seeds it had to invent. Without the
      * check the seeds default to all zeroes, which is a usable-looking key an application has no
      * way of telling apart from a generated one.

@@ -1,9 +1,11 @@
 package org.bouncycastle.crypto.params;
 
 /**
- * Shared by the XMSS and XMSS^MT key parameter classes, which accept the same n-byte fields on the
- * same terms and so must say the same thing about one that is the wrong size - the message is
- * asserted on verbatim, and two copies of the check are two chances to change only one of them.
+ * Shared by the four XMSS and XMSS^MT key parameter classes, public and private, which accept the
+ * same n-byte fields on the same terms and so must say the same thing about one that is the wrong
+ * size - the message is asserted on verbatim, and a copy of the check per class is a chance per
+ * class to change only that one. The two public key classes had already drifted to a different
+ * wording before they were brought here.
  */
 class XmssFieldUtil
 {

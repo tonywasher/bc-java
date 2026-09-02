@@ -59,32 +59,8 @@ public final class XMSSPublicKeyParameters
         {
             /* set */
             this.oid = params.getParameterSetOID();
-            byte[] tmpRoot = builder.root;
-            if (tmpRoot != null)
-            {
-                if (tmpRoot.length != n)
-                {
-                    throw new IllegalArgumentException("length of root must be equal to length of digest");
-                }
-                root = tmpRoot;
-            }
-            else
-            {
-                root = new byte[n];
-            }
-            byte[] tmpPublicSeed = builder.publicSeed;
-            if (tmpPublicSeed != null)
-            {
-                if (tmpPublicSeed.length != n)
-                {
-                    throw new IllegalArgumentException("length of publicSeed must be equal to length of digest");
-                }
-                publicSeed = tmpPublicSeed;
-            }
-            else
-            {
-                publicSeed = new byte[n];
-            }
+            root = XmssFieldUtil.validateOrAllocate(builder.root, n, "root");
+            publicSeed = XmssFieldUtil.validateOrAllocate(builder.publicSeed, n, "publicSeed");
         }
     }
 
