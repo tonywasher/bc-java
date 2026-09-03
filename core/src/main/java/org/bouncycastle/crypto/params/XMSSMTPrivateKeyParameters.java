@@ -228,15 +228,42 @@ public final class XMSSMTPrivateKeyParameters
             // of its own, given on its withBDSState: no layer states are installed into a single
             // BDS, but a signature still marks it.
             //
-            if (val.getMaxIndex() < 0)   // check for legacy state maps
-            {
-                bdsState = new BDSStateMap(val, (1L << params.getHeight()) - 1);
-            }
-            else
-            {
-                bdsState = new BDSStateMap(val, val.getMaxIndex());
-            }
+            bdsState = new BDSStateMap(val, maxIndexFor(val));
             return this;
+        }
+
+        /**
+         * As {@link #withBDSState(BDSStateMap)}, for a state map the caller has just built and
+         * shares with nothing: it is adopted rather than copied a second time.
+         * <p>
+         * Package private, and deliberately: the copy the public setter makes is what stops a
+         * caller keeping the map it handed over, and a way of asking the key to adopt one is the
+         * same defect offered as an option. The callers that can use this are the ones inside the
+         * class, where the map being handed over was built by the expression handing it over and
+         * is provably shared with nothing. Key generation and the two key decode factories build
+         * an exclusive map too, but they are in other packages and so go on paying for the copy -
+         * once per key pair and once per key read, against a shard that can be taken once per
+         * signature.
+         * </p>
+         */
+        Builder withOwnedBDSState(BDSStateMap val)
+        {
+            long maxIndex = maxIndexFor(val);
+
+            // a legacy state map cannot be given a maximum index in place without changing the map
+            // that was handed over, so that one is copied even here
+            bdsState = (maxIndex == val.getMaxIndex()) ? val : new BDSStateMap(val, maxIndex);
+            return this;
+        }
+
+        /**
+         * The maximum index a state map handed to this builder should end up with: its own, or -
+         * for one written before the maximum index was recorded, which marks itself with a
+         * negative value it cannot resolve for itself - the last leaf of the key's own tree.
+         */
+        private long maxIndexFor(BDSStateMap val)
+        {
+            return (val.getMaxIndex() < 0) ? (1L << params.getHeight()) - 1 : val.getMaxIndex();
         }
 
         public Builder withPrivateKey(byte[] privateKeyVal)
@@ -409,7 +436,8 @@ public final class XMSSMTPrivateKeyParameters
                                     .withSecretKeySeed(secretKeySeed).withSecretKeyPRF(secretKeyPRF)
                                     .withPublicSeed(publicSeed).withRoot(root)
                                     .withIndex(getIndex())
-                                    .withBDSState(new BDSStateMap(this.bdsState, getIndex() + usageCount - 1)).build();
+                                    .withOwnedBDSState(new BDSStateMap(this.bdsState,
+                                        getIndex() + usageCount - 1)).build();
 
                 for (int i = 0; i != usageCount; i++)
                 {

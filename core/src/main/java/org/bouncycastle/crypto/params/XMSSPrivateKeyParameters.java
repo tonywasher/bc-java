@@ -208,7 +208,7 @@ public final class XMSSPrivateKeyParameters
                     .withSecretKeySeed(secretKeySeed).withSecretKeyPRF(secretKeyPRF)
                     .withPublicSeed(publicSeed).withRoot(root)
                     .withIndex(getIndex())
-                    .withBDSState(bdsState.withMaxIndex(bdsState.getIndex() + usageCount - 1,
+                    .withOwnedBDSState(bdsState.withMaxIndex(bdsState.getIndex() + usageCount - 1,
                         params.getTreeDigestOID(), params.getTreeDigestSize())).build();
 
                 if (usageCount == this.getUsagesRemaining())
@@ -306,6 +306,18 @@ public final class XMSSPrivateKeyParameters
             //
             bdsState = valBDS.withMaxIndex(valBDS.getMaxIndex(), params.getTreeDigestOID(),
                 params.getTreeDigestSize());
+            return this;
+        }
+
+        /**
+         * As {@link #withBDSState(BDS)}, for a state the caller has just built and shares with
+         * nothing: it is adopted rather than copied a second time. Package private for the reason
+         * the XMSS^MT sibling gives - a public way of asking the key to adopt a state is the
+         * sharing defect the copy prevents, offered as an option.
+         */
+        Builder withOwnedBDSState(BDS valBDS)
+        {
+            bdsState = valBDS;
             return this;
         }
 
