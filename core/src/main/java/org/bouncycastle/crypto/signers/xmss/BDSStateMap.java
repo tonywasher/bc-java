@@ -218,7 +218,27 @@ public class BDSStateMap
     public void validate(XMSSMTParameters params, long globalIndex)
     {
         validate(params);
+        validateIndex(params, globalIndex);
+    }
 
+    /**
+     * The index half of validate(XMSSMTParameters, long) on its own: tie each layer's traversal
+     * state to the index its enclosing key declares, without re-walking the structure of every
+     * state.
+     * <p>
+     * Separate because the two halves answer at different times. The structure of a state can only
+     * be wrong on the way in, so the constructor is where it is checked; the index pair can go
+     * wrong every time the key moves, because the two records are advanced by two statements and
+     * only the author of those statements keeps them together. So this half runs on every roll and
+     * before every encoding, where the full check would be re-walking authentication paths, stacks
+     * and tree hashes once per signature to learn nothing new.
+     * </p>
+     *
+     * @param params      the parameters of the enclosing key.
+     * @param globalIndex the index the enclosing key declares.
+     */
+    public void validateIndex(XMSSMTParameters params, long globalIndex)
+    {
         int xmssHeight = params.getXMSSParameters().getHeight();
         int lastLeaf = (1 << xmssHeight) - 1;
         long treeIndex = globalIndex;
@@ -229,7 +249,7 @@ public class BDSStateMap
             int expectedLeaf = XMSSUtil.getLeafIndex(treeIndex, xmssHeight);
             treeIndex = XMSSUtil.getTreeIndex(treeIndex, xmssHeight);
 
-            BDS state = bdsState.get(Integers.valueOf(layer));
+            BDS state = get(layer);
             if (state == null)
             {
                 // a layer's state is built lazily, on the first signature that needs it

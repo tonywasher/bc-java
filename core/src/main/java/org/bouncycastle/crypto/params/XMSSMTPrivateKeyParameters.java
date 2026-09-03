@@ -270,6 +270,10 @@ public final class XMSSMTPrivateKeyParameters
             int totalSize = indexSize + n + n + n + n;
             byte[] out = new byte[totalSize];
             int position = 0;
+            // the two records of the position are about to be written out beside each other, and a
+            // stored key that disagrees with itself is refused on the way back in, so say so here
+            // rather than persisting one that cannot be read
+            bdsState.validateIndex(params, index);
             /* copy index */
             byte[] indexBytes = XMSSEngine.toBytesBigEndian(index, indexSize);
             System.arraycopy(indexBytes, 0, out, position, indexBytes.length);
@@ -366,6 +370,17 @@ public final class XMSSMTPrivateKeyParameters
                 index = bdsState.getMaxIndex() + 1;
                 bdsState = new BDSStateMap(bdsState.getMaxIndex());
             }
+
+            //
+            // The key's position is recorded twice - here and in each layer's traversal state - and
+            // the two are carried by separate statements, so nothing but the author of those
+            // statements holds them together. The constructor compares them, which covers a key
+            // arriving desynchronised; this covers one going that way while it is held, so a roll
+            // that advanced one record and not the other is refused here rather than surfacing as
+            // a one-time key signing twice. It is the walk down the layers and d integer
+            // comparisons, not the structural check the constructor also runs.
+            //
+            bdsState.validateIndex(params, index);
 
             return this;
         }

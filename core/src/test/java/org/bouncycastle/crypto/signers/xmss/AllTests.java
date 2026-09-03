@@ -32,6 +32,7 @@ public class AllTests
         suite.addTestSuite(BDSStateSerializationTests.class);
         suite.addTestSuite(CorruptedStateTests.class);
         suite.addTestSuite(BDSStateMapIndexEnumerationTests.class);
+        suite.addTestSuite(PositionRecordCrossCheckTests.class);
         suite.addTestSuite(OneTimeKeyReuseTests.class);
         suite.addTestSuite(LargeIndexEncodingTests.class);
         suite.addTestSuite(CraftedLegacyStateTests.class);
