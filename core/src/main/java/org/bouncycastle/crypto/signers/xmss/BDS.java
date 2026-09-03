@@ -135,60 +135,23 @@ public final class BDS
         this.validate();
     }
 
-    BDS(BDS last)
+    /**
+     * The copy the four "carry on from a previous state" constructors below all make, written
+     * once. Each of them differs from the others only in the WOTS+ instance it ends up with,
+     * whether it keeps the maximum index and the used mark of the state it copies, and what it
+     * does after the copy - so those are the arguments, and the rest is this.
+     * <p>
+     * They had a copy of the block each, which is how a field added to the traversal state has to
+     * be threaded through four places by hand: that happened once already, for maxIndex, and
+     * missing one of the four leaves that constructor quietly building a state whose new field
+     * never came across. Two of the four end in validate(), which would have caught it, and two -
+     * the plain copy and the one the signer advances through, both on the per signature path - do
+     * not, so the way not to have the problem is to have one copy rather than to check four.
+     * </p>
+     */
+    private BDS(BDS last, WOTSPlus wotsPlus, int maxIndex, boolean used)
     {
-        this.wotsPlus = new WOTSPlus(last.wotsPlus.getParams());
-        this.treeHeight = last.treeHeight;
-        this.k = last.k;
-        this.root = last.root;
-        this.authenticationPath = cloneAuthenticationPath(last.authenticationPath);
-        this.retain = cloneRetain(last.retain);
-        this.stack = cloneStack(last.stack);
-        this.treeHashInstances = cloneTreeHashInstances(last.treeHashInstances);
-        this.keep = new TreeMap<Integer, XMSSNode>(last.keep);
-        this.index = last.index;
-        this.maxIndex = last.maxIndex;
-        this.used = last.used;
-    }
-
-    private BDS(BDS last, byte[] publicSeed, byte[] secretKeySeed, OTSHashAddress otsHashAddress)
-    {
-        this.wotsPlus = new WOTSPlus(last.wotsPlus.getParams());
-        this.treeHeight = last.treeHeight;
-        this.k = last.k;
-        this.root = last.root;
-        this.authenticationPath = cloneAuthenticationPath(last.authenticationPath);
-        this.retain = cloneRetain(last.retain);
-        this.stack = cloneStack(last.stack);
-        this.treeHashInstances = cloneTreeHashInstances(last.treeHashInstances);
-        this.keep = new TreeMap<Integer, XMSSNode>(last.keep);
-        this.index = last.index;
-        this.maxIndex = last.maxIndex;
-        this.used = false;
-
-        this.nextAuthenticationPath(publicSeed, secretKeySeed, otsHashAddress);
-    }
-
-    private BDS(BDS last, ASN1ObjectIdentifier digest, int digestSize)
-    {
-        this.wotsPlus = new WOTSPlus(digestSize > 0 ? new WOTSPlusParameters(digest, digestSize) : new WOTSPlusParameters(digest));
-        this.treeHeight = last.treeHeight;
-        this.k = last.k;
-        this.root = last.root;
-        this.authenticationPath = cloneAuthenticationPath(last.authenticationPath);
-        this.retain = cloneRetain(last.retain);
-        this.stack = cloneStack(last.stack);
-        this.treeHashInstances = cloneTreeHashInstances(last.treeHashInstances);
-        this.keep = new TreeMap<Integer, XMSSNode>(last.keep);
-        this.index = last.index;
-        this.maxIndex = last.maxIndex;
-        this.used = last.used;
-        this.validate();
-    }
-
-    private BDS(BDS last, int maxIndex, ASN1ObjectIdentifier digest, int digestSize)
-    {
-        this.wotsPlus = new WOTSPlus(digestSize > 0 ? new WOTSPlusParameters(digest, digestSize) : new WOTSPlusParameters(digest));
+        this.wotsPlus = wotsPlus;
         this.treeHeight = last.treeHeight;
         this.k = last.k;
         this.root = last.root;
@@ -199,8 +162,43 @@ public final class BDS
         this.keep = new TreeMap<Integer, XMSSNode>(last.keep);
         this.index = last.index;
         this.maxIndex = maxIndex;
-        this.used = last.used;
+        this.used = used;
+    }
+
+    BDS(BDS last)
+    {
+        this(last, new WOTSPlus(last.wotsPlus.getParams()), last.maxIndex, last.used);
+    }
+
+    private BDS(BDS last, byte[] publicSeed, byte[] secretKeySeed, OTSHashAddress otsHashAddress)
+    {
+        // the state being built is the one after last, and it has signed nothing yet
+        this(last, new WOTSPlus(last.wotsPlus.getParams()), last.maxIndex, false);
+
+        this.nextAuthenticationPath(publicSeed, secretKeySeed, otsHashAddress);
+    }
+
+    private BDS(BDS last, ASN1ObjectIdentifier digest, int digestSize)
+    {
+        this(last, newWOTSPlus(digest, digestSize), last.maxIndex, last.used);
         this.validate();
+    }
+
+    private BDS(BDS last, int maxIndex, ASN1ObjectIdentifier digest, int digestSize)
+    {
+        this(last, newWOTSPlus(digest, digestSize), maxIndex, last.used);
+        this.validate();
+    }
+
+    /**
+     * The WOTS+ instance the two constructors that rebuild a state around a named digest make -
+     * a decoded state carries no WOTS+ parameters of its own, so they cannot take last's. An
+     * explicit size is needed for the digests whose output length is not fixed by their name.
+     */
+    private static WOTSPlus newWOTSPlus(ASN1ObjectIdentifier digest, int digestSize)
+    {
+        return new WOTSPlus(digestSize > 0
+            ? new WOTSPlusParameters(digest, digestSize) : new WOTSPlusParameters(digest));
     }
 
     // note use of addAll/clone rather than a shared reference to avoid serialization issues
