@@ -6,6 +6,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.security.GeneralSecurityException;
 import java.security.InvalidKeyException;
+import java.security.InvalidParameterException;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -974,6 +975,24 @@ public class XMSSMTTest
         catch (IllegalStateException e)
         {
             assertEquals("key exhausted", e.getMessage());
+        }
+    }
+
+    public void testStrengthInitialisation()
+        throws Exception
+    {
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("XMSSMT", "BCPQC");
+
+        try
+        {
+            kpg.initialize(10, new SecureRandom());
+            fail("no exception");
+        }
+        catch (InvalidParameterException e)
+        {
+            // what KeyPairGenerator.initialize(int, SecureRandom) is specified to throw; it
+            // extends IllegalArgumentException, so a caller catching that still sees this one
+            assertEquals("use AlgorithmParameterSpec", e.getMessage());
         }
     }
 
