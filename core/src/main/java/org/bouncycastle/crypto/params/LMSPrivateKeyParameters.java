@@ -15,6 +15,7 @@ import org.bouncycastle.crypto.signers.lms.LMSContext;
 import org.bouncycastle.crypto.signers.lms.LMSEngine;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Exceptions;
+import org.bouncycastle.util.Objects;
 import org.bouncycastle.util.io.Streams;
 
 public class LMSPrivateKeyParameters
@@ -40,7 +41,6 @@ public class LMSPrivateKeyParameters
     private final byte[] masterSecret;
     private final Map<CacheKey, byte[]> tCache;
     private final int maxCacheR;
-    private final Digest tDigest;
 
     private int q;
 
@@ -54,6 +54,28 @@ public class LMSPrivateKeyParameters
     public LMSPrivateKeyParameters(LMSigParameters lmsParameter, LMOtsParameters otsParameters, int q, byte[] I, int maxQ, byte[] masterSecret)
     {
         super(true);
+
+        // the checks the decoder applies, so a key built directly is not one it would refuse
+        if (lmsParameter == null || otsParameters == null)
+        {
+            throw new IllegalArgumentException("LMS private key needs both parameter sets");
+        }
+        if (I == null || I.length != 16)
+        {
+            throw new IllegalArgumentException("LMS key identifier I must be 16 bytes");
+        }
+        if (masterSecret == null || masterSecret.length < lmsParameter.getM())
+        {
+            throw new IllegalArgumentException("master secret is less than " + lmsParameter.getM());
+        }
+
+        int twoToH = 1 << lmsParameter.getH();
+        if (q < 0 || maxQ < 0 || maxQ > twoToH || q > maxQ)
+        {
+            throw new IllegalArgumentException(
+                "LMS private key q/maxQ out of range: q=" + q + " maxQ=" + maxQ + " 2^h=" + twoToH);
+        }
+
         this.parameters = lmsParameter;
         this.otsParameters = otsParameters;
         this.q = q;
@@ -62,7 +84,26 @@ public class LMSPrivateKeyParameters
         this.masterSecret = Arrays.clone(masterSecret);
         this.maxCacheR = 1 << (parameters.getH() + 1);
         this.tCache = new WeakHashMap<CacheKey, byte[]>();
-        this.tDigest = LMSEngine.createDigest(lmsParameter);
+    }
+
+    /**
+     * A key with no position, identifier or seed of its own - the placeholder an HSS hierarchy is
+     * built with for the levels below the root, each of which resetKeyToIndex replaces from the
+     * level above before the key is used. The sentinel values are deliberately ones the public
+     * constructor refuses, so a placeholder can never be mistaken for a key that was merely built
+     * carelessly; a subclass using this must not present the result as a usable key.
+     */
+    protected LMSPrivateKeyParameters(LMSigParameters lmsParameter, LMOtsParameters otsParameters, int maxQ)
+    {
+        super(true);
+        this.parameters = lmsParameter;
+        this.otsParameters = otsParameters;
+        this.q = -1;
+        this.I = new byte[0];
+        this.maxQ = maxQ;
+        this.masterSecret = new byte[0];
+        this.maxCacheR = 1 << (lmsParameter.getH() + 1);
+        this.tCache = new WeakHashMap<CacheKey, byte[]>();
     }
 
     private LMSPrivateKeyParameters(LMSPrivateKeyParameters parent, int q, int maxQ)
@@ -76,7 +117,6 @@ public class LMSPrivateKeyParameters
         this.masterSecret = parent.masterSecret;
         this.maxCacheR = 1 << parameters.getH();
         this.tCache = parent.tCache;
-        this.tDigest = LMSEngine.createDigest(parameters);
         this.publicKey = parent.publicKey;
     }
 
@@ -85,7 +125,27 @@ public class LMSPrivateKeyParameters
     {
         LMSPrivateKeyParameters pKey = getInstance(privEnc);
 
-        pKey.publicKey = LMSPublicKeyParameters.getInstance(pubEnc);
+        LMSPublicKeyParameters pubKey = LMSPublicKeyParameters.getInstance(pubEnc);
+
+        // cross-check rather than adopt, as the HSS twin does; the root only where it is cached
+        if (!Arrays.areEqual(pKey.getI(), pubKey.getI())
+            || pKey.getSigParameters().getType() != pubKey.getSigParameters().getType()
+            || pKey.getOtsParameters().getType() != pubKey.getOtsParameters().getType())
+        {
+            throw new IOException("LMS public key does not match the private key");
+        }
+
+        byte[] cachedRoot = pKey.peekRootT();
+
+        if (cachedRoot != null && !Arrays.areEqual(cachedRoot, pubKey.getT1()))
+        {
+            throw new IOException("LMS private key tree cache does not match the public key");
+        }
+
+        synchronized (pKey)
+        {
+            pKey.publicKey = pubKey;
+        }
 
         return pKey;
     }
@@ -182,7 +242,7 @@ public class LMSPrivateKeyParameters
 
         if (dIn.readInt() != 0)
         {
-            throw new IllegalStateException("expected version 0 lms private key");
+            throw new IOException("expected version 0 lms private key");
         }
 
         int sigType = dIn.readInt();
@@ -214,9 +274,10 @@ public class LMSPrivateKeyParameters
                 "LMS private key q/maxQ out of range: q=" + q + " maxQ=" + maxQ + " 2^h=" + twoToH);
         }
         int l = dIn.readInt();
-        if (l < 0)
+        if (l < parameter.getM())
         {
-            throw new IllegalStateException("secret length less than zero");
+            // SP 800-208 sec. 6.1 requires SEED to be n bytes; generateKey has always required m
+            throw new IOException("secret length less than " + parameter.getM() + ": " + l);
         }
         if (l > dIn.available())
         {
@@ -235,6 +296,10 @@ public class LMSPrivateKeyParameters
         if (cacheCount < 0 || cacheCount >= internedKeys.length)
         {
             throw new IOException("tree cache node count out of range: " + cacheCount);
+        }
+        if (cacheCount != 0 && (cacheCount < 3 || ((cacheCount + 1) & cacheCount) != 0))
+        {
+            throw new IOException("tree cache node count is not a complete top of tree: " + cacheCount);
         }
         int m = key.getSigParameters().getM();
         if ((long)cacheCount * m > dIn.available())
@@ -260,6 +325,15 @@ public class LMSPrivateKeyParameters
      * the root, whose children 2 and 3 are cached - so bit rot or a partial write in the stored key
      * is refused here rather than primed into the tree, where it would change the public key the
      * key reports or yield a signature that does not verify (github #2414).
+     * <p>
+     * That every node is covered holds only because the caller has already refused any node count
+     * that is not a complete top of tree - 2^k - 1 nodes, k at least 2. A node with no cached
+     * sibling pair above it is read but never recomputed: at a count of 1 or 2 that is the root
+     * itself, and at any even count it is the last node, whose parent would need the sibling the
+     * count stops one short of. Every node of a complete top of tree is either recomputed from its
+     * two children or is an input to its own parent's recomputation, so the guarantee above is
+     * exact. This writer emits 63, or 31 for a height-5 shard, so the restriction refuses nothing
+     * it produces.
      * <p>
      * Only interior nodes are recomputed. A cached node at or beyond 2^h is a leaf, and deriving one
      * costs an LM-OTS public key - which is the work the cache exists to avoid; a corrupt leaf is
@@ -291,14 +365,16 @@ public class LMSPrivateKeyParameters
      */
     byte[][] deriveChildKey()
     {
+        int q;
         synchronized (this)
         {
+            q = this.q;
             if (q >= maxQ)
             {
                 throw new ExhaustedPrivateKeyException("ots private key exhausted");
             }
-            return LMSEngine.deriveChildKey(otsParameters, I, masterSecret, q);
         }
+        return LMSEngine.deriveChildKey(otsParameters, I, masterSecret, q);
     }
 
     /**
@@ -470,7 +546,11 @@ public class LMSPrivateKeyParameters
 
     private byte[] calcT(int r)
     {
-        int h = this.getSigParameters().getH();
+        LMSigParameters sigParameters = getSigParameters();
+
+        Digest tDigest = LMSEngine.createDigest(sigParameters);
+
+        int h = sigParameters.getH();
 
         int twoToh = 1 << h;
 
@@ -554,43 +634,37 @@ public class LMSPrivateKeyParameters
 
         LMSPrivateKeyParameters that = (LMSPrivateKeyParameters)o;
 
-        if (q != that.q)
-        {
-            return false;
-        }
-        if (maxQ != that.maxQ)
-        {
-            return false;
-        }
-        if (!Arrays.areEqual(I, that.I))
-        {
-            return false;
-        }
-        if (parameters != null ? !parameters.equals(that.parameters) : that.parameters != null)
-        {
-            return false;
-        }
-        if (otsParameters != null ? !otsParameters.equals(that.otsParameters) : that.otsParameters != null)
-        {
-            return false;
-        }
-        if (!Arrays.constantTimeAreEqual(masterSecret, that.masterSecret))
-        {
-            return false;
-        }
-
-        return true;
+        return this.getIndex() == that.getIndex()
+            && this.maxQ == that.maxQ
+            && Arrays.areEqual(this.I, that.I)
+            && Objects.areEqual(this.parameters, that.parameters)
+            && Objects.areEqual(this.otsParameters, that.otsParameters)
+            && Arrays.constantTimeAreEqual(this.masterSecret, that.masterSecret);
     }
 
     @Override
     public int hashCode()
     {
-        return getPublicKey().hashCode();
+        //
+        // Deliberately not getPublicKey().hashCode(): the root is only there if the tree cache
+        // holds it, so on a freshly generated or decoded key that builds the whole Merkle tree -
+        // 2^h LM-OTS public keys - from an implicit call no caller expects to cost anything. It is
+        // also independent of q, so a key's hash does not move as it signs, and of the master
+        // secret, so no function of the seed is handed out. Equal keys agree on every field used
+        // here, so the equals() contract holds.
+        //
+        int hc = Objects.hashCode(parameters);
+        hc = 31 * hc + Objects.hashCode(otsParameters);
+        hc = 31 * hc + maxQ;
+        hc = 31 * hc + Arrays.hashCode(I);
+        return hc;
     }
 
     public byte[] getEncoded()
         throws IOException
     {
+        int q = getIndex();
+
         //
         // NB there is no formal specification for the encoding of private keys.
         // It is implementation dependent.

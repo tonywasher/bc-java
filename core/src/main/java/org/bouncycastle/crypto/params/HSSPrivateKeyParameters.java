@@ -29,8 +29,6 @@ public class HSSPrivateKeyParameters
     private final long indexLimit;
     private long index = 0;
 
-    private HSSPublicKeyParameters publicKey;
-
     public HSSPrivateKeyParameters(LMSPrivateKeyParameters key, long index, long indexLimit)
     {
         super(true);
@@ -52,9 +50,29 @@ public class HSSPrivateKeyParameters
     {
         super(true);
 
+        // the same shape the decoder requires; resetKeyToIndex below indexes both lists against l
+        if (l < 1 || l > 8)    // RFC 8554, Section 6.
+        {
+            throw new IllegalArgumentException("L value of HSS private key out of range: " + l);
+        }
+        if (keys.size() != l)
+        {
+            throw new IllegalArgumentException("HSS private key needs one component key per level");
+        }
+        if (sig.size() != l - 1)
+        {
+            throw new IllegalArgumentException(
+                "HSS private key needs one chaining signature per level below the root");
+        }
+        if (index < 0 || indexLimit < 0 || index > indexLimit)
+        {
+            throw new IllegalArgumentException(
+                "HSS private key index out of range: index=" + index + " indexLimit=" + indexLimit);
+        }
+
         this.l = l;
-        this.keys = Collections.unmodifiableList(keys);
-        this.sig = Collections.unmodifiableList(sig);
+        this.keys = Collections.unmodifiableList(new ArrayList<LMSPrivateKeyParameters>(keys));
+        this.sig = Collections.unmodifiableList(new ArrayList<LMSSignature>(sig));
         this.index = index;
         this.indexLimit = indexLimit;
         this.isShard = false;
@@ -63,6 +81,12 @@ public class HSSPrivateKeyParameters
         // Correct Intermediate LMS values will be constructed during reset to index.
         //
         resetKeyToIndex();
+
+        // a null level is legitimate on the way in, for the reset above to fill, but not on the way out
+        if (this.keys.contains(null) || this.sig.contains(null))
+        {
+            throw new IllegalArgumentException("HSS private key has a level that was left unconstructed");
+        }
     }
 
     private HSSPrivateKeyParameters(int l, List<LMSPrivateKeyParameters> keys, List<LMSSignature> sig, long index, long indexLimit, boolean isShard)
@@ -70,6 +94,8 @@ public class HSSPrivateKeyParameters
         super(true);
 
         this.l = l;
+        // No copy here, unlike the public constructor: the callers are extractKeyShard and
+        // getInstance, which build fresh lists they do not retain.
         this.keys = Collections.unmodifiableList(keys);
         this.sig = Collections.unmodifiableList(sig);
         this.index = index;
@@ -97,8 +123,6 @@ public class HSSPrivateKeyParameters
         {
             throw new IOException("HSS private key tree cache does not match the public key");
         }
-
-        pKey.publicKey = pubKey;
 
         return pKey;
     }
@@ -155,7 +179,7 @@ public class HSSPrivateKeyParameters
             int version = ((DataInputStream)src).readInt();
             if (version != 0 && version != 1)
             {
-                throw new IllegalStateException("unknown version for hss private key");
+                throw new IOException("unknown version for hss private key");
             }
             int d = ((DataInputStream)src).readInt();
             if (d < 1 || d > 8)    // RFC 8554, Section 6.
@@ -308,7 +332,7 @@ public class HSSPrivateKeyParameters
         }
     }
 
-    protected void updateHierarchy(LMSPrivateKeyParameters[] newKeys, LMSSignature[] newSig)
+    private void updateHierarchy(LMSPrivateKeyParameters[] newKeys, LMSSignature[] newSig)
     {
         synchronized (this)
         {
@@ -341,7 +365,7 @@ public class HSSPrivateKeyParameters
 
     LMSPrivateKeyParameters getRootKey()
     {
-        return keys.get(0);
+        return getKeys().get(0);
     }
 
     /**
@@ -396,11 +420,14 @@ public class HSSPrivateKeyParameters
 
     /**
      * Reset to index will ensure that all LMS keys are correct for a given HSS index value.
-     * Normally LMS keys updated in sync with their parent HSS key but in cases of sharding
+     * Normally LMS keys are updated in sync with their parent HSS key but in cases of sharding
      * the normal monotonic updating does not apply and the state of the LMS keys needs to be
      * reset to match the current HSS index.
+     * <p>
+     * Should only be called under the monitor (lock) or during construction before the instance escapes.
+     * </p>
      */
-    void resetKeyToIndex()
+    private void resetKeyToIndex()
     {
         // Extract the original keys
         List<LMSPrivateKeyParameters> originalKeys = getKeys();
@@ -418,16 +445,21 @@ public class HSSPrivateKeyParameters
         }
 
         boolean changed = false;
-        LMSPrivateKeyParameters[] keys = originalKeys.toArray(new LMSPrivateKeyParameters[originalKeys.size()]);//  new LMSPrivateKeyParameters[originalKeys.size()];
-        LMSSignature[] sig = this.sig.toArray(new LMSSignature[this.sig.size()]);//   new LMSSignature[originalKeys.size() - 1];
+        LMSPrivateKeyParameters[] keys = originalKeys.toArray(new LMSPrivateKeyParameters[originalKeys.size()]);
+        LMSSignature[] sig = this.sig.toArray(new LMSSignature[this.sig.size()]);
 
         LMSPrivateKeyParameters originalRootKey = this.getRootKey();
 
 
         //
-        // We need to replace the root key to a new q value.
+        // We need to replace the root key to a new q value; the last level reads the derived
+        // value itself, which for a single level hierarchy is the root.
         //
-        if (keys[0].getIndex() - 1 != qTreePath[0])
+        boolean rootQMatch = (qTreePath.length > 1)
+            ? qTreePath[0] == keys[0].getIndex() - 1
+            : qTreePath[0] == keys[0].getIndex();
+
+        if (!rootQMatch)
         {
             keys[0] = generateKey(
                 originalRootKey.getSigParameters(),
@@ -626,27 +658,40 @@ public class HSSPrivateKeyParameters
 
         HSSPrivateKeyParameters that = (HSSPrivateKeyParameters)o;
 
-        if (l != that.l)
+        if (this.l != that.l || this.isShard != that.isShard || this.indexLimit != that.indexLimit)
         {
             return false;
         }
-        if (isShard != that.isShard)
+
+        //
+        // index, keys and sig all move as consumed trees are replaced, and they move together -
+        // replaceConsumedKey assigns keys and sig one after the other under this monitor - so read
+        // each key's trio in one synchronized block to get a snapshot no unsynchronized reader
+        // could tear. The lists are unmodifiable and replaced rather than mutated, so a captured
+        // reference stays a coherent view after the lock drops. Neither monitor is held while the
+        // other is taken, so a.equals(b) racing b.equals(a) cannot deadlock.
+        //
+        long thisIndex;
+        List<LMSPrivateKeyParameters> thisKeys;
+        List<LMSSignature> thisSig;
+        synchronized (this)
         {
-            return false;
+            thisIndex = this.index;
+            thisKeys = this.keys;
+            thisSig = this.sig;
         }
-        if (indexLimit != that.indexLimit)
+
+        long thatIndex;
+        List<LMSPrivateKeyParameters> thatKeys;
+        List<LMSSignature> thatSig;
+        synchronized (that)
         {
-            return false;
+            thatIndex = that.index;
+            thatKeys = that.keys;
+            thatSig = that.sig;
         }
-        if (index != that.index)
-        {
-            return false;
-        }
-        if (!keys.equals(that.keys))
-        {
-            return false;
-        }
-        return sig.equals(that.sig);
+
+        return thisIndex == thatIndex && thisKeys.equals(thatKeys) && thisSig.equals(thatSig);
     }
 
     @Override
@@ -684,7 +729,20 @@ public class HSSPrivateKeyParameters
     @Override
     public int hashCode()
     {
-        return getPublicKey().hashCode();
+        //
+        // Deliberately not getPublicKey().hashCode(): that reaches the root key's tree, which is
+        // only built if the node cache does not already hold it - 2^h LM-OTS public keys from an
+        // implicit call no caller expects to cost anything. The fields used here are the ones that
+        // do not move as the key signs: the root key material is fixed (resetKeyToIndex only
+        // repositions it, and LMSPrivateKeyParameters.hashCode is itself index-independent),
+        // whereas index, keys and sig all change. Equal keys agree on all of these, so the
+        // equals() contract holds.
+        //
+        int hc = l;
+        hc = 31 * hc + (isShard ? 1 : 0);
+        hc = 31 * hc + (int)(indexLimit ^ (indexLimit >>> 32));
+        hc = 31 * hc + getRootKey().hashCode();
+        return hc;
     }
 
     @Override
@@ -698,9 +756,11 @@ public class HSSPrivateKeyParameters
     {
         LMSSignature[] signatures;
         LMSPublicKeyParameters[] publicKeys;
-        LMSPrivateKeyParameters nextKey;
+        LMSContext context;
         int L = this.getL();
 
+        // the HSS index and the bottom key's q are two records of one position: claim both here,
+        // bottom key first so an exhausted one leaves each untouched.
         synchronized (this)
         {
             rangeTestKeys();
@@ -708,7 +768,7 @@ public class HSSPrivateKeyParameters
             List<LMSPrivateKeyParameters> keys = this.getKeys();
             List<LMSSignature> sig = this.getSig();
 
-            nextKey = this.getKeys().get(L - 1);
+            LMSPrivateKeyParameters nextKey = keys.get(L - 1);
 
             // Step 2. Stand in for sig[L-1]
             int i = 0;
@@ -721,13 +781,15 @@ public class HSSPrivateKeyParameters
                 i = i + 1;
             }
 
+            context = nextKey.generateLMSContext();
+
             //
             // increment the index.
             //
             this.incIndex();
         }
 
-        return LMSEngine.withSignedPublicKeys(nextKey.generateLMSContext(), signatures, publicKeys);
+        return LMSEngine.withSignedPublicKeys(context, signatures, publicKeys);
     }
 
     public byte[] generateSignature(LMSContext context)
