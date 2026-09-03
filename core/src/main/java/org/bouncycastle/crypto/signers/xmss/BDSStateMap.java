@@ -298,6 +298,10 @@ public class BDSStateMap
         // The import path rebuilds a state map around the digest its key names before anything
         // validates it - withWOTSDigest() walks the map - so validate()'s own null checks are
         // reached too late to be what rejects this. Refuse it here, where the stream enters.
+        if (bdsState == null)
+        {
+            throw new IOException("no state in BDS state map");
+        }
         for (Iterator<Integer> it = bdsState.keySet().iterator(); it.hasNext();)
         {
             Integer layer = it.next();
