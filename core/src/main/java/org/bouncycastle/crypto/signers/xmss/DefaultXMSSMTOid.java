@@ -192,11 +192,6 @@ final class DefaultXMSSMTOid
     private static String createKey(String algorithmName, int digestSize, int winternitzParameter, int len, int height,
                                     int layers)
     {
-        if (algorithmName == null)
-        {
-            throw new NullPointerException("algorithmName == null");
-        }
-        
         return algorithmName + "-" + digestSize + "-" + winternitzParameter + "-" + len + "-" + height + "-" + layers;
     }
 
