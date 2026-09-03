@@ -37,7 +37,6 @@ final class WOTSPlus
      */
     WOTSPlus(WOTSPlusParameters params)
     {
-        super();
         if (params == null)
         {
             throw new NullPointerException("params == null");
@@ -320,16 +319,6 @@ final class WOTSPlus
     }
 
     /**
-     * Getter secret key seed.
-     *
-     * @return secret key seed.
-     */
-    protected byte[] getSecretKeySeed()
-    {
-        return Arrays.clone(secretKeySeed);
-    }
-
-    /**
      * Getter public seed.
      *
      * @return public seed.
@@ -337,21 +326,6 @@ final class WOTSPlus
     protected byte[] getPublicSeed()
     {
         return Arrays.clone(publicSeed);
-    }
-
-    /**
-     * Getter private key.
-     *
-     * @return WOTS+ private key.
-     */
-    protected WOTSPlusPrivateKeyParameters getPrivateKey()
-    {
-        byte[][] privateKey = new byte[params.getLen()][];
-        for (int i = 0; i < privateKey.length; i++)
-        {
-            privateKey[i] = expandSecretKeySeed(i);
-        }
-        return new WOTSPlusPrivateKeyParameters(params, privateKey);
     }
 
     /**
