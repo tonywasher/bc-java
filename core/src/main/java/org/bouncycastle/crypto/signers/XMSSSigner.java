@@ -21,25 +21,32 @@ public class XMSSSigner
     private boolean initSign;
     private boolean hasGenerated;
 
+    /**
+     * Initialise for signing or verification. A {@link ParametersWithRandom} wrapper is accepted
+     * and unwrapped before either branch is entered, the way LMSSigner.init accepts it, so a
+     * caller that wraps its key once and drives both sides is not refused by the verification
+     * one; the random the wrapper carries is not used. The randomizer r is derived from the key
+     * itself - r = PRF(SK_PRF, toByte(idx, 32)), RFC 8391 sec. 4.1.9 - so a SecureRandom supplied
+     * here has nothing to drive and is discarded, the way SPHINCS256Signer discards it. On the
+     * signing side accepting the wrapper is what BC itself needs:
+     * XMSSSignatureSpi.engineInitSign(PrivateKey, SecureRandom) wraps the key whenever a random
+     * is supplied, so initSign(key, random) used to fail on the cast.
+     *
+     * @param forSigning true for signing, false for verification.
+     * @param param the key, optionally wrapped in {@link ParametersWithRandom}.
+     */
     public void init(boolean forSigning, CipherParameters param)
     {
+        if (param instanceof ParametersWithRandom)
+        {
+            param = ((ParametersWithRandom)param).getParameters();
+        }
+
         if (forSigning)
         {
             initSign = true;
             hasGenerated = false;
-            // the randomizer is derived from the key itself - r = PRF(SK_PRF, toByte(idx, 32)),
-            // RFC 8391 sec. 4.1.9 - so a SecureRandom supplied here has nothing to drive and is
-            // discarded, the way SPHINCS256Signer discards it. Accepting the wrapper is what
-            // matters: XMSSSignatureSpi.engineInitSign(PrivateKey, SecureRandom) wraps the key
-            // whenever a random is supplied, so initSign(key, random) used to fail on the cast.
-            if (param instanceof ParametersWithRandom)
-            {
-                privateKey = (XMSSPrivateKeyParameters)((ParametersWithRandom)param).getParameters();
-            }
-            else
-            {
-                privateKey = (XMSSPrivateKeyParameters)param;
-            }
+            privateKey = (XMSSPrivateKeyParameters)param;
             // the public key from a previous verification init must not stay behind, or this signer
             // still verifies against it. The private key is deliberately NOT cleared on a
             // verification init: sign then verify then collect the advanced state is a legitimate
@@ -50,7 +57,6 @@ public class XMSSSigner
         {
             initSign = false;
             publicKey = (XMSSPublicKeyParameters)param;
-
         }
 
         // a message absorbed before this call belongs to the operation that has just ended:
