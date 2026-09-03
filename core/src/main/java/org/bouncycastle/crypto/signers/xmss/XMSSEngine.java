@@ -696,10 +696,6 @@ public final class XMSSEngine
         {
             throw new IllegalArgumentException("size of messageDigest needs to be equal to size of digest");
         }
-        if (otsHashAddress == null)
-        {
-            throw new NullPointerException("otsHashAddress == null");
-        }
         /* (re)initialize WOTS+ instance */
         wotsPlus.importKeys(wotsPlus.getWOTSPlusSecretKey(secretKeySeed, otsHashAddress), publicSeed);
 

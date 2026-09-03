@@ -91,10 +91,6 @@ final class WOTSPlus
      */
     WOTSPlusSignature sign(byte[] messageDigest, OTSHashAddress otsHashAddress)
     {
-        if (otsHashAddress == null)
-        {
-            throw new NullPointerException("otsHashAddress == null");
-        }
         List<Integer> baseWMessage = baseWMessageWithChecksum(messageDigest);
 
         /* create signature */
@@ -118,14 +114,6 @@ final class WOTSPlus
     WOTSPlusPublicKeyParameters getPublicKeyFromSignature(byte[] messageDigest, WOTSPlusSignature signature,
                                                                     OTSHashAddress otsHashAddress)
     {
-        if (signature == null)
-        {
-            throw new NullPointerException("signature == null");
-        }
-        if (otsHashAddress == null)
-        {
-            throw new NullPointerException("otsHashAddress == null");
-        }
         List<Integer> baseWMessage = baseWMessageWithChecksum(messageDigest);
 
         byte[][] publicKey = new byte[params.getLen()][];
@@ -151,21 +139,9 @@ final class WOTSPlus
     private byte[] chain(byte[] startHash, int startIndex, int steps, OTSHashAddress otsHashAddress)
     {
         int n = params.getTreeDigestSize();
-        if (startHash == null)
-        {
-            throw new NullPointerException("startHash == null");
-        }
         if (startHash.length != n)
         {
             throw new IllegalArgumentException("startHash needs to be " + n + "bytes");
-        }
-        if (otsHashAddress == null)
-        {
-            throw new NullPointerException("otsHashAddress == null");
-        }
-        if (otsHashAddress.toByteArray() == null)
-        {
-            throw new NullPointerException("otsHashAddress byte array == null");
         }
         if ((startIndex + steps) > params.getWinternitzParameter() - 1)
         {
@@ -387,10 +363,6 @@ final class WOTSPlus
      */
     WOTSPlusPublicKeyParameters getPublicKey(OTSHashAddress otsHashAddress)
     {
-        if (otsHashAddress == null)
-        {
-            throw new NullPointerException("otsHashAddress == null");
-        }
         byte[][] publicKey = new byte[params.getLen()][];
         /* derive public key from secretKeySeed */
         for (int i = 0; i < params.getLen(); i++)

@@ -45,10 +45,6 @@ class BDSTreeHash
 
     void update(Stack<XMSSNode> stack, WOTSPlus wotsPlus, byte[] publicSeed, byte[] secretSeed, OTSHashAddress otsHashAddress)
     {
-        if (otsHashAddress == null)
-        {
-            throw new NullPointerException("otsHashAddress == null");
-        }
         if (finished || !initialized)
         {
             throw new IllegalStateException("finished or not initialized");

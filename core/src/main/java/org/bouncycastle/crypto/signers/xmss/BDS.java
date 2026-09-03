@@ -246,10 +246,6 @@ public final class BDS
 
     private void initialize(byte[] publicSeed, byte[] secretSeed, OTSHashAddress otsHashAddress)
     {
-        if (otsHashAddress == null)
-        {
-            throw new NullPointerException("otsHashAddress == null");
-        }
         /* prepare addresses */
         LTreeAddress lTreeAddress = (LTreeAddress)new LTreeAddress.Builder()
             .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
@@ -321,10 +317,6 @@ public final class BDS
 
     private void nextAuthenticationPath(byte[] publicSeed, byte[] secretSeed, OTSHashAddress otsHashAddress)
     {
-        if (otsHashAddress == null)
-        {
-            throw new NullPointerException("otsHashAddress == null");
-        }
         if (used)
         {
             throw new IllegalStateException("index already used");

@@ -22,14 +22,6 @@ class XMSSVerifierUtil
         {
             throw new IllegalArgumentException("size of messageDigest needs to be equal to size of digest");
         }
-        if (signature == null)
-        {
-            throw new NullPointerException("signature == null");
-        }
-        if (otsHashAddress == null)
-        {
-            throw new NullPointerException("otsHashAddress == null");
-        }
 
         /* prepare adresses */
         LTreeAddress lTreeAddress = (LTreeAddress)new LTreeAddress.Builder()
