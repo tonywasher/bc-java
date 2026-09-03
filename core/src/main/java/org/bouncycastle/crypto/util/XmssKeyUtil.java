@@ -483,10 +483,6 @@ class XmssKeyUtil
         int n = keyParams.getParameters().getTreeDigestSize();
         int totalHeight = keyParams.getParameters().getHeight();
         int indexSize = 4;
-        int secretKeySize = n;
-        int secretKeyPRFSize = n;
-        int publicSeedSize = n;
-        int rootSize = n;
 
         int position = 0;
         int index = (int)XMSSEngine.bytesToXBigEndian(keyData, position, indexSize);
@@ -495,14 +491,14 @@ class XmssKeyUtil
             throw new IllegalArgumentException("index out of bounds");
         }
         position += indexSize;
-        byte[] secretKeySeed = XMSSEngine.extractBytesAtOffset(keyData, position, secretKeySize);
-        position += secretKeySize;
-        byte[] secretKeyPRF = XMSSEngine.extractBytesAtOffset(keyData, position, secretKeyPRFSize);
-        position += secretKeyPRFSize;
-        byte[] publicSeed = XMSSEngine.extractBytesAtOffset(keyData, position, publicSeedSize);
-        position += publicSeedSize;
-        byte[] root = XMSSEngine.extractBytesAtOffset(keyData, position, rootSize);
-        position += rootSize;
+        byte[] secretKeySeed = XMSSEngine.extractBytesAtOffset(keyData, position, n);
+        position += n;
+        byte[] secretKeyPRF = XMSSEngine.extractBytesAtOffset(keyData, position, n);
+        position += n;
+        byte[] publicSeed = XMSSEngine.extractBytesAtOffset(keyData, position, n);
+        position += n;
+        byte[] root = XMSSEngine.extractBytesAtOffset(keyData, position, n);
+        position += n;
         /* the serialized BDS state is the tail of the encoding */
         byte[] bdsStateBinary = XMSSEngine.extractBytesAtOffset(keyData, position, keyData.length - position);
 
@@ -528,10 +524,6 @@ class XmssKeyUtil
         int n = keyParams.getParameters().getTreeDigestSize();
         int totalHeight = keyParams.getParameters().getHeight();
         int indexSize = (totalHeight + 7) / 8;
-        int secretKeySize = n;
-        int secretKeyPRFSize = n;
-        int publicSeedSize = n;
-        int rootSize = n;
 
         int position = 0;
         // read as a long: indexSize is up to eight bytes for a tree taller than 32, and the index
@@ -545,14 +537,14 @@ class XmssKeyUtil
             throw new IllegalArgumentException("index out of bounds");
         }
         position += indexSize;
-        byte[] secretKeySeed = XMSSEngine.extractBytesAtOffset(keyData, position, secretKeySize);
-        position += secretKeySize;
-        byte[] secretKeyPRF = XMSSEngine.extractBytesAtOffset(keyData, position, secretKeyPRFSize);
-        position += secretKeyPRFSize;
-        byte[] publicSeed = XMSSEngine.extractBytesAtOffset(keyData, position, publicSeedSize);
-        position += publicSeedSize;
-        byte[] root = XMSSEngine.extractBytesAtOffset(keyData, position, rootSize);
-        position += rootSize;
+        byte[] secretKeySeed = XMSSEngine.extractBytesAtOffset(keyData, position, n);
+        position += n;
+        byte[] secretKeyPRF = XMSSEngine.extractBytesAtOffset(keyData, position, n);
+        position += n;
+        byte[] publicSeed = XMSSEngine.extractBytesAtOffset(keyData, position, n);
+        position += n;
+        byte[] root = XMSSEngine.extractBytesAtOffset(keyData, position, n);
+        position += n;
         /* the serialized BDS state is the tail of the encoding */
         byte[] bdsStateBinary = XMSSEngine.extractBytesAtOffset(keyData, position, keyData.length - position);
 
