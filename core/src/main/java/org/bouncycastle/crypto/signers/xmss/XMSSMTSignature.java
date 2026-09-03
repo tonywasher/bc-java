@@ -21,7 +21,6 @@ final class XMSSMTSignature
 
     private XMSSMTSignature(Builder builder)
     {
-        super();
         params = builder.params;
         if (params == null)
         {

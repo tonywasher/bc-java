@@ -18,7 +18,6 @@ class BDSTreeHash
 
     public BDSTreeHash(int initialHeight)
     {
-        super();
         this.initialHeight = initialHeight;
         initialized = false;
         finished = false;

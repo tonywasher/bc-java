@@ -10,14 +10,12 @@ import java.util.List;
  */
 class XMSSReducedSignature
 {
-
     private final XMSSParameters params;
     private final WOTSPlusSignature wotsPlusSignature;
     private final List<XMSSNode> authPath;
 
     public XMSSReducedSignature(Builder builder)
     {
-        super();
         params = builder.params;
         if (params == null)
         {
