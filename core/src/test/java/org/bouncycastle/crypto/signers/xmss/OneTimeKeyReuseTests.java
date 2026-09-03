@@ -216,6 +216,41 @@ public class OneTimeKeyReuseTests
     }
 
     /**
+     * The XMSS counterpart of the copy above. Its state is a single BDS and no layer states are
+     * installed into it, but a signature still marks the state it spent in place, so two keys
+     * sharing one BDS share that record: the key signing marks the state of the key that is not,
+     * and the one that has signed nothing is then refused as a key that has already signed.
+     */
+    public void testXMSSKeyBuilderCopiesTheTraversalStateItIsGiven()
+        throws Exception
+    {
+        XMSSParameters params = new XMSSParameters(HEIGHT, new SHA256Digest());
+        XMSSKeyPairGenerator kpg = new XMSSKeyPairGenerator();
+
+        kpg.init(new XMSSKeyGenerationParameters(params, new SecureRandom()));
+
+        XMSSPrivateKeyParameters key = (XMSSPrivateKeyParameters)kpg.generateKeyPair().getPrivate();
+        XMSSPrivateKeyParameters shard = new XMSSPrivateKeyParameters.Builder(params)
+            .withSecretKeySeed(key.getSecretKeySeed()).withSecretKeyPRF(key.getSecretKeyPRF())
+            .withPublicSeed(key.getPublicSeed()).withRoot(key.getRoot())
+            .withBDSState(key.getBDSState()).build();
+
+        assertNotSame("the builder must copy the state it is given, not adopt it",
+            key.getBDSState(), shard.getBDSState());
+
+        XMSSEngine.generateSignature(key, new byte[]{0x01});
+
+        assertEquals("the other key's index moved", 1, key.getIndex());
+        assertEquals("the shard's index did not", 0, shard.getIndex());
+        assertFalse("nor may the other key's signature mark the shard's state",
+            shard.getBDSState().isUsed());
+
+        // which is the point: a shard that has signed nothing must still be able to
+        XMSSEngine.generateSignature(shard, new byte[]{0x02});
+        assertEquals(1, shard.getIndex());
+    }
+
+    /**
      * markUsed() had no read side. The record it leaves travels with the state - it is copied by
      * every BDS copy constructor and written into the encoding - so a key can arrive holding a
      * state that says it has already signed, and nothing looked. The way there is ordinary: take

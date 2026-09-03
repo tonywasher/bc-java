@@ -295,7 +295,17 @@ public final class XMSSPrivateKeyParameters
 
         public Builder withBDSState(BDS valBDS)
         {
-            bdsState = valBDS;
+            //
+            // Copy, do not adopt, as the XMSS^MT builder does. Rolling the key replaces its state
+            // rather than advancing the one it holds, but a signature still marks the state it
+            // spent in place - XMSSEngine's markUsed() - so two keys sharing one BDS share that
+            // record: one key's signature marks the other's state, and the other is then refused
+            // by the check that reads the mark, having signed nothing. It travels the other way
+            // too, a caller keeping the state it passed in seeing its own copy marked by a key it
+            // has handed it to.
+            //
+            bdsState = valBDS.withMaxIndex(valBDS.getMaxIndex(), params.getTreeDigestOID(),
+                params.getTreeDigestSize());
             return this;
         }
 

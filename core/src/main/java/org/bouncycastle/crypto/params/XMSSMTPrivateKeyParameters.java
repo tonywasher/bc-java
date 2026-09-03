@@ -224,8 +224,9 @@ public final class XMSSMTPrivateKeyParameters
             // one it holds, but signing still installs subtree states into that map as it descends
             // the layers, so a caller that keeps the map it passed - or passes one it took off
             // another key with getBDSState() - leaves two keys reading authentication paths out of
-            // one map while each sits at its own index. The XMSS side needs no copy for this: its
-            // state is a single BDS the signer only reads.
+            // one map while each sits at its own index. The XMSS side copies for a narrower reason
+            // of its own, given on its withBDSState: no layer states are installed into a single
+            // BDS, but a signature still marks it.
             //
             if (val.getMaxIndex() < 0)   // check for legacy state maps
             {
