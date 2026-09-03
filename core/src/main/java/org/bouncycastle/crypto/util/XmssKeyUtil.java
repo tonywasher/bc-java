@@ -491,16 +491,16 @@ class XmssKeyUtil
             throw new IllegalArgumentException("index out of bounds");
         }
         position += indexSize;
-        byte[] secretKeySeed = XMSSEngine.extractBytesAtOffset(keyData, position, n);
+        byte[] secretKeySeed = Arrays.copyOfRange(keyData, position, position + n);
         position += n;
-        byte[] secretKeyPRF = XMSSEngine.extractBytesAtOffset(keyData, position, n);
+        byte[] secretKeyPRF = Arrays.copyOfRange(keyData, position, position + n);
         position += n;
-        byte[] publicSeed = XMSSEngine.extractBytesAtOffset(keyData, position, n);
+        byte[] publicSeed = Arrays.copyOfRange(keyData, position, position + n);
         position += n;
-        byte[] root = XMSSEngine.extractBytesAtOffset(keyData, position, n);
+        byte[] root = Arrays.copyOfRange(keyData, position, position + n);
         position += n;
         /* the serialized BDS state is the tail of the encoding */
-        byte[] bdsStateBinary = XMSSEngine.extractBytesAtOffset(keyData, position, keyData.length - position);
+        byte[] bdsStateBinary = Arrays.copyOfRange(keyData, position, keyData.length);
 
         // read the maximum index off the state itself rather than off the bytes just written from
         // it: parsing them back to recover a field the key is holding is a whole deserialization,
@@ -537,16 +537,16 @@ class XmssKeyUtil
             throw new IllegalArgumentException("index out of bounds");
         }
         position += indexSize;
-        byte[] secretKeySeed = XMSSEngine.extractBytesAtOffset(keyData, position, n);
+        byte[] secretKeySeed = Arrays.copyOfRange(keyData, position, position + n);
         position += n;
-        byte[] secretKeyPRF = XMSSEngine.extractBytesAtOffset(keyData, position, n);
+        byte[] secretKeyPRF = Arrays.copyOfRange(keyData, position, position + n);
         position += n;
-        byte[] publicSeed = XMSSEngine.extractBytesAtOffset(keyData, position, n);
+        byte[] publicSeed = Arrays.copyOfRange(keyData, position, position + n);
         position += n;
-        byte[] root = XMSSEngine.extractBytesAtOffset(keyData, position, n);
+        byte[] root = Arrays.copyOfRange(keyData, position, position + n);
         position += n;
         /* the serialized BDS state is the tail of the encoding */
-        byte[] bdsStateBinary = XMSSEngine.extractBytesAtOffset(keyData, position, keyData.length - position);
+        byte[] bdsStateBinary = Arrays.copyOfRange(keyData, position, keyData.length);
 
         // as above: off the state, not off the bytes written from it - and here the parse being
         // dropped is of every layer's traversal state, up to twelve of them

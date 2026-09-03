@@ -54,12 +54,15 @@ public final class XMSSPrivateKeyParameters
             /* import */
             int height = params.getHeight();
             int indexSize = 4;
-            /*
-            int totalSize = indexSize + secretKeySize + secretKeyPRFSize + publicSeedSize + rootSize;
-            if (privateKey.length != totalSize) {
-                throw new ParseException("private key has wrong size", 0);
+            /* index || secretKeySeed || secretKeyPRF || publicSeed || root || BDS state. Only the
+             * head is fixed - the serialized BDS state that follows it is variable-length - so what
+             * can be checked here is that the head is all there. It has to be checked somewhere:
+             * the five reads below take their bytes at computed offsets, and nothing else on the
+             * way in from PrivateKeyFactory looks at the length at all. */
+            if (privateKey.length < indexSize + 4 * n)
+            {
+                throw new IllegalArgumentException("private key has wrong size");
             }
-            */
             int position = 0;
             int index = Pack.bigEndianToInt(privateKey, position);
             if (!XMSSEngine.isStoredIndexValid(height, index))
@@ -67,16 +70,16 @@ public final class XMSSPrivateKeyParameters
                 throw new IllegalArgumentException("index out of bounds");
             }
             position += indexSize;
-            secretKeySeed = XMSSEngine.extractBytesAtOffset(privateKey, position, n);
+            secretKeySeed = Arrays.copyOfRange(privateKey, position, position + n);
             position += n;
-            secretKeyPRF = XMSSEngine.extractBytesAtOffset(privateKey, position, n);
+            secretKeyPRF = Arrays.copyOfRange(privateKey, position, position + n);
             position += n;
-            publicSeed = XMSSEngine.extractBytesAtOffset(privateKey, position, n);
+            publicSeed = Arrays.copyOfRange(privateKey, position, position + n);
             position += n;
-            root = XMSSEngine.extractBytesAtOffset(privateKey, position, n);
+            root = Arrays.copyOfRange(privateKey, position, position + n);
             position += n;
             /* import BDS state */
-            byte[] bdsStateBinary = XMSSEngine.extractBytesAtOffset(privateKey, position, privateKey.length - position);
+            byte[] bdsStateBinary = Arrays.copyOfRange(privateKey, position, privateKey.length);
             try
             {
                 BDS bdsImport = XMSSEngine.getBDSFromEncoding(bdsStateBinary, publicSeed);
@@ -331,16 +334,16 @@ public final class XMSSPrivateKeyParameters
             Pack.intToBigEndian(bdsState.getIndex(), out, position);
             position += indexSize;
             /* copy secretKeySeed */
-            XMSSEngine.copyBytesAtOffset(out, secretKeySeed, position);
+            System.arraycopy(secretKeySeed, 0, out, position, secretKeySeed.length);
             position += n;
             /* copy secretKeyPRF */
-            XMSSEngine.copyBytesAtOffset(out, secretKeyPRF, position);
+            System.arraycopy(secretKeyPRF, 0, out, position, secretKeyPRF.length);
             position += n;
             /* copy publicSeed */
-            XMSSEngine.copyBytesAtOffset(out, publicSeed, position);
+            System.arraycopy(publicSeed, 0, out, position, publicSeed.length);
             position += n;
             /* copy root */
-            XMSSEngine.copyBytesAtOffset(out, root, position);
+            System.arraycopy(root, 0, out, position, root.length);
             /* concatenate bdsState */
             byte[] bdsStateOut;
             try

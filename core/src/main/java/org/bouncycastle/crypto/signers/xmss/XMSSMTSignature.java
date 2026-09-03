@@ -44,13 +44,13 @@ final class XMSSMTSignature
                 throw new IllegalArgumentException("index out of bounds");
             }
             position += indexSize;
-            random = XMSSUtil.extractBytesAtOffset(signature, position, n);
+            random = Arrays.copyOfRange(signature, position, position + n);
             position += n;
             reducedSignatures = new ArrayList<XMSSReducedSignature>();
             while (position < signature.length)
             {
                 XMSSReducedSignature xmssSig = new XMSSReducedSignature.Builder(params.getXMSSParameters())
-                    .withReducedSignature(XMSSUtil.extractBytesAtOffset(signature, position, reducedSignatureSizeSingle))
+                    .withReducedSignature(Arrays.copyOfRange(signature, position, position + reducedSignatureSizeSingle))
                     .build();
                 reducedSignatures.add(xmssSig);
                 position += reducedSignatureSizeSingle;
@@ -124,16 +124,16 @@ final class XMSSMTSignature
         int position = 0;
         /* copy index */
         byte[] indexBytes = XMSSUtil.toBytesBigEndian(index, indexSize);
-        XMSSUtil.copyBytesAtOffset(out, indexBytes, position);
+        System.arraycopy(indexBytes, 0, out, position, indexBytes.length);
         position += indexSize;
         /* copy random */
-        XMSSUtil.copyBytesAtOffset(out, random, position);
+        System.arraycopy(random, 0, out, position, random.length);
         position += n;
         /* copy reduced signatures */
         for (XMSSReducedSignature reducedSignature : reducedSignatures)
         {
             byte[] signature = reducedSignature.toByteArray();
-            XMSSUtil.copyBytesAtOffset(out, signature, position);
+            System.arraycopy(signature, 0, out, position, signature.length);
             position += reducedSignatureSizeSingle;
         }
         return out;

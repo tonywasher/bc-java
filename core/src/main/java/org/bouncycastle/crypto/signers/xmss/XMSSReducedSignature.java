@@ -1,6 +1,7 @@
 package org.bouncycastle.crypto.signers.xmss;
 
 import org.bouncycastle.crypto.params.XMSSParameters;
+import org.bouncycastle.util.Arrays;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,7 +36,7 @@ class XMSSReducedSignature
             byte[][] wotsPlusSignature = new byte[len][];
             for (int i = 0; i < wotsPlusSignature.length; i++)
             {
-                wotsPlusSignature[i] = XMSSUtil.extractBytesAtOffset(reducedSignature, position, n);
+                wotsPlusSignature[i] = Arrays.copyOfRange(reducedSignature, position, position + n);
                 position += n;
             }
             this.wotsPlusSignature = new WOTSPlusSignature(XMSSEngine.newWOTSPlusParameters(params), wotsPlusSignature);
@@ -43,7 +44,7 @@ class XMSSReducedSignature
             List<XMSSNode> nodeList = new ArrayList<XMSSNode>();
             for (int i = 0; i < height; i++)
             {
-                nodeList.add(new XMSSNode(i, XMSSUtil.extractBytesAtOffset(reducedSignature, position, n)));
+                nodeList.add(new XMSSNode(i, Arrays.copyOfRange(reducedSignature, position, position + n)));
                 position += n;
             }
             authPath = nodeList;
@@ -128,14 +129,14 @@ class XMSSReducedSignature
         byte[][] signature = this.wotsPlusSignature.toByteArray();
         for (int i = 0; i < signature.length; i++)
         {
-            XMSSUtil.copyBytesAtOffset(out, signature[i], position);
+            System.arraycopy(signature[i], 0, out, position, signature[i].length);
             position += n;
         }
         /* copy authentication path */
         for (int i = 0; i < authPath.size(); i++)
         {
             byte[] value = authPath.get(i).getValue();
-            XMSSUtil.copyBytesAtOffset(out, value, position);
+            System.arraycopy(value, 0, out, position, value.length);
             position += n;
         }
         return out;

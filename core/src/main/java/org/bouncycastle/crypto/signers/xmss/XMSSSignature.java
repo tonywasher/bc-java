@@ -1,6 +1,7 @@
 package org.bouncycastle.crypto.signers.xmss;
 
 import org.bouncycastle.crypto.params.XMSSParameters;
+import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Encodable;
 import org.bouncycastle.util.Pack;
 
@@ -80,9 +81,9 @@ final class XMSSSignature
             index = Pack.bigEndianToInt(val, position);
             position += indexSize;
             /* extract random */
-            random = XMSSUtil.extractBytesAtOffset(val, position, n);
+            random = Arrays.copyOfRange(val, position, position + n);
             position += n;
-            withReducedSignature(XMSSUtil.extractBytesAtOffset(val, position, signatureSize + authPathSize));
+            withReducedSignature(Arrays.copyOfRange(val, position, position + signatureSize + authPathSize));
             return this;
         }
 
@@ -109,20 +110,20 @@ final class XMSSSignature
         Pack.intToBigEndian(index, out, position);
         position += indexSize;
         /* copy random */
-        XMSSUtil.copyBytesAtOffset(out, random, position);
+        System.arraycopy(random, 0, out, position, random.length);
         position += n;
         /* copy signature */
         byte[][] signature = getWOTSPlusSignature().toByteArray();
         for (int i = 0; i < signature.length; i++)
         {
-            XMSSUtil.copyBytesAtOffset(out, signature[i], position);
+            System.arraycopy(signature[i], 0, out, position, signature[i].length);
             position += n;
         }
         /* copy authentication path */
         for (int i = 0; i < getAuthPath().size(); i++)
         {
             byte[] value = getAuthPath().get(i).getValue();
-            XMSSUtil.copyBytesAtOffset(out, value, position);
+            System.arraycopy(value, 0, out, position, value.length);
             position += n;
         }
         return out;

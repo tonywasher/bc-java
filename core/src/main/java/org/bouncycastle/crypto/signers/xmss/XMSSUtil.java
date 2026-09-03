@@ -170,63 +170,6 @@ class XMSSUtil
     }
 
     /**
-     * Copy src byte array to dst byte array at offset.
-     *
-     * @param dst    Destination.
-     * @param src    Source.
-     * @param offset Destination offset.
-     */
-    public static void copyBytesAtOffset(byte[] dst, byte[] src, int offset)
-    {
-        if (dst == null)
-        {
-            throw new NullPointerException("dst == null");
-        }
-        if (src == null)
-        {
-            throw new NullPointerException("src == null");
-        }
-        if (offset < 0)
-        {
-            throw new IllegalArgumentException("offset hast to be >= 0");
-        }
-        if ((src.length + offset) > dst.length)
-        {
-            throw new IllegalArgumentException("src length + offset must not be greater than size of destination");
-        }
-        System.arraycopy(src, 0, dst, offset, src.length);
-    }
-
-    /**
-     * Copy length bytes at position offset from src.
-     *
-     * @param src    Source byte array.
-     * @param offset Offset in source byte array.
-     * @param length Length of bytes to copy.
-     * @return New byte array.
-     */
-    public static byte[] extractBytesAtOffset(byte[] src, int offset, int length)
-    {
-        if (src == null)
-        {
-            throw new NullPointerException("src == null");
-        }
-        if (offset < 0)
-        {
-            throw new IllegalArgumentException("offset hast to be >= 0");
-        }
-        if (length < 0)
-        {
-            throw new IllegalArgumentException("length hast to be >= 0");
-        }
-        if ((offset + length) > src.length)
-        {
-            throw new IllegalArgumentException("offset + length must not be greater then size of source array");
-        }
-        return Arrays.copyOfRange(src, offset, offset + length);
-    }
-
-    /**
      * Check whether an index is valid or not.
      *
      * @param height Height of binary tree.

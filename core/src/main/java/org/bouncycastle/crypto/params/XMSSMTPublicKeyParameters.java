@@ -3,6 +3,7 @@ package org.bouncycastle.crypto.params;
 import java.io.IOException;
 
 import org.bouncycastle.crypto.signers.xmss.XMSSEngine;
+import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Encodable;
 import org.bouncycastle.util.Pack;
 
@@ -33,17 +34,17 @@ public final class XMSSMTPublicKeyParameters
             if (publicKey.length == n + n)
             {
                 oid = 0;
-                root = XMSSEngine.extractBytesAtOffset(publicKey, position, n);
+                root = Arrays.copyOfRange(publicKey, position, position + n);
                 position += n;
-                publicSeed = XMSSEngine.extractBytesAtOffset(publicKey, position, n);
+                publicSeed = Arrays.copyOfRange(publicKey, position, position + n);
             }
             else if (publicKey.length == oidSize + n + n)
             {
                 oid = Pack.bigEndianToInt(publicKey, 0);
                 position += oidSize;
-                root = XMSSEngine.extractBytesAtOffset(publicKey, position, n);
+                root = Arrays.copyOfRange(publicKey, position, position + n);
                 position += n;
-                publicSeed = XMSSEngine.extractBytesAtOffset(publicKey, position, n);
+                publicSeed = Arrays.copyOfRange(publicKey, position, position + n);
             }
             else
             {
@@ -134,10 +135,10 @@ public final class XMSSMTPublicKeyParameters
             out = new byte[rootSize + publicSeedSize];
         }
         /* copy root */
-        XMSSEngine.copyBytesAtOffset(out, root, position);
+        System.arraycopy(root, 0, out, position, root.length);
         position += rootSize;
         /* copy public seed */
-        XMSSEngine.copyBytesAtOffset(out, publicSeed, position);
+        System.arraycopy(publicSeed, 0, out, position, publicSeed.length);
         return out;
     }
 
