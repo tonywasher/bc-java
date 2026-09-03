@@ -221,11 +221,12 @@ public class SignerStateHandoverTests
         assertFalse(mtVerifier.verifySignature(new byte[0]));
 
         // straight at the engine, which is where the check lives. XMSS reported an absent
-        // signature as one that failed to verify, because the builder's own NullPointerException
-        // fell into the catch that turns a malformed signature into false; XMSS^MT did not reach
-        // that catch at all, since its builder reads a null as a request to set the fields rather
-        // than to decode and hands back a signature carrying no reduced signatures, which surfaced
-        // at the layer-0 lookup past that catch as an IndexOutOfBoundsException
+        // signature as one that failed to verify, because the decode dereferences the array to check
+        // its length and the catch that turns a malformed signature into false cannot tell that
+        // NullPointerException from a bad encoding; XMSS^MT did not reach that catch at all, since
+        // its builder reads a null as a request to set the fields rather than to decode and hands
+        // back a signature carrying no reduced signatures, which surfaced at the layer-0 lookup
+        // past that catch as an IndexOutOfBoundsException
         checkAbsentSignature((XMSSPublicKeyParameters)kp.getPublic(), message);
         checkAbsentSignature((XMSSMTPublicKeyParameters)mtKp.getPublic(), message);
 

@@ -58,10 +58,6 @@ final class XMSSSignature
 
         public Builder withSignature(byte[] val)
         {
-            if (val == null)
-            {
-                throw new NullPointerException("signature == null");
-            }
             int n = params.getTreeDigestSize();
             int len = params.getLen();
             int height = params.getHeight();

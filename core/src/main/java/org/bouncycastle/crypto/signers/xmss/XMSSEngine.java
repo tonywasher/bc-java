@@ -256,8 +256,9 @@ public final class XMSSEngine
     public static boolean verifySignature(XMSSPublicKeyParameters publicKey, byte[] message, byte[] signature)
     {
         // ahead of the decode below, whose catch would otherwise fold a missing argument into the
-        // same false a malformed one gets: the builder raises this exact exception for a null, and
-        // catching RuntimeException there cannot tell the two apart
+        // same false a malformed one gets: the builder reads the array's length to check it against
+        // the size these parameters fix, and the NullPointerException that dereference raises is
+        // indistinguishable there from what a bad encoding raises
         if (signature == null)
         {
             throw new NullPointerException("signature == null");
