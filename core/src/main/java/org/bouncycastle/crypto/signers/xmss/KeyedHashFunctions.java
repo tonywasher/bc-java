@@ -5,16 +5,34 @@ import org.bouncycastle.crypto.Digest;
 import org.bouncycastle.crypto.Xof;
 
 /**
- * Crypto functions for XMSS.
+ * Crypto functions for XMSS: the keyed hash functions F, H, H_msg and PRF of RFC 8391 sec. 4.1.2.
+ * <p>
+ * Each of them hashes <code>toByte(i, n) || key || in</code> under its own domain separator i, and
+ * that concatenation carries no length prefix - so it is unambiguous only because every argument has
+ * the fixed length RFC 8391 sec. 4.1.2 gives it: F an n-byte key and an n-byte string, H an n-byte
+ * key and a 2n-byte string, H_msg a 3n-byte key and a message of any length, PRF an n-byte key and a
+ * 32-byte index, where n is the digestSize this instance was built with.
+ * <p>
+ * Those lengths are guaranteed by the call sites rather than checked here. This class is
+ * package-private and built in exactly one place - {@link WOTSPlus}, with n taken from the owning
+ * key's parameters - so the set of callers is closed: every key argument is a return value of one of
+ * these functions, a {@code new byte[n]} field of WOTSPlus, or key material one of the key parameter
+ * classes has already pinned to n; every in is freshly allocated at the size wanted; every PRF
+ * address is an {@link XMSSAddress#toByteArray()} or a toBytesBigEndian(x, 32), both always 32
+ * bytes. A new call site has to keep that true: a wrong length is not rejected here, it silently
+ * hashes to something else.
+ * <p>
+ * coreDigest also takes it that digestSize is at most the underlying digest's own output size, which
+ * likewise nothing checks - the admissible (digest, n) pairs are fixed by {@link WOTSPlusOid}, and
+ * one breaking that would leave the tail of the result zero rather than throw.
  */
 final class KeyedHashFunctions
 {
     private final Digest digest;
     private final int digestSize;
 
-    public KeyedHashFunctions(ASN1ObjectIdentifier treeDigest, int digestSize)
+    KeyedHashFunctions(ASN1ObjectIdentifier treeDigest, int digestSize)
     {
-        super();
         if (treeDigest == null)
         {
             throw new NullPointerException("digest == null");
@@ -51,51 +69,23 @@ final class KeyedHashFunctions
         return out;
     }
 
-    public byte[] F(byte[] key, byte[] in)
+    byte[] F(byte[] key, byte[] in)
     {
-        if (key.length != digestSize)
-        {
-            throw new IllegalArgumentException("wrong key length");
-        }
-        if (in.length != digestSize)
-        {
-            throw new IllegalArgumentException("wrong in length");
-        }
         return coreDigest(0, key, in);
     }
 
-    public byte[] H(byte[] key, byte[] in)
+    byte[] H(byte[] key, byte[] in)
     {
-        if (key.length != digestSize)
-        {
-            throw new IllegalArgumentException("wrong key length");
-        }
-        if (in.length != (2 * digestSize))
-        {
-            throw new IllegalArgumentException("wrong in length");
-        }
         return coreDigest(1, key, in);
     }
 
-    public byte[] HMsg(byte[] key, byte[] in)
+    byte[] HMsg(byte[] key, byte[] in)
     {
-        if (key.length != (3 * digestSize))
-        {
-            throw new IllegalArgumentException("wrong key length");
-        }
         return coreDigest(2, key, in);
     }
 
-    public byte[] PRF(byte[] key, byte[] address)
+    byte[] PRF(byte[] key, byte[] address)
     {
-        if (key.length != digestSize)
-        {
-            throw new IllegalArgumentException("wrong key length");
-        }
-        if (address.length != 32)
-        {
-            throw new IllegalArgumentException("wrong address length");
-        }
         return coreDigest(3, key, address);
     }
 }
