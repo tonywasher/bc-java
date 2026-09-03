@@ -102,10 +102,6 @@ final class DefaultXMSSOid
     private static String createKey(String algorithmName, int digestSize, int winternitzParameter, int len,
                                     int height)
     {
-        if (algorithmName == null)
-        {
-            throw new NullPointerException("algorithmName == null");
-        }
         return algorithmName + "-" + digestSize + "-" + winternitzParameter + "-" + len + "-" + height;
     }
 
