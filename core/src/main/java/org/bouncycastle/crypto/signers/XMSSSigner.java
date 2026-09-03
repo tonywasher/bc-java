@@ -141,13 +141,6 @@ public class XMSSSigner
         {
             throw new IllegalStateException("signer not initialized for verification");
         }
-        // a missing argument is the caller's mistake rather than a signature that failed to verify:
-        // bytes that will not decode are reported as false further down, but there are no bytes
-        // here. The XMSS^MT signer has always answered a null signature this way.
-        if (signature == null)
-        {
-            throw new NullPointerException("signature == null");
-        }
 
         return XMSSEngine.verifySignature(publicKey, message, signature);
     }

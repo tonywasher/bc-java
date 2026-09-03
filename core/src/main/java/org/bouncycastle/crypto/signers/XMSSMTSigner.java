@@ -121,15 +121,12 @@ public class XMSSMTSigner
         reset();
 
         // covers both a signer initialised for signing and one never initialised at all, and comes
-        // ahead of the argument checks: not being initialised is the caller's first problem. This
-        // replaces the NullPointerException the absent public key used to raise.
+        // ahead of the delegation below so that it beats the engine's own argument checks: not
+        // being initialised is the caller's first problem. This replaces the NullPointerException
+        // the absent public key used to raise.
         if (initSign || publicKey == null)
         {
             throw new IllegalStateException("signer not initialized for verification");
-        }
-        if (signature == null)
-        {
-            throw new NullPointerException("signature == null");
         }
 
         return XMSSEngine.verifyMTSignature(publicKey, message, signature);

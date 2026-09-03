@@ -11,8 +11,10 @@ import org.bouncycastle.crypto.params.XMSSKeyGenerationParameters;
 import org.bouncycastle.crypto.params.XMSSMTKeyGenerationParameters;
 import org.bouncycastle.crypto.params.XMSSMTParameters;
 import org.bouncycastle.crypto.params.XMSSMTPrivateKeyParameters;
+import org.bouncycastle.crypto.params.XMSSMTPublicKeyParameters;
 import org.bouncycastle.crypto.params.XMSSParameters;
 import org.bouncycastle.crypto.params.XMSSPrivateKeyParameters;
+import org.bouncycastle.crypto.params.XMSSPublicKeyParameters;
 import org.bouncycastle.crypto.signers.XMSSMTSigner;
 import org.bouncycastle.crypto.signers.XMSSSigner;
 
@@ -169,6 +171,11 @@ public class SignerStateHandoverTests
      * verify - bytes that will not decode are reported as false, but there are no bytes here. The
      * XMSS signer used to answer a null signature with false; XMSS^MT has always named it. The
      * message is streamed in through update() and so cannot be absent, only empty.
+     * <p>
+     * The check sits on XMSSEngine rather than on the two signers, so the engine is asserted here
+     * as well: it is the package's one public class, and a caller reaching it directly used to get
+     * neither of the two answers a verify is allowed to give.
+     * </p>
      */
     public void testVerifyNamesAnAbsentArgument()
     {
@@ -212,6 +219,44 @@ public class SignerStateHandoverTests
 
         mtVerifier.update(message, 0, message.length);
         assertFalse(mtVerifier.verifySignature(new byte[0]));
+
+        // straight at the engine, which is where the check lives. XMSS reported an absent
+        // signature as one that failed to verify, because the builder's own NullPointerException
+        // fell into the catch that turns a malformed signature into false; XMSS^MT did not reach
+        // that catch at all, since its builder reads a null as a request to set the fields rather
+        // than to decode and hands back a signature carrying no reduced signatures, which surfaced
+        // at the layer-0 lookup past that catch as an IndexOutOfBoundsException
+        checkAbsentSignature((XMSSPublicKeyParameters)kp.getPublic(), message);
+        checkAbsentSignature((XMSSMTPublicKeyParameters)mtKp.getPublic(), message);
+
+        assertFalse(XMSSEngine.verifySignature((XMSSPublicKeyParameters)kp.getPublic(), message, new byte[0]));
+        assertFalse(XMSSEngine.verifyMTSignature((XMSSMTPublicKeyParameters)mtKp.getPublic(), message, new byte[0]));
+    }
+
+    private void checkAbsentSignature(XMSSPublicKeyParameters publicKey, byte[] message)
+    {
+        try
+        {
+            XMSSEngine.verifySignature(publicKey, message, null);
+            fail("absent signature accepted");
+        }
+        catch (NullPointerException e)
+        {
+            assertEquals("signature == null", e.getMessage());
+        }
+    }
+
+    private void checkAbsentSignature(XMSSMTPublicKeyParameters publicKey, byte[] message)
+    {
+        try
+        {
+            XMSSEngine.verifyMTSignature(publicKey, message, null);
+            fail("absent signature accepted");
+        }
+        catch (NullPointerException e)
+        {
+            assertEquals("signature == null", e.getMessage());
+        }
     }
 
     private void checkAbsentSignature(XMSSSigner verifier, byte[] message)

@@ -250,10 +250,19 @@ public final class XMSSEngine
     /**
      * Verify an XMSS signature (RFC 8391 sec. 4.1.10). A signature that will not decode at all is
      * reported as a failed verification rather than raised, per the JCA contract the signers above
-     * this present.
+     * this present. An absent one is not the same thing: there are no bytes to decode, so a null
+     * signature is the caller's mistake and is raised.
      */
     public static boolean verifySignature(XMSSPublicKeyParameters publicKey, byte[] message, byte[] signature)
     {
+        // ahead of the decode below, whose catch would otherwise fold a missing argument into the
+        // same false a malformed one gets: the builder raises this exact exception for a null, and
+        // catching RuntimeException there cannot tell the two apart
+        if (signature == null)
+        {
+            throw new NullPointerException("signature == null");
+        }
+
         XMSSParameters params = publicKey.getParameters();
         WOTSPlus wotsPlus = newWOTSPlus(params);
         KeyedHashFunctions khf = wotsPlus.getKhf();
@@ -406,10 +415,20 @@ public final class XMSSEngine
 
     /**
      * Verify an XMSS^MT signature (RFC 8391 sec. 4.2.8). As with XMSS above, a signature that will
-     * not decode is reported as a failed verification rather than raised.
+     * not decode is reported as a failed verification rather than raised, and an absent one is
+     * raised.
      */
     public static boolean verifyMTSignature(XMSSMTPublicKeyParameters publicKey, byte[] message, byte[] signature)
     {
+        // ahead of the decode below, which a null does not fail: the builder takes a null signature
+        // as a request for its set-the-fields branch instead, so what it returns is a signature with
+        // no reduced signatures at all, and that reached the layer-0 get() further down - outside
+        // the catch - as an IndexOutOfBoundsException
+        if (signature == null)
+        {
+            throw new NullPointerException("signature == null");
+        }
+
         XMSSMTParameters params = publicKey.getParameters();
         XMSSParameters xmssParams = params.getXMSSParameters();
         WOTSPlus wotsPlus = newWOTSPlus(params);
