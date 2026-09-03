@@ -28,6 +28,7 @@ public class AllTests
         suite.addTestSuite(SignerStateHandoverTests.class);
         suite.addTestSuite(SignerMessageBufferTests.class);
         suite.addTestSuite(SignerInitParametersTests.class);
+        suite.addTestSuite(SignerConcurrencyTests.class);
         suite.addTestSuite(BDSStateSerializationTests.class);
         suite.addTestSuite(CorruptedStateTests.class);
         suite.addTestSuite(BDSStateMapIndexEnumerationTests.class);
