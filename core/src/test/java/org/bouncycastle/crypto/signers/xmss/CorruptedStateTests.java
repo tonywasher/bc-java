@@ -1,7 +1,6 @@
 package org.bouncycastle.crypto.signers.xmss;
 
 import java.security.SecureRandom;
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -134,7 +133,9 @@ public class CorruptedStateTests
 
         assertEquals(atIndex, state.getIndex());
 
-        Map<Integer, XMSSNode> keep = new TreeMap<Integer, XMSSNode>(state.getKeep());
+        // getKeep(), getRetain() and getTreeHashInstances() below all hand out copies, so the
+        // corruption applied here does not reach the state it was decoded from
+        Map<Integer, XMSSNode> keep = state.getKeep();
         Map<Integer, List<XMSSNode>> retain = state.getRetain();
 
         if ("keep".equals(drop))
@@ -166,7 +167,7 @@ public class CorruptedStateTests
 
         BDS rebuilt = new BDS(state.getTreeHeight(), state.getK(), state.getMaxIndex(), state.getIndex(),
             state.isUsed(), state.getRoot(), state.getAuthenticationPath(), retain, state.getStack(),
-            new ArrayList<BDSTreeHash>(state.getTreeHashInstances()), keep);
+            state.getTreeHashInstances(), keep);
 
         return new XMSSPrivateKeyParameters.Builder(params)
             .withPrivateKey(Arrays.concatenate(head, BDSStateCodec.encode(rebuilt, publicSeed))).build();
