@@ -16,14 +16,14 @@ class BDSTreeHash
     private boolean initialized;
     private boolean finished;
 
-    public BDSTreeHash(int initialHeight)
+    BDSTreeHash(int initialHeight)
     {
         this.initialHeight = initialHeight;
         initialized = false;
         finished = false;
     }
 
-    public BDSTreeHash(int initialHeight, int height, int nextIndex, boolean initialized, boolean finished,
+    BDSTreeHash(int initialHeight, int height, int nextIndex, boolean initialized, boolean finished,
         XMSSNode tailNode)
     {
         this.initialHeight = initialHeight;
@@ -34,7 +34,7 @@ class BDSTreeHash
         this.tailNode = tailNode;
     }
 
-    public void initialize(int nextIndex)
+    void initialize(int nextIndex)
     {
         tailNode = null;
         height = initialHeight;
@@ -43,7 +43,7 @@ class BDSTreeHash
         finished = false;
     }
 
-    public void update(Stack<XMSSNode> stack, WOTSPlus wotsPlus, byte[] publicSeed, byte[] secretSeed, OTSHashAddress otsHashAddress)
+    void update(Stack<XMSSNode> stack, WOTSPlus wotsPlus, byte[] publicSeed, byte[] secretSeed, OTSHashAddress otsHashAddress)
     {
         if (otsHashAddress == null)
         {
@@ -115,7 +115,7 @@ class BDSTreeHash
         }
     }
 
-    public int getHeight()
+    int getHeight()
     {
         if (!initialized || finished)
         {
@@ -124,22 +124,22 @@ class BDSTreeHash
         return height;
     }
 
-    public int getIndexLeaf()
+    int getIndexLeaf()
     {
         return nextIndex;
     }
 
-    public int getInitialHeight()
+    int getInitialHeight()
     {
         return initialHeight;
     }
 
-    public int getRawHeight()
+    int getRawHeight()
     {
         return height;
     }
 
-    public void setNode(XMSSNode node)
+    void setNode(XMSSNode node)
     {
         tailNode = node;
         height = node.getHeight();
@@ -149,12 +149,12 @@ class BDSTreeHash
         }
     }
 
-    public boolean isFinished()
+    boolean isFinished()
     {
         return finished;
     }
 
-    public boolean isInitialized()
+    boolean isInitialized()
     {
         return initialized;
     }
@@ -164,7 +164,7 @@ class BDSTreeHash
         return tailNode;
     }
 
-    public BDSTreeHash clone()
+    protected BDSTreeHash clone()
     {
         BDSTreeHash th = new BDSTreeHash(this.initialHeight);
 

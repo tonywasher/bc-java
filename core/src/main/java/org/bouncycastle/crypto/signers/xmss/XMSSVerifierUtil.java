@@ -15,7 +15,7 @@ class XMSSVerifierUtil
      * @param signature     XMSS signature.
      * @return Root node calculated from signature.
      */
-    public static XMSSNode getRootNodeFromSignature(WOTSPlus wotsPlus, int height, byte[] messageDigest, XMSSReducedSignature signature,
+    static XMSSNode getRootNodeFromSignature(WOTSPlus wotsPlus, int height, byte[] messageDigest, XMSSReducedSignature signature,
                                               OTSHashAddress otsHashAddress, int indexLeaf)
     {
         if (messageDigest.length != wotsPlus.getParams().getTreeDigestSize())

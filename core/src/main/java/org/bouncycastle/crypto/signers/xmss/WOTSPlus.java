@@ -35,7 +35,7 @@ final class WOTSPlus
      *
      * @param params Parameters for WOTSPlus object.
      */
-    public WOTSPlus(WOTSPlusParameters params)
+    WOTSPlus(WOTSPlusParameters params)
     {
         super();
         if (params == null)
@@ -55,7 +55,7 @@ final class WOTSPlus
      * @param secretKeySeed Secret key seed.
      * @param publicSeed    Public seed.
      */
-    public void importKeys(byte[] secretKeySeed, byte[] publicSeed)
+    void importKeys(byte[] secretKeySeed, byte[] publicSeed)
     {
         if (secretKeySeed == null)
         {
@@ -89,7 +89,7 @@ final class WOTSPlus
      * @param otsHashAddress OTS hash address for randomization.
      * @return WOTS+ signature.
      */
-    public WOTSPlusSignature sign(byte[] messageDigest, OTSHashAddress otsHashAddress)
+    WOTSPlusSignature sign(byte[] messageDigest, OTSHashAddress otsHashAddress)
     {
         if (otsHashAddress == null)
         {
@@ -115,7 +115,7 @@ final class WOTSPlus
      * @param otsHashAddress OTS hash address for randomization.
      * @return WOTS+ public key derived from digest and signature.
      */
-    public WOTSPlusPublicKeyParameters getPublicKeyFromSignature(byte[] messageDigest, WOTSPlusSignature signature,
+    WOTSPlusPublicKeyParameters getPublicKeyFromSignature(byte[] messageDigest, WOTSPlusSignature signature,
                                                                     OTSHashAddress otsHashAddress)
     {
         if (signature == null)
@@ -300,7 +300,7 @@ final class WOTSPlus
      * @param otsHashAddress one time hash address.
      * @return WOTS+ secret key at index.
      */
-    public byte[] getWOTSPlusSecretKey(byte[] secretKeySeed, OTSHashAddress otsHashAddress)
+    protected byte[] getWOTSPlusSecretKey(byte[] secretKeySeed, OTSHashAddress otsHashAddress)
     {
         otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder()
             .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
@@ -328,7 +328,7 @@ final class WOTSPlus
      *
      * @return params.
      */
-    public WOTSPlusParameters getParams()
+    protected WOTSPlusParameters getParams()
     {
         return params;
     }
@@ -338,7 +338,7 @@ final class WOTSPlus
      *
      * @return keyed hash functions.
      */
-    public KeyedHashFunctions getKhf()
+    protected KeyedHashFunctions getKhf()
     {
         return khf;
     }
@@ -348,7 +348,7 @@ final class WOTSPlus
      *
      * @return secret key seed.
      */
-    public byte[] getSecretKeySeed()
+    protected byte[] getSecretKeySeed()
     {
         return Arrays.clone(secretKeySeed);
     }
@@ -358,7 +358,7 @@ final class WOTSPlus
      *
      * @return public seed.
      */
-    public byte[] getPublicSeed()
+    protected byte[] getPublicSeed()
     {
         return Arrays.clone(publicSeed);
     }
@@ -368,7 +368,7 @@ final class WOTSPlus
      *
      * @return WOTS+ private key.
      */
-    public WOTSPlusPrivateKeyParameters getPrivateKey()
+    protected WOTSPlusPrivateKeyParameters getPrivateKey()
     {
         byte[][] privateKey = new byte[params.getLen()][];
         for (int i = 0; i < privateKey.length; i++)
@@ -385,7 +385,7 @@ final class WOTSPlus
      * @param otsHashAddress OTS hash address for randomization.
      * @return WOTS+ public key.
      */
-    public WOTSPlusPublicKeyParameters getPublicKey(OTSHashAddress otsHashAddress)
+    WOTSPlusPublicKeyParameters getPublicKey(OTSHashAddress otsHashAddress)
     {
         if (otsHashAddress == null)
         {
