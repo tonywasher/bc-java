@@ -409,6 +409,20 @@ public class BDSStateMap
 
             this.maxIndex = Pack.bigEndianToLong(encoded, 0);
         }
+
+        // and nothing after it, as BDS.readObject() requires of its own data. The two were
+        // reworked together onto read() and only one came away with the check, so a legacy state
+        // map encoding carrying bytes appended past its maximum index was a second encoding of the
+        // same state map where the byte for byte equivalent on a BDS was refused. The outer
+        // "unexpected data found at end of ObjectInputStream" in XMSSUtil.deserialize does not
+        // cover this: these bytes are inside this object's own data rather than after it, so they
+        // are consumed by the read that recovers it and the stream is at its end by the time that
+        // check looks. BDSStateCodec calls checkFinished for both of the current formats, which
+        // leaves this path the one place the two families disagreed.
+        if (in.read() >= 0)
+        {
+            throw new IOException("inconsistent BDS state map data detected");
+        }
     }
 
     private void writeObject(

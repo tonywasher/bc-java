@@ -20,6 +20,7 @@ import org.bouncycastle.crypto.generators.XMSSMTKeyPairGenerator;
 import org.bouncycastle.crypto.params.XMSSKeyGenerationParameters;
 import org.bouncycastle.crypto.params.XMSSMTKeyGenerationParameters;
 import org.bouncycastle.crypto.params.XMSSMTParameters;
+import org.bouncycastle.crypto.params.XMSSMTPrivateKeyParameters;
 import org.bouncycastle.crypto.params.XMSSParameters;
 import org.bouncycastle.crypto.params.XMSSPrivateKeyParameters;
 import org.bouncycastle.crypto.util.PrivateKeyFactory;
@@ -257,6 +258,126 @@ public class CraftedLegacyStateTests
         catch (IOException e)
         {
             assertEquals("no state in BDS state map", e.getMessage());
+        }
+    }
+
+    /**
+     * The block data a class's own writeObject() left behind, with one extra byte in it. The
+     * serialized form of an object whose class writes custom data ends with a block data record -
+     * TC_BLOCKDATA, a one byte length, the data - and then TC_ENDBLOCKDATA, so widening that
+     * record by a byte puts the byte inside the object's own data rather than after the object,
+     * which is the distinction that matters: bytes after the object are what
+     * XMSSUtil.deserialize's "unexpected data found at end of ObjectInputStream" covers, and
+     * bytes inside it are consumed by the read that recovers the object, leaving the stream at
+     * its end by the time that check looks.
+     *
+     * @param serialized a serialized object ending in a block data record.
+     * @param dataLength the length of that record.
+     */
+    private static byte[] withAByteAppendedInsideTheObject(byte[] serialized, int dataLength)
+    {
+        int end = serialized.length;
+
+        assertEquals("not TC_ENDBLOCKDATA", TC_ENDBLOCKDATA, serialized[end - 1]);
+        assertEquals("not the expected data length", dataLength, serialized[end - 2 - dataLength]);
+        assertEquals("not TC_BLOCKDATA", TC_BLOCKDATA, serialized[end - 3 - dataLength]);
+
+        byte[] out = new byte[end + 1];
+
+        System.arraycopy(serialized, 0, out, 0, end - 2 - dataLength);
+        out[end - 2 - dataLength] = (byte)(dataLength + 1);
+        System.arraycopy(serialized, end - 1 - dataLength, out, end - 1 - dataLength, dataLength);
+        out[end - 1] = (byte)0xff;
+        out[end] = TC_ENDBLOCKDATA;
+
+        return out;
+    }
+
+    private static byte[] serialize(Object obj)
+        throws IOException
+    {
+        ByteArrayOutputStream bOut = new ByteArrayOutputStream();
+        ObjectOutputStream oOut = new ObjectOutputStream(bOut);
+
+        oOut.writeObject(obj);
+        oOut.close();
+
+        return bOut.toByteArray();
+    }
+
+    /**
+     * A state map encoding carrying a byte past the maximum index its readObject() reads is a
+     * second encoding of the same state map, and the byte for byte equivalent on a BDS has always
+     * been refused - "inconsistent BDS data detected", the last thing BDS.readObject() checks.
+     * The two were reworked side by side onto read() and only one came away with the check, so
+     * this asserts both families now answer the same way, and that the unpadded encoding either
+     * one produces is still taken.
+     */
+    public void testLegacyStateWithTrailingDataRefused()
+        throws Exception
+    {
+        // height 4 over 2 layers is not an RFC 8391 sec. 5.4 registered set, so the key is written
+        // in the legacy form that carries a serialized state at all
+        XMSSMTParameters mtParams = new XMSSMTParameters(4, 2, NISTObjectIdentifiers.id_sha256);
+        XMSSMTKeyPairGenerator mtKpg = new XMSSMTKeyPairGenerator();
+
+        mtKpg.init(new XMSSMTKeyGenerationParameters(mtParams, new SecureRandom()));
+
+        AsymmetricCipherKeyPair mtKp = mtKpg.generateKeyPair();
+        XMSSMTPrivateKeyParameters mtKey = (XMSSMTPrivateKeyParameters)mtKp.getPrivate();
+        PrivateKeyInfo mtInfo = PrivateKeyInfoFactory.createPrivateKeyInfo(mtKey);
+        XMSSMTPrivateKey mtAsn1 = XMSSMTPrivateKey.getInstance(mtInfo.parsePrivateKey());
+
+        // BDSStateMap.writeObject() writes an eight byte maximum index
+        byte[] mtLegacy = serialize(mtKey.getBDSState());
+
+        assertNotNull("the unpadded legacy state map is no longer read at all",
+            PrivateKeyFactory.createKey(new PrivateKeyInfo(mtInfo.getPrivateKeyAlgorithm(),
+                new XMSSMTPrivateKey(mtAsn1.getIndex(), mtAsn1.getSecretKeySeed(),
+                    mtAsn1.getSecretKeyPRF(), mtAsn1.getPublicSeed(), mtAsn1.getRoot(), mtLegacy))));
+
+        try
+        {
+            PrivateKeyFactory.createKey(new PrivateKeyInfo(mtInfo.getPrivateKeyAlgorithm(),
+                new XMSSMTPrivateKey(mtAsn1.getIndex(), mtAsn1.getSecretKeySeed(),
+                    mtAsn1.getSecretKeyPRF(), mtAsn1.getPublicSeed(), mtAsn1.getRoot(),
+                    withAByteAppendedInsideTheObject(mtLegacy, 8))));
+            fail("a legacy BDS state map with trailing data was accepted");
+        }
+        catch (IOException e)
+        {
+            assertEquals("inconsistent BDS state map data detected", e.getMessage());
+        }
+
+        XMSSParameters params = new XMSSParameters(4, NISTObjectIdentifiers.id_sha256);
+        XMSSKeyPairGenerator kpg = new XMSSKeyPairGenerator();
+
+        kpg.init(new XMSSKeyGenerationParameters(params, new SecureRandom()));
+
+        AsymmetricCipherKeyPair kp = kpg.generateKeyPair();
+        XMSSPrivateKeyParameters key = (XMSSPrivateKeyParameters)kp.getPrivate();
+        PrivateKeyInfo info = PrivateKeyInfoFactory.createPrivateKeyInfo(key);
+        XMSSPrivateKey asn1 = XMSSPrivateKey.getInstance(info.parsePrivateKey());
+
+        // BDS.writeObject() writes a four byte maximum index
+        byte[] legacy = serialize(key.getBDSState());
+
+        assertNotNull("the unpadded legacy BDS is no longer read at all",
+            PrivateKeyFactory.createKey(new PrivateKeyInfo(info.getPrivateKeyAlgorithm(),
+                new XMSSPrivateKey(asn1.getIndex(), asn1.getSecretKeySeed(), asn1.getSecretKeyPRF(),
+                    asn1.getPublicSeed(), asn1.getRoot(), legacy))));
+
+        try
+        {
+            PrivateKeyFactory.createKey(new PrivateKeyInfo(info.getPrivateKeyAlgorithm(),
+                new XMSSPrivateKey(asn1.getIndex(), asn1.getSecretKeySeed(), asn1.getSecretKeyPRF(),
+                    asn1.getPublicSeed(), asn1.getRoot(),
+                    withAByteAppendedInsideTheObject(legacy, 4))));
+            fail("a legacy BDS with trailing data was accepted");
+        }
+        catch (IOException e)
+        {
+            assertEquals("inconsistent BDS data detected", e.getMessage());
         }
     }
 }
