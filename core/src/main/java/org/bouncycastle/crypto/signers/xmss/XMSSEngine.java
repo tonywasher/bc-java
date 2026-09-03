@@ -326,16 +326,6 @@ public final class XMSSEngine
         {
             throw new IllegalStateException("not initialized");
         }
-        //
-        // The index and the traversal state are two records of the same position, and this is the
-        // point where their disagreeing does the damage: the one-time key about to be derived comes
-        // from the index, the authentication path from the state, so signing with the two apart
-        // either signs under a one-time key the state has already moved past - RFC 8391 sec. 1.1,
-        // and the second signature verifies - or emits a path that does not match the signature.
-        // Checked here as well as on load and on roll because the state is reachable through
-        // getBDSState() and so can be moved by its holder; the signer is what must not act on it.
-        //
-        privateKey.getBDSState().validate(params, privateKey.getIndex());
 
         try
         {
@@ -546,32 +536,29 @@ public final class XMSSEngine
     }
 
     /**
-     * Advance an XMSS^MT traversal state to the leaf after {@code globalIndex}, for the key
-     * parameters class rolling its own key on.
+     * The XMSS^MT traversal state for the leaf after {@code globalIndex}, for the key parameters
+     * class rolling its own key on. The state passed in is left where it is and a new one comes
+     * back, as {@link #getNextBDSState} does for the single tree.
      * <p>
-     * This sits here rather than on {@link BDSStateMap} because that type is an opaque handle a
-     * caller can obtain from a live private key: advancing the state on its own would leave it
-     * past the index the key still reports, and a key whose two records of its position disagree
-     * signs twice under one one-time key. Rolling the state is the key's to do, not its holder's.
+     * That it returns the advanced state rather than advancing the one it is given is what makes it
+     * safe to be public - and public it has to be, the key parameters class being in another
+     * package and Java having no way to say "callable from these two packages only". A state map is
+     * reachable from a live private key through its getBDSState(), so a version of this that
+     * advanced its argument let a holder move a key's state out from under the index the key still
+     * reported. A key whose two records of its position disagree signs a second message under a
+     * one-time key it has already spent, against RFC 8391 sec. 1.1, and that signature verifies.
      * </p><p>
-     * Being public does not make it the holder's, though - the key parameters class is in another
-     * package and Java has no way to say "callable from these two packages only" - so this checks
-     * rather than trusts: the state must be sitting on {@code globalIndex} before it is advanced
-     * off it. A holder calling this with a state it took from a live key can therefore no longer
-     * move that state to an index of its choosing, and a state whose position had already drifted
-     * from its key's is refused here rather than rolled further. What that check cannot see is a
-     * caller passing the key's true index to advance the state one step behind the key's back;
-     * {@link #generateMTSignature} is where that is caught, before it can reuse a one-time key.
+     * With the state replaced instead, the two records move together or not at all: the key assigns
+     * both, a failure part way through leaves it on the index it was already on, and a holder
+     * calling this gets a state map of its own while the key keeps the one it had. Nothing is left
+     * for the signer to check, and the one remaining way for a key's index and state to part - a
+     * stored key written or restored wrongly - is refused when the key is built.
      * </p>
-     *
-     * @throws IllegalStateException if the state is not sitting on {@code globalIndex}.
      */
-    public static void rollState(BDSStateMap bdsState, XMSSMTParameters params, long globalIndex,
+    public static BDSStateMap rollState(BDSStateMap bdsState, XMSSMTParameters params, long globalIndex,
         byte[] publicSeed, byte[] secretKeySeed)
     {
-        bdsState.validate(params, globalIndex);
-
-        bdsState.updateState(params, globalIndex, publicSeed, secretKeySeed);
+        return bdsState.getNextState(params, globalIndex, publicSeed, secretKeySeed);
     }
 
     /**

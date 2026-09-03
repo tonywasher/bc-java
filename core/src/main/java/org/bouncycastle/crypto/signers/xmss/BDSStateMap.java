@@ -54,9 +54,25 @@ public class BDSStateMap
     }
 
     /**
-     * Package-private: advancing the traversal state is the owning key's to do, and it does it
-     * through {@link XMSSEngine#rollState} so that the index it reports moves with it. See that
-     * method for why this is not on the handle a caller can reach.
+     * The traversal state for the leaf after {@code globalIndex}, as a new state map: the one this
+     * is called on is left where it is. This is the multi-tree counterpart of
+     * {@link BDS#getNextState(byte[], byte[], OTSHashAddress)}, and advancing by replacement rather
+     * than in place is what lets the owning key move its index and its state as one - see
+     * {@link XMSSEngine#rollState}.
+     */
+    BDSStateMap getNextState(XMSSMTParameters params, long globalIndex, byte[] publicSeed, byte[] secretKeySeed)
+    {
+        BDSStateMap next = new BDSStateMap(this, maxIndex);
+
+        next.updateState(params, globalIndex, publicSeed, secretKeySeed);
+
+        return next;
+    }
+
+    /**
+     * Advance this state map in place. Package-private, and for a map that is not yet anyone's: the
+     * constructor building a state up to an index, and the copy {@link #getNextState} has just
+     * taken. The state a key holds is advanced by being replaced, never through here.
      */
     void updateState(XMSSMTParameters params, long globalIndex, byte[] publicSeed, byte[] secretKeySeed)
     {

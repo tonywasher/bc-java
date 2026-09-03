@@ -225,13 +225,12 @@ public class OneTimeKeyReuseTests
     }
 
     /**
-     * A state map is mutable and the XMSS^MT key advances it in place, so the builder has to copy
-     * one it is handed rather than adopt it. Adopting it puts two keys on one state while each
-     * keeps its own index, and signing with either then moves the state out from under the other -
-     * whose next signature is under a one-time key already spent.
+     * Rolling the key replaces its state map, but signing still installs subtree states into the
+     * map as it descends the layers, so the builder has to copy one it is handed rather than adopt
+     * it. Adopting it leaves two keys reading authentication paths out of one map while each sits
+     * at its own index.
      * <p>
-     * The XMSS side has no equivalent: its BDS is replaced on each roll rather than advanced in
-     * place, so a shared one is never mutated.
+     * The XMSS side has no equivalent: its state is a single BDS the signer only reads.
      * </p>
      */
     public void testKeyBuilderCopiesTheTraversalStateItIsGiven()
@@ -265,10 +264,11 @@ public class OneTimeKeyReuseTests
 
     /**
      * XMSSEngine.rollState has to be public - the key parameters class is in another package - so a
-     * caller can reach it with a state map taken off a live key. It therefore checks rather than
-     * trusts: the state must be sitting on the index it is told to advance off.
+     * caller can reach it with a state map taken off a live key. It hands the advanced state back
+     * rather than applying it to the map it was given, so what such a caller gets is a state map of
+     * its own, and the key it took the state from is untouched.
      */
-    public void testStateCannotBeRolledToAnIndexOfTheHoldersChoosing()
+    public void testRollingAStateTakenOffAKeyLeavesTheKeyWhereItWas()
         throws Exception
     {
         XMSSMTParameters params = new XMSSMTParameters(HEIGHT, LAYERS, new SHA256Digest());
@@ -276,52 +276,57 @@ public class OneTimeKeyReuseTests
 
         XMSSEngine.generateMTSignature(key, new byte[]{0x01});
 
-        try
-        {
-            XMSSEngine.rollState(key.getBDSState(), key.getParameters(), key.getIndex() + 3,
-                key.getPublicSeed(), key.getSecretKeySeed());
-            fail("rolled the state to an index of the caller's choosing");
-        }
-        catch (IllegalStateException e)
-        {
-            assertTrue(e.getMessage(), e.getMessage().startsWith("BDS state has wrong index"));
-        }
+        BDSStateMap held = key.getBDSState();
+        int before = held.get(0).getIndex();
 
-        // and the refused roll left the state where it was: the key still signs
-        assertEquals(1L, key.getIndex());
-        XMSSEngine.generateMTSignature(key, new byte[]{0x02});
-        assertEquals(2L, key.getIndex());
+        BDSStateMap rolled = XMSSEngine.rollState(held, key.getParameters(), key.getIndex(),
+            key.getPublicSeed(), key.getSecretKeySeed());
+
+        assertNotSame("the advanced state has to be a new map", held, rolled);
+        assertEquals("and it is the one that moved", before + 1, rolled.get(0).getIndex());
+
+        assertSame("the key still holds the state it had", held, key.getBDSState());
+        assertEquals("which has not moved", before, held.get(0).getIndex());
+        assertEquals("nor has its index", 1L, key.getIndex());
     }
 
     /**
-     * What the check on rollState cannot see is a caller passing the key's own index, advancing the
-     * state one step behind the key's back. The signer is where that is caught: the one-time key it
-     * is about to derive comes from the index and the authentication path from the state, so it
-     * refuses to sign with the two apart rather than spend an index the state has moved past.
+     * So a caller cannot part a key's index from its traversal state, which is what would let the
+     * key sign again under a one-time key its state had already moved past. Rolling the state a
+     * holder took off the key changes nothing about the key: it signs on at the index it was on,
+     * and the signature verifies.
      */
-    public void testSigningRefusesAKeyWhoseStateHasMovedWithoutIt()
+    public void testAHolderCannotMoveAKeysStateOutFromUnderIt()
         throws Exception
     {
         XMSSMTParameters params = new XMSSMTParameters(HEIGHT, LAYERS, new SHA256Digest());
-        XMSSMTPrivateKeyParameters key = mtKey(params);
+        XMSSMTKeyPairGenerator kpg = new XMSSMTKeyPairGenerator();
+
+        kpg.init(new XMSSMTKeyGenerationParameters(params, new SecureRandom()));
+
+        AsymmetricCipherKeyPair kp = kpg.generateKeyPair();
+        XMSSMTPrivateKeyParameters key = (XMSSMTPrivateKeyParameters)kp.getPrivate();
+        XMSSMTPublicKeyParameters publicKey = (XMSSMTPublicKeyParameters)kp.getPublic();
 
         XMSSEngine.generateMTSignature(key, new byte[]{0x01});
 
-        // the state moves, the key's index does not
         XMSSEngine.rollState(key.getBDSState(), key.getParameters(), key.getIndex(),
             key.getPublicSeed(), key.getSecretKeySeed());
 
-        try
-        {
-            XMSSEngine.generateMTSignature(key, new byte[]{0x02});
-            fail("signed at an index the traversal state had already moved past");
-        }
-        catch (IllegalStateException e)
-        {
-            assertTrue(e.getMessage(), e.getMessage().startsWith("BDS state has wrong index"));
-        }
+        byte[] message = new byte[]{0x02};
+        byte[] signature = XMSSEngine.generateMTSignature(key, message);
 
-        // refused before anything was spent: the index is where it was
-        assertEquals(1L, key.getIndex());
+        assertEquals("the key spent one index, the one it was on", 2L, key.getIndex());
+        assertTrue("the signature taken after a holder rolled the state it was handed",
+            XMSSEngine.verifyMTSignature(publicKey, message, signature));
+
+        // and on, through the subtree boundary the roll would have skipped
+        for (int i = 2; i != (1 << HEIGHT); i++)
+        {
+            message = new byte[]{(byte)i};
+
+            assertTrue("signature at index " + i, XMSSEngine.verifyMTSignature(publicKey, message,
+                XMSSEngine.generateMTSignature(key, message)));
+        }
     }
 }

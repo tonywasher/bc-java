@@ -219,13 +219,12 @@ public final class XMSSMTPrivateKeyParameters
         public Builder withBDSState(BDSStateMap val)
         {
             //
-            // Copy, do not adopt: a state map is mutable and this key advances it in place, so a
-            // caller that keeps the map it passed - or passes one it took off another key with
-            // getBDSState() - leaves two keys driving one state while each tracks its own index.
-            // Signing with one then moves the shared state without moving the other key's index,
-            // and that key's next signature is under a one-time key already used, against RFC 8391
-            // sec. 1.1 - and it verifies. The XMSS side needs no copy for this: its BDS is replaced
-            // on each roll (getNextState) rather than advanced in place, so nothing is shared.
+            // Copy, do not adopt. Rolling the key replaces its state map rather than advancing the
+            // one it holds, but signing still installs subtree states into that map as it descends
+            // the layers, so a caller that keeps the map it passed - or passes one it took off
+            // another key with getBDSState() - leaves two keys reading authentication paths out of
+            // one map while each sits at its own index. The XMSS side needs no copy for this: its
+            // state is a single BDS the signer only reads.
             //
             if (val.getMaxIndex() < 0)   // check for legacy state maps
             {
@@ -353,7 +352,11 @@ public final class XMSSMTPrivateKeyParameters
         {
             if (this.getIndex() < bdsState.getMaxIndex())
             {
-                XMSSEngine.rollState(bdsState, params, index, publicSeed, secretKeySeed);
+                // the advanced state comes back rather than being applied to the one held, so the
+                // index and the state move together: nothing is assigned unless the walk completed,
+                // where advancing in place left a state part way to the next leaf under an index
+                // that had not moved. XMSSPrivateKeyParameters.rollKey does the same with its BDS.
+                bdsState = XMSSEngine.rollState(bdsState, params, index, publicSeed, secretKeySeed);
                 index = index + 1;
             }
             else
