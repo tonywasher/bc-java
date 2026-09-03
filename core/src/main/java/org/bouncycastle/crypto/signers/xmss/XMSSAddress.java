@@ -33,7 +33,6 @@ abstract class XMSSAddress
 
         public Builder(int type)
         {
-            super();
             this.type = type;
         }
 

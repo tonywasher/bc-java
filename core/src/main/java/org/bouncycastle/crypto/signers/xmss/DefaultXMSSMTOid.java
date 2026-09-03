@@ -157,7 +157,6 @@ final class DefaultXMSSMTOid
      */
     private DefaultXMSSMTOid(int oid, String stringRepresentation)
     {
-        super();
         this.oid = oid;
         this.stringRepresentation = stringRepresentation;
     }

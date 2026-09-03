@@ -88,7 +88,6 @@ class XMSSReducedSignature
 
         public Builder(XMSSParameters params)
         {
-            super();
             this.params = params;
         }
 

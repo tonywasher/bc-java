@@ -102,7 +102,6 @@ public final class XMSSParameters
      */
     public XMSSParameters(int height, ASN1ObjectIdentifier treeDigestOID, int n)
     {
-        super();
         if (height < 2)
         {
             throw new IllegalArgumentException("height must be >= 2");

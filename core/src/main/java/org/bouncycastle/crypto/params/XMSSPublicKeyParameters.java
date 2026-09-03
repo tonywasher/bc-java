@@ -83,7 +83,6 @@ public final class XMSSPublicKeyParameters
 
         public Builder(XMSSParameters params)
         {
-            super();
             if (params == null)
             {
                 throw new NullPointerException("params == null");

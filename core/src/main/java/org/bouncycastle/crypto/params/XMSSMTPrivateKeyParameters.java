@@ -174,7 +174,6 @@ public final class XMSSMTPrivateKeyParameters
 
         public Builder(XMSSMTParameters params)
         {
-            super();
             if (params == null)
             {
                 throw new NullPointerException("params == null");

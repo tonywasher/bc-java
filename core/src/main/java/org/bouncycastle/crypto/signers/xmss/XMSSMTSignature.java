@@ -83,7 +83,6 @@ final class XMSSMTSignature
 
         public Builder(XMSSMTParameters params)
         {
-            super();
             this.params = params;
         }
 

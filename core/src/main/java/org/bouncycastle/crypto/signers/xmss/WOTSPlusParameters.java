@@ -57,7 +57,6 @@ final class WOTSPlusParameters
      */
     public WOTSPlusParameters(ASN1ObjectIdentifier treeDigest, int digestSize)
     {
-        super();
         if (treeDigest == null)
         {
             throw new NullPointerException("treeDigest == null");

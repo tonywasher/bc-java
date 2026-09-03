@@ -78,7 +78,6 @@ public final class XMSSMTPublicKeyParameters
 
         public Builder(XMSSMTParameters params)
         {
-            super();
             if (params == null)
             {
                 throw new NullPointerException("params == null");

@@ -50,7 +50,6 @@ final class WOTSPlusOid
      */
     private WOTSPlusOid(int oid, String stringRepresentation)
     {
-        super();
         this.oid = oid;
         this.stringRepresentation = stringRepresentation;
     }

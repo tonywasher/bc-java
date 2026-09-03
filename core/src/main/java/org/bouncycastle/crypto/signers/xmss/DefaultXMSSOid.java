@@ -68,7 +68,6 @@ final class DefaultXMSSOid
      */
     private DefaultXMSSOid(int oid, String stringRepresentation)
     {
-        super();
         this.oid = oid;
         this.stringRepresentation = stringRepresentation;
     }

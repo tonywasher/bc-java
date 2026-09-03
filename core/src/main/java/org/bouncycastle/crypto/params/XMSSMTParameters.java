@@ -133,7 +133,6 @@ public final class XMSSMTParameters
      */
     public XMSSMTParameters(int height, int layers, ASN1ObjectIdentifier digestOID, int n)
     {
-        super();
         this.height = height;
         this.layers = layers;
         this.xmssParams = new XMSSParameters(xmssTreeHeight(height, layers), digestOID, n);
