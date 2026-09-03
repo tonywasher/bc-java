@@ -10,7 +10,6 @@ import java.util.Map;
 final class DefaultXMSSMTOid
     implements XMSSOid
 {
-
     /**
      * XMSS^MT OID lookup table.
      */

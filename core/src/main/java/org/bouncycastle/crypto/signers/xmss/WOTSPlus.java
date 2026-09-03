@@ -11,7 +11,6 @@ import org.bouncycastle.util.Bytes;
  */
 final class WOTSPlus
 {
-
     /**
      * WOTS+ parameters.
      */
@@ -259,7 +258,7 @@ final class WOTSPlus
      * @param otsHashAddress one time hash address.
      * @return WOTS+ secret key at index.
      */
-    protected byte[] getWOTSPlusSecretKey(byte[] secretKeySeed, OTSHashAddress otsHashAddress)
+    byte[] getWOTSPlusSecretKey(byte[] secretKeySeed, OTSHashAddress otsHashAddress)
     {
         otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder()
             .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
@@ -287,7 +286,7 @@ final class WOTSPlus
      *
      * @return params.
      */
-    protected WOTSPlusParameters getParams()
+    WOTSPlusParameters getParams()
     {
         return params;
     }
@@ -297,7 +296,7 @@ final class WOTSPlus
      *
      * @return keyed hash functions.
      */
-    protected KeyedHashFunctions getKhf()
+    KeyedHashFunctions getKhf()
     {
         return khf;
     }
@@ -307,7 +306,7 @@ final class WOTSPlus
      *
      * @return public seed.
      */
-    protected byte[] getPublicSeed()
+    byte[] getPublicSeed()
     {
         return Arrays.clone(publicSeed);
     }

@@ -16,7 +16,10 @@ import org.bouncycastle.util.Integers;
 public final class XMSSParameters
 {
     private static final Map<Integer, XMSSParameters> paramsLookupTable;
-
+    /**
+     * The Winternitz parameter, fixed at 16 by RFC 8391 sec. 5.
+     */
+    private static final int WINTERNITZ_PARAMETER = 16;
     static
     {
         Map<Integer, XMSSParameters> pMap = new HashMap<Integer, XMSSParameters>();
@@ -63,7 +66,7 @@ public final class XMSSParameters
     private final int height;
     private final int k;
     private final ASN1ObjectIdentifier treeDigestOID;
-    private final int winternitzParameter;
+
     private final String treeDigest;
     private final int treeDigestSize;
     private final int len;
@@ -127,8 +130,7 @@ public final class XMSSParameters
 
         this.treeDigestSize = (n > 0) ? n : XMSSEngine.getDigestSize(treeDigestOID);
         this.len = XMSSEngine.getWOTSPlusLen(treeDigestOID, this.treeDigestSize);
-        this.winternitzParameter = XMSSEngine.getWinternitzParameter();
-        this.parameterSetOID = XMSSEngine.lookupXMSSOid(this.treeDigest, this.treeDigestSize, this.winternitzParameter, this.len, height);
+        this.parameterSetOID = XMSSEngine.lookupXMSSOid(this.treeDigest, this.treeDigestSize, WINTERNITZ_PARAMETER, this.len, height);
         /*
          * if (oid == null) { throw new InvalidParameterException(); }
          */
@@ -193,8 +195,6 @@ public final class XMSSParameters
         return treeDigest;
     }
 
-
-
     public int getLen()
     {
         return len;
@@ -207,7 +207,7 @@ public final class XMSSParameters
      */
     public int getWinternitzParameter()
     {
-        return winternitzParameter;
+        return WINTERNITZ_PARAMETER;
     }
 
     public int getK()

@@ -8,12 +8,6 @@ import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 final class WOTSPlusParameters
 {
     /**
-     * The Winternitz parameter, fixed at 16 by RFC 8391 sec. 5.
-     */
-    static final int WINTERNITZ_PARAMETER = 16;
-
-
-    /**
      * OID.
      */
     private final XMSSOid oid;
@@ -22,10 +16,6 @@ final class WOTSPlusParameters
      * The message digest size.
      */
     private final int digestSize;
-    /**
-     * The Winternitz parameter (currently fixed to 16).
-     */
-    private final int winternitzParameter;
     /**
      * The number of n-byte string elements in a WOTS+ secret key, public key,
      * and signature.
@@ -66,12 +56,13 @@ final class WOTSPlusParameters
         }
         this.treeDigest = treeDigest;
         this.digestSize = digestSize;
-        winternitzParameter = WINTERNITZ_PARAMETER;
-        len1 = (int)Math.ceil((double)(8 * digestSize) / XMSSUtil.log2(winternitzParameter));
-        len2 = (int)Math.floor(XMSSUtil.log2(len1 * (winternitzParameter - 1)) / XMSSUtil.log2(winternitzParameter)) + 1;
+        // The Winternitz parameter, fixed at 16 by RFC 8391 sec. 5.
+        int WINTERNITZ_PARAMETER = 16;
+        len1 = (int)Math.ceil((double)(8 * digestSize) / XMSSUtil.log2(WINTERNITZ_PARAMETER));
+        len2 = (int)Math.floor(XMSSUtil.log2(len1 * (WINTERNITZ_PARAMETER - 1)) / XMSSUtil.log2(WINTERNITZ_PARAMETER)) + 1;
         len = len1 + len2;
         String algName = DigestUtil.getDigestName(treeDigest);
-        oid = WOTSPlusOid.lookup(algName, digestSize, winternitzParameter, len);
+        oid = WOTSPlusOid.lookup(algName, digestSize, WINTERNITZ_PARAMETER, len);
         if (oid == null)
         {
             throw new IllegalArgumentException("cannot find OID for digest algorithm: " + algName);
@@ -96,16 +87,6 @@ final class WOTSPlusParameters
     public int getTreeDigestSize()
     {
         return digestSize;
-    }
-
-    /**
-     * Getter WinternitzParameter.
-     *
-     * @return winternitzParameter.
-     */
-    public int getWinternitzParameter()
-    {
-        return winternitzParameter;
     }
 
     /**

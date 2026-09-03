@@ -76,14 +76,6 @@ public final class XMSSEngine
     }
 
     /**
-     * The Winternitz parameter w, fixed at 16 by RFC 8391 sec. 5.
-     */
-    public static int getWinternitzParameter()
-    {
-        return WOTSPlusParameters.WINTERNITZ_PARAMETER;
-    }
-
-    /**
      * The RFC 8391 sec. 5.3 XMSS parameter-set identifier for this combination, or 0 when the
      * combination is not one of the registered sets.
      */
