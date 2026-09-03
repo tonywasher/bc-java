@@ -3,9 +3,7 @@ package org.bouncycastle.crypto.params;
 import java.io.IOException;
 
 import org.bouncycastle.crypto.signers.xmss.XMSSEngine;
-import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Encodable;
-import org.bouncycastle.util.Pack;
 
 /**
  * XMSS Public Key.
@@ -32,29 +30,11 @@ public final class XMSSPublicKeyParameters
         if (publicKey != null)
         {
             /* import */
-            int oidSize = 4;
-            // updated key
-            int position = 0;
-            // pre-rfc final key without OID.
-            if (publicKey.length == n + n)
-            {
-                oid = 0;
-                root = Arrays.copyOfRange(publicKey, position, position + n);
-                position += n;
-                publicSeed = Arrays.copyOfRange(publicKey, position, position + n);
-            }
-            else if (publicKey.length == oidSize + n + n)
-            {
-                oid = Pack.bigEndianToInt(publicKey, 0);
-                position += oidSize;
-                root = Arrays.copyOfRange(publicKey, position, position + n);
-                position += n;
-                publicSeed = Arrays.copyOfRange(publicKey, position, position + n);
-            }
-            else
-            {
-                throw new IllegalArgumentException("public key has wrong size");
-            }
+            XMSSPublicKeyCodec decoded = XMSSPublicKeyCodec.decode(publicKey, n);
+
+            oid = decoded.getOid();
+            root = decoded.getRoot();
+            publicSeed = decoded.getPublicSeed();
         }
         else
         {
@@ -120,31 +100,7 @@ public final class XMSSPublicKeyParameters
     @Deprecated
     public byte[] toByteArray()
     {
-        /* oid || root || seed */
-        int n = params.getTreeDigestSize();
-        int oidSize = 4;
-        int rootSize = n;
-        int publicSeedSize = n;
-
-        byte[] out;
-        int position = 0;
-        /* copy oid */
-        if (oid != 0)
-        {
-            out = new byte[oidSize + rootSize + publicSeedSize];
-            Pack.intToBigEndian(oid, out, position);
-            position += oidSize;
-        }
-        else
-        {
-            out = new byte[rootSize + publicSeedSize];
-        }
-        /* copy root */
-        System.arraycopy(root, 0, out, position, root.length);
-        position += rootSize;
-        /* copy public seed */
-        System.arraycopy(publicSeed, 0, out, position, publicSeed.length);
-        return out;
+        return XMSSPublicKeyCodec.encode(oid, root, publicSeed);
     }
 
     public byte[] getRoot()
