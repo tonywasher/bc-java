@@ -555,7 +555,7 @@ public final class XMSSEngine
      * stored key written or restored wrongly - is refused when the key is built.
      * </p>
      */
-    public static BDSStateMap rollState(BDSStateMap bdsState, XMSSMTParameters params, long globalIndex,
+    public static BDSStateMap getNextBDSStateMap(BDSStateMap bdsState, XMSSMTParameters params, long globalIndex,
         byte[] publicSeed, byte[] secretKeySeed)
     {
         return bdsState.getNextState(params, globalIndex, publicSeed, secretKeySeed);

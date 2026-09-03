@@ -58,7 +58,7 @@ public class BDSStateMap
      * is called on is left where it is. This is the multi-tree counterpart of
      * {@link BDS#getNextState(byte[], byte[], OTSHashAddress)}, and advancing by replacement rather
      * than in place is what lets the owning key move its index and its state as one - see
-     * {@link XMSSEngine#rollState}.
+     * {@link XMSSEngine#getNextBDSStateMap}.
      */
     BDSStateMap getNextState(XMSSMTParameters params, long globalIndex, byte[] publicSeed, byte[] secretKeySeed)
     {

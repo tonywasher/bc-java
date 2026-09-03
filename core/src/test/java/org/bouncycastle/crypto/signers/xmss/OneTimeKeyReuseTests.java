@@ -263,12 +263,12 @@ public class OneTimeKeyReuseTests
     }
 
     /**
-     * XMSSEngine.rollState has to be public - the key parameters class is in another package - so a
-     * caller can reach it with a state map taken off a live key. It hands the advanced state back
-     * rather than applying it to the map it was given, so what such a caller gets is a state map of
-     * its own, and the key it took the state from is untouched.
+     * XMSSEngine.getNextBDSStateMap has to be public - the key parameters class is in another
+     * package - so a caller can reach it with a state map taken off a live key. It hands the
+     * advanced state back rather than applying it to the map it was given, so what such a caller
+     * gets is a state map of its own, and the key it took the state from is untouched.
      */
-    public void testRollingAStateTakenOffAKeyLeavesTheKeyWhereItWas()
+    public void testTakingTheNextStateOffAKeyLeavesTheKeyWhereItWas()
         throws Exception
     {
         XMSSMTParameters params = new XMSSMTParameters(HEIGHT, LAYERS, new SHA256Digest());
@@ -279,11 +279,11 @@ public class OneTimeKeyReuseTests
         BDSStateMap held = key.getBDSState();
         int before = held.get(0).getIndex();
 
-        BDSStateMap rolled = XMSSEngine.rollState(held, key.getParameters(), key.getIndex(),
+        BDSStateMap next = XMSSEngine.getNextBDSStateMap(held, key.getParameters(), key.getIndex(),
             key.getPublicSeed(), key.getSecretKeySeed());
 
-        assertNotSame("the advanced state has to be a new map", held, rolled);
-        assertEquals("and it is the one that moved", before + 1, rolled.get(0).getIndex());
+        assertNotSame("the advanced state has to be a new map", held, next);
+        assertEquals("and it is the one that moved", before + 1, next.get(0).getIndex());
 
         assertSame("the key still holds the state it had", held, key.getBDSState());
         assertEquals("which has not moved", before, held.get(0).getIndex());
@@ -292,9 +292,9 @@ public class OneTimeKeyReuseTests
 
     /**
      * So a caller cannot part a key's index from its traversal state, which is what would let the
-     * key sign again under a one-time key its state had already moved past. Rolling the state a
-     * holder took off the key changes nothing about the key: it signs on at the index it was on,
-     * and the signature verifies.
+     * key sign again under a one-time key its state had already moved past. Taking the next state
+     * off the map a holder got from the key changes nothing about the key: it signs on at the index
+     * it was on, and the signature verifies.
      */
     public void testAHolderCannotMoveAKeysStateOutFromUnderIt()
         throws Exception
@@ -310,17 +310,17 @@ public class OneTimeKeyReuseTests
 
         XMSSEngine.generateMTSignature(key, new byte[]{0x01});
 
-        XMSSEngine.rollState(key.getBDSState(), key.getParameters(), key.getIndex(),
+        XMSSEngine.getNextBDSStateMap(key.getBDSState(), key.getParameters(), key.getIndex(),
             key.getPublicSeed(), key.getSecretKeySeed());
 
         byte[] message = new byte[]{0x02};
         byte[] signature = XMSSEngine.generateMTSignature(key, message);
 
         assertEquals("the key spent one index, the one it was on", 2L, key.getIndex());
-        assertTrue("the signature taken after a holder rolled the state it was handed",
+        assertTrue("the signature taken after a holder advanced the state it was handed",
             XMSSEngine.verifyMTSignature(publicKey, message, signature));
 
-        // and on, through the subtree boundary the roll would have skipped
+        // and on, through the subtree boundary that advance would have skipped
         for (int i = 2; i != (1 << HEIGHT); i++)
         {
             message = new byte[]{(byte)i};

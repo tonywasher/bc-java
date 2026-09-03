@@ -356,7 +356,7 @@ public final class XMSSMTPrivateKeyParameters
                 // index and the state move together: nothing is assigned unless the walk completed,
                 // where advancing in place left a state part way to the next leaf under an index
                 // that had not moved. XMSSPrivateKeyParameters.rollKey does the same with its BDS.
-                bdsState = XMSSEngine.rollState(bdsState, params, index, publicSeed, secretKeySeed);
+                bdsState = XMSSEngine.getNextBDSStateMap(bdsState, params, index, publicSeed, secretKeySeed);
                 index = index + 1;
             }
             else
