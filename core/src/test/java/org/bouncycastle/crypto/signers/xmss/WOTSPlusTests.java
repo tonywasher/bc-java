@@ -164,4 +164,48 @@ public class WOTSPlusTests
 
         return "accepted";
     }
+
+    /**
+     * importKeys is the one place a WOTS+ instance takes key material, and the two things it has
+     * to say about a wrong argument are that a wrong length is a wrong length - the message the
+     * rest of the package uses for it - and that an absent one is not a field to be filled in.
+     * The second is what stops the shared check's allocate-when-absent branch being taken here,
+     * where it would import an all-zero one-time key instead of failing.
+     */
+    public void testImportKeysRejectsWrongSizeAndAbsentSeeds()
+    {
+        String[] names = new String[]{"secretKeySeed", "publicSeed"};
+        int[] lengths = new int[]{0, N - 1, N + 1};
+
+        for (int i = 0; i != names.length; i++)
+        {
+            for (int j = 0; j != lengths.length; j++)
+            {
+                byte[] secretKeySeed = new byte[i == 0 ? lengths[j] : N];
+                byte[] publicSeed = new byte[i == 0 ? N : lengths[j]];
+
+                try
+                {
+                    newWOTSPlus().importKeys(secretKeySeed, publicSeed);
+                    fail(names[i] + " of " + lengths[j] + " bytes accepted");
+                }
+                catch (IllegalArgumentException e)
+                {
+                    assertEquals("size of " + names[i] + " needs to be equal to size of digest",
+                        e.getMessage());
+                }
+            }
+
+            try
+            {
+                newWOTSPlus().importKeys(i == 0 ? null : new byte[N], i == 0 ? new byte[N] : null);
+                fail("an absent " + names[i] + " was accepted");
+            }
+            catch (NullPointerException e)
+            {
+                // an absent seed is a caller error here, not an optional field: it must not be
+                // quietly replaced by an all-zero one
+            }
+        }
+    }
 }

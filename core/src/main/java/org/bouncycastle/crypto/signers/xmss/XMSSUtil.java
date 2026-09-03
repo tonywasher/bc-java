@@ -101,6 +101,24 @@ class XMSSUtil
         {
             return new byte[size];
         }
+
+        return validateSize(value, size, name);
+    }
+
+    /**
+     * The size check on its own, for a field that is required rather than optional.
+     * <p>
+     * Absent is not a case here the way it is above: where the caller is importing a value rather
+     * than filling in a key it is building, taking the allocation for a null would substitute an
+     * all-zero value silently, so null is left to fail as the dereference it is.
+     * </p>
+     *
+     * @param value the value to check.
+     * @param size  the size it has to be.
+     * @param name  what to call it in a message.
+     */
+    static byte[] validateSize(byte[] value, int size, String name)
+    {
         if (value.length != size)
         {
             throw new IllegalArgumentException("size of " + name + " needs to be equal to size of digest");

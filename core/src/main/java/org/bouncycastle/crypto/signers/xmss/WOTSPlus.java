@@ -51,14 +51,19 @@ final class WOTSPlus
      */
     void importKeys(byte[] secretKeySeed, byte[] publicSeed)
     {
-        if (secretKeySeed.length != params.getTreeDigestSize())
-        {
-            throw new IllegalArgumentException("size of secretKeySeed needs to be equal to size of digest");
-        }
-        if (publicSeed.length != params.getTreeDigestSize())
-        {
-            throw new IllegalArgumentException("size of publicSeed needs to be equal to size of digest");
-        }
+        int n = params.getTreeDigestSize();
+
+        // through the shared check rather than a copy of its message: a20b761bc3 put the one
+        // implementation behind XMSSUtil for the specific reason that six copies of it had already
+        // drifted into saying two different things about the same mistake, and these two were a
+        // plain string literal duplicate of what that check says - findable by grepping the
+        // message, but not by looking for the callers of the check that owns it. The size half of
+        // it, without the allocate-when-absent branch: an absent seed here is not an optional
+        // field left to be filled in, and taking the allocation would import an all-zero one-time
+        // key rather than say so.
+        XMSSUtil.validateSize(secretKeySeed, n, "secretKeySeed");
+        XMSSUtil.validateSize(publicSeed, n, "publicSeed");
+
         // copy in rather than take the caller's arrays by reference: getSecretKeySeed() and
         // getPublicSeed() hand out clones, so holding the originals was the one way live WOTS+ key
         // material could still be changed from outside. The destinations are allocated once, in
