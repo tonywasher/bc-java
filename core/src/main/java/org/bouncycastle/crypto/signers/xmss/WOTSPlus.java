@@ -272,15 +272,20 @@ final class WOTSPlus
      * Derive WOTS+ secret key for specific index as in XMSS ref impl Andreas
      * Huelsing.
      *
+     * @param secretSeed     the XMSS private key's secret seed, SK_SEED of RFC 8391 sec. 4.1.3 -
+     *                       the seed a one-time key is derived from, and not the derived seed this
+     *                       instance holds under the near enough same name. The two are the input
+     *                       and the output of this one derivation: every caller hands the result
+     *                       straight to {@link #importKeys(byte[], byte[])} on the same object.
      * @param otsHashAddress one time hash address.
      * @return WOTS+ secret key at index.
      */
-    byte[] getWOTSPlusSecretKey(byte[] secretKeySeed, OTSHashAddress otsHashAddress)
+    byte[] getWOTSPlusSecretKey(byte[] secretSeed, OTSHashAddress otsHashAddress)
     {
         otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder()
             .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
             .withOTSAddress(otsHashAddress.getOTSAddress()).build();
-        return khf.PRF(secretKeySeed, otsHashAddress.toByteArray());
+        return khf.PRF(secretSeed, otsHashAddress.toByteArray());
     }
 
     /**
