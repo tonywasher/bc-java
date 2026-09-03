@@ -240,7 +240,7 @@ public final class XMSSEngine
 
             /* create signature for messageDigest */
             OTSHashAddress otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder().withOTSAddress(index).build();
-            WOTSPlusSignature wotsPlusSignature = wotsSign(wotsPlus, params, privateKey.getSecretKeySeed(),
+            WOTSPlusSignature wotsPlusSignature = wotsSign(wotsPlus, privateKey.getSecretKeySeed(),
                 privateKey.getPublicSeed(), messageDigest, otsHashAddress);
 
             return new XMSSSignature.Builder(params).withIndex(index).withRandom(random)
@@ -364,7 +364,7 @@ public final class XMSSEngine
             }
 
             /* sign message digest */
-            WOTSPlusSignature wotsPlusSignature = wotsSign(wotsPlus, params, secretKeySeed,
+            WOTSPlusSignature wotsPlusSignature = wotsSign(wotsPlus, secretKeySeed,
                 publicSeed, messageDigest, otsHashAddress);
 
             XMSSReducedSignature reducedSignature = new XMSSReducedSignature.Builder(xmssParams)
@@ -387,7 +387,7 @@ public final class XMSSEngine
                     .withTreeAddress(indexTree).withOTSAddress(indexLeaf).build();
 
                 /* sign root digest of layer - 1 */
-                wotsPlusSignature = wotsSign(wotsPlus, params, secretKeySeed,
+                wotsPlusSignature = wotsSign(wotsPlus, secretKeySeed,
                     publicSeed, root.getValue(), otsHashAddress);
 
                 /* get authentication path from BDS */
@@ -678,10 +678,21 @@ public final class XMSSEngine
         return newWOTSPlus(params.getXMSSParameters());
     }
 
-    private static WOTSPlusSignature wotsSign(WOTSPlus wotsPlus, XMSSParameters params, byte[] secretKeySeed,
+    /**
+     * Signs the n-byte messageDigest with the one-time key at otsHashAddress.
+     * <p>
+     * The length is checked against the WOTS+ instance's own n - the one khf and chain use - and
+     * this is the only place it is checked: nothing downstream would catch a wrong length, since
+     * convertToBaseW faults a digest that is too short ("outLength too big") but silently truncates
+     * one that is too long, so two different digests could sign to the same signature. What reaches
+     * here is either a khf.HMsg output, exactly n bytes by construction, or the root of a stored
+     * BDS state, which BDS.validate(XMSSParameters) has already pinned to non-null and exactly n
+     * before the key holding it could be constructed.
+     */
+    private static WOTSPlusSignature wotsSign(WOTSPlus wotsPlus, byte[] secretKeySeed,
                                               byte[] publicSeed, byte[] messageDigest, OTSHashAddress otsHashAddress)
     {
-        if (messageDigest.length != params.getTreeDigestSize())
+        if (messageDigest.length != wotsPlus.getParams().getTreeDigestSize())
         {
             throw new IllegalArgumentException("size of messageDigest needs to be equal to size of digest");
         }
@@ -694,11 +705,5 @@ public final class XMSSEngine
 
         /* create WOTS+ signature */
         return wotsPlus.sign(messageDigest, otsHashAddress);
-    }
-
-    private static WOTSPlusSignature wotsSign(WOTSPlus wotsPlus, XMSSMTParameters params, byte[] secretKeySeed,
-                                              byte[] publicSeed, byte[] messageDigest, OTSHashAddress otsHashAddress)
-    {
-        return wotsSign(wotsPlus, params.getXMSSParameters(), secretKeySeed, publicSeed, messageDigest, otsHashAddress);
     }
 }

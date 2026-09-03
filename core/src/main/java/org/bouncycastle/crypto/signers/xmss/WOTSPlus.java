@@ -91,7 +91,6 @@ final class WOTSPlus
      */
     public WOTSPlusSignature sign(byte[] messageDigest, OTSHashAddress otsHashAddress)
     {
-        checkMessageDigest(messageDigest);
         if (otsHashAddress == null)
         {
             throw new NullPointerException("otsHashAddress == null");
@@ -119,7 +118,6 @@ final class WOTSPlus
     public WOTSPlusPublicKeyParameters getPublicKeyFromSignature(byte[] messageDigest, WOTSPlusSignature signature,
                                                                     OTSHashAddress otsHashAddress)
     {
-        checkMessageDigest(messageDigest);
         if (signature == null)
         {
             throw new NullPointerException("signature == null");
@@ -226,23 +224,6 @@ final class WOTSPlus
             .withOTSAddress(otsHashAddress.getOTSAddress()).withChainAddress(otsHashAddress.getChainAddress())
             .withHashAddress(hashAddress).withKeyAndMask(keyAndMask)
             .build();
-    }
-
-    /**
-     * Checks the message digest argument shared by sign() and getPublicKeyFromSignature().
-     *
-     * @param messageDigest Digest to check.
-     */
-    private void checkMessageDigest(byte[] messageDigest)
-    {
-        if (messageDigest == null)
-        {
-            throw new NullPointerException("messageDigest == null");
-        }
-        if (messageDigest.length != params.getTreeDigestSize())
-        {
-            throw new IllegalArgumentException("size of messageDigest needs to be equal to size of digest");
-        }
     }
 
     /**

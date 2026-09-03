@@ -4,6 +4,12 @@ class XMSSVerifierUtil
 {
     /**
      * Compute a root node from a tree signature.
+     * <p>
+     * The length check is the verifying half of the pair described on XMSSEngine.wotsSign: a digest
+     * of the wrong length is not rejected downstream but silently truncated by convertToBaseW.
+     * Every messageDigest reaching here is a khf output - HMsg at the two entry points, or a node
+     * this method itself returned one layer down - so it holds a boundary rather than catching a
+     * live path.
      *
      * @param messageDigest Message digest.
      * @param signature     XMSS signature.
