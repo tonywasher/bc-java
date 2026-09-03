@@ -357,88 +357,100 @@ public final class XMSSEngine
                 "one time key at index " + privateKey.getIndex() + " has already signed");
         }
 
-        try
+        //
+        // the map's own monitor, held for the whole descent below and the roll that follows it. The
+        // key is locked already, but a caller copying the state does not lock the key - it calls
+        // getBDSState(), which hands out the live map, and copies what it is given. The layer
+        // states below are installed into that same map with put(), so without this the copy walked
+        // a TreeMap the signer was restructuring. Lock order is always key then map; nothing takes
+        // them the other way round, a state map holding no reference to a key.
+        //
+        BDSStateMap bdsState = privateKey.getBDSState();
+
+        synchronized (bdsState)
         {
-            BDSStateMap bdsState = privateKey.getBDSState();
-            byte[] publicSeed = privateKey.getPublicSeed();
-            byte[] secretKeySeed = privateKey.getSecretKeySeed();
-
-            final long globalIndex = privateKey.getIndex();
-            final int xmssHeight = xmssParams.getHeight();
-
-            /* compress message */
-            byte[] random = wotsPlus.getKhf().PRF(privateKey.getSecretKeyPRF(), XMSSUtil.toBytesBigEndian(globalIndex, 32));
-            byte[] concatenated = Arrays.concatenate(random, privateKey.getRoot(),
-                XMSSUtil.toBytesBigEndian(globalIndex, params.getTreeDigestSize()));
-            byte[] messageDigest = wotsPlus.getKhf().HMsg(concatenated, message);
-
-            XMSSMTSignature signature = new XMSSMTSignature.Builder(params).withIndex(globalIndex).withRandom(random).build();
-
-            /* layer 0 */
-            long indexTree = XMSSUtil.getTreeIndex(globalIndex, xmssHeight);
-            int indexLeaf = XMSSUtil.getLeafIndex(globalIndex, xmssHeight);
-
-            /* reset xmss */
-            wotsPlus.importKeys(new byte[params.getTreeDigestSize()], publicSeed);
-
-            /* create signature with XMSS tree on layer 0 */
-
-            /* adjust addresses */
-            OTSHashAddress otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder().withTreeAddress(indexTree)
-                .withOTSAddress(indexLeaf).build();
-
-            /* get authentication path from BDS */
-            if (bdsState.get(0) == null || indexLeaf == 0)
+            try
             {
-                bdsState.put(0, new BDS(xmssParams, publicSeed, secretKeySeed, otsHashAddress));
-            }
+                byte[] publicSeed = privateKey.getPublicSeed();
+                byte[] secretKeySeed = privateKey.getSecretKeySeed();
 
-            /* sign message digest */
-            WOTSPlusSignature wotsPlusSignature = wotsSign(wotsPlus, secretKeySeed,
-                publicSeed, messageDigest, otsHashAddress);
+                final long globalIndex = privateKey.getIndex();
+                final int xmssHeight = xmssParams.getHeight();
 
-            XMSSReducedSignature reducedSignature = new XMSSReducedSignature.Builder(xmssParams)
-                .withWOTSPlusSignature(wotsPlusSignature).withAuthPath(bdsState.get(0).getAuthenticationPath())
-                .build();
+                /* compress message */
+                byte[] random = wotsPlus.getKhf().PRF(privateKey.getSecretKeyPRF(), XMSSUtil.toBytesBigEndian(globalIndex, 32));
+                byte[] concatenated = Arrays.concatenate(random, privateKey.getRoot(),
+                    XMSSUtil.toBytesBigEndian(globalIndex, params.getTreeDigestSize()));
+                byte[] messageDigest = wotsPlus.getKhf().HMsg(concatenated, message);
 
-            signature.getReducedSignatures().add(reducedSignature);
+                XMSSMTSignature signature = new XMSSMTSignature.Builder(params).withIndex(globalIndex).withRandom(random).build();
 
-            /* loop over remaining layers */
-            for (int layer = 1; layer < params.getLayers(); layer++)
-            {
-                /* get root of layer - 1 */
-                XMSSNode root = bdsState.get(layer - 1).getRoot();
+                /* layer 0 */
+                long indexTree = XMSSUtil.getTreeIndex(globalIndex, xmssHeight);
+                int indexLeaf = XMSSUtil.getLeafIndex(globalIndex, xmssHeight);
 
-                indexLeaf = XMSSUtil.getLeafIndex(indexTree, xmssHeight);
-                indexTree = XMSSUtil.getTreeIndex(indexTree, xmssHeight);
+                /* reset xmss */
+                wotsPlus.importKeys(new byte[params.getTreeDigestSize()], publicSeed);
+
+                /* create signature with XMSS tree on layer 0 */
 
                 /* adjust addresses */
-                otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder().withLayerAddress(layer)
-                    .withTreeAddress(indexTree).withOTSAddress(indexLeaf).build();
-
-                /* sign root digest of layer - 1 */
-                wotsPlusSignature = wotsSign(wotsPlus, secretKeySeed,
-                    publicSeed, root.getValue(), otsHashAddress);
+                OTSHashAddress otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder().withTreeAddress(indexTree)
+                    .withOTSAddress(indexLeaf).build();
 
                 /* get authentication path from BDS */
-                if (bdsState.get(layer) == null || XMSSUtil.isNewBDSInitNeeded(globalIndex, xmssHeight, layer))
+                if (bdsState.get(0) == null || indexLeaf == 0)
                 {
-                    bdsState.put(layer, new BDS(xmssParams, publicSeed, secretKeySeed, otsHashAddress));
+                    bdsState.put(0, new BDS(xmssParams, publicSeed, secretKeySeed, otsHashAddress));
                 }
 
-                reducedSignature = new XMSSReducedSignature.Builder(xmssParams)
-                    .withWOTSPlusSignature(wotsPlusSignature)
-                    .withAuthPath(bdsState.get(layer).getAuthenticationPath()).build();
+                /* sign message digest */
+                WOTSPlusSignature wotsPlusSignature = wotsSign(wotsPlus, secretKeySeed,
+                    publicSeed, messageDigest, otsHashAddress);
+
+                XMSSReducedSignature reducedSignature = new XMSSReducedSignature.Builder(xmssParams)
+                    .withWOTSPlusSignature(wotsPlusSignature).withAuthPath(bdsState.get(0).getAuthenticationPath())
+                    .build();
 
                 signature.getReducedSignatures().add(reducedSignature);
-            }
 
-            return signature.toByteArray();
-        }
-        finally
-        {
-            privateKey.getBDSState().markUsed();
-            privateKey.rollKey();
+                /* loop over remaining layers */
+                for (int layer = 1; layer < params.getLayers(); layer++)
+                {
+                    /* get root of layer - 1 */
+                    XMSSNode root = bdsState.get(layer - 1).getRoot();
+
+                    indexLeaf = XMSSUtil.getLeafIndex(indexTree, xmssHeight);
+                    indexTree = XMSSUtil.getTreeIndex(indexTree, xmssHeight);
+
+                    /* adjust addresses */
+                    otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder().withLayerAddress(layer)
+                        .withTreeAddress(indexTree).withOTSAddress(indexLeaf).build();
+
+                    /* sign root digest of layer - 1 */
+                    wotsPlusSignature = wotsSign(wotsPlus, secretKeySeed,
+                        publicSeed, root.getValue(), otsHashAddress);
+
+                    /* get authentication path from BDS */
+                    if (bdsState.get(layer) == null || XMSSUtil.isNewBDSInitNeeded(globalIndex, xmssHeight, layer))
+                    {
+                        bdsState.put(layer, new BDS(xmssParams, publicSeed, secretKeySeed, otsHashAddress));
+                    }
+
+                    reducedSignature = new XMSSReducedSignature.Builder(xmssParams)
+                        .withWOTSPlusSignature(wotsPlusSignature)
+                        .withAuthPath(bdsState.get(layer).getAuthenticationPath()).build();
+
+                    signature.getReducedSignatures().add(reducedSignature);
+                }
+
+                return signature.toByteArray();
+            }
+            finally
+            {
+                bdsState.markUsed();
+                privateKey.rollKey();
+            }
         }
     }
 

@@ -185,6 +185,82 @@ public class SignerConcurrencyTests
         }
     }
 
+    /**
+     * XMSSMTPrivateKeyParameters.getBDSState() hands out the live state map, and the signer
+     * installs subtree states into that same map with put() as it descends the layers. So copying
+     * a state map off a key that is signing - which is what the builder does with what the getter
+     * returned, the shape the suite's own testKeyBuilderCopiesTheTraversalStateItIsGiven uses -
+     * walked a TreeMap while it was being restructured. That is a ConcurrentModificationException
+     * where the walk notices, and a torn read of the tree where it does not: the copy comes back
+     * with layers missing or with a null where a state should be, and a key built on it is
+     * unusable in a way that only shows up when it next signs.
+     */
+    public void testStateMapCanBeCopiedWhileTheKeyIsSigning()
+        throws Exception
+    {
+        XMSSMTParameters params = new XMSSMTParameters(6, 3, new SHA256Digest());
+        XMSSMTKeyPairGenerator kpg = new XMSSMTKeyPairGenerator();
+
+        kpg.init(new XMSSMTKeyGenerationParameters(params, new SecureRandom()));
+
+        final XMSSMTPrivateKeyParameters key =
+            (XMSSMTPrivateKeyParameters)kpg.generateKeyPair().getPrivate();
+        final int signatures = 1 << 6;
+        final Throwable[] failure = {null};
+        final boolean[] done = {false};
+
+        Thread copying = new Thread()
+        {
+            public void run()
+            {
+                try
+                {
+                    while (!done[0])
+                    {
+                        BDSStateMap live = key.getBDSState();
+                        BDSStateMap copy = new BDSStateMap(live, live.getMaxIndex());
+
+                        for (int layer = 0; layer != 3; layer++)
+                        {
+                            BDS state = copy.get(layer);
+
+                            // a layer built lazily is legitimately absent; one present must be
+                            // whole, which a copy taken out of a map mid-restructure is not
+                            if (state != null)
+                            {
+                                state.validate(params.getXMSSParameters());
+                            }
+                        }
+                    }
+                }
+                catch (Throwable t)
+                {
+                    failure[0] = t;
+                }
+            }
+        };
+
+        copying.start();
+
+        try
+        {
+            for (int i = 0; i != signatures; i++)
+            {
+                XMSSEngine.generateMTSignature(key, new byte[]{(byte)i});
+            }
+        }
+        finally
+        {
+            done[0] = true;
+            copying.join();
+        }
+
+        if (failure[0] != null)
+        {
+            fail("copying the state map of a signing key: " + failure[0]);
+        }
+    }
+
     private static void run(Thread signing, Thread collecting, CountDownLatch go)
         throws InterruptedException
     {

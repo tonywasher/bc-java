@@ -28,13 +28,26 @@ public class BDSStateMap
         this.maxIndex = maxIndex;
     }
 
+    /**
+     * Copy the states of another map. On that map's own monitor, which is what makes this safe to
+     * run against a map a key is signing with: {@code XMSSMTPrivateKeyParameters.getBDSState()}
+     * hands the live map out, and the signer installs subtree states into it as it descends the
+     * layers, so walking it unlocked raced a TreeMap being restructured - a
+     * ConcurrentModificationException at best, a torn read of the tree itself at worst. Holding
+     * the monitor for the whole walk also makes the copy coherent rather than merely intact: the
+     * signer takes the same monitor for its whole descent, so what comes out is every layer from
+     * before that signature or every layer from after it, never a mixture.
+     */
     public BDSStateMap(BDSStateMap stateMap, long maxIndex)
     {
-        for (Iterator it = stateMap.bdsState.keySet().iterator(); it.hasNext();)
+        synchronized (stateMap)
         {
-            Integer key = (Integer)it.next();
+            for (Iterator it = stateMap.bdsState.keySet().iterator(); it.hasNext();)
+            {
+                Integer key = (Integer)it.next();
 
-            bdsState.put(key, new BDS(stateMap.bdsState.get(key)));
+                bdsState.put(key, new BDS(stateMap.bdsState.get(key)));
+            }
         }
         this.maxIndex = maxIndex;
     }
@@ -125,36 +138,49 @@ public class BDSStateMap
 
     boolean isEmpty()
     {
-        return bdsState.isEmpty();
+        synchronized (this)
+        {
+            return bdsState.isEmpty();
+        }
     }
 
+    /**
+     * The layer to state mapping, as a snapshot rather than the map itself: the encoder walks what
+     * it is given, and the map this is taken from can be one a key is signing with.
+     */
     Map<Integer, BDS> getStateMap()
     {
-        return bdsState;
+        synchronized (this)
+        {
+            return new TreeMap<Integer, BDS>(bdsState);
+        }
     }
 
     public void validate(XMSSMTParameters params)
     {
-        long maxIndexLimit = (1L << params.getHeight()) - 1;
-        if (maxIndex < 0 || maxIndex > maxIndexLimit || bdsState.size() > params.getLayers())
+        synchronized (this)
         {
-            throw new IllegalStateException("BDS state map does not match XMSSMT parameters");
-        }
+            long maxIndexLimit = (1L << params.getHeight()) - 1;
+            if (maxIndex < 0 || maxIndex > maxIndexLimit || bdsState.size() > params.getLayers())
+            {
+                throw new IllegalStateException("BDS state map does not match XMSSMT parameters");
+            }
 
-        XMSSParameters xmssParams = params.getXMSSParameters();
-        for (Iterator<Integer> it = bdsState.keySet().iterator(); it.hasNext();)
-        {
-            Integer layer = it.next();
-            if (layer.intValue() < 0 || layer.intValue() >= params.getLayers())
+            XMSSParameters xmssParams = params.getXMSSParameters();
+            for (Iterator<Integer> it = bdsState.keySet().iterator(); it.hasNext();)
             {
-                throw new IllegalStateException("BDS state map has invalid layer");
+                Integer layer = it.next();
+                if (layer.intValue() < 0 || layer.intValue() >= params.getLayers())
+                {
+                    throw new IllegalStateException("BDS state map has invalid layer");
+                }
+                BDS state = bdsState.get(layer);
+                if (state == null)
+                {
+                    throw new IllegalStateException("BDS state map has null state");
+                }
+                state.validate(xmssParams);
             }
-            BDS state = bdsState.get(layer);
-            if (state == null)
-            {
-                throw new IllegalStateException("BDS state map has null state");
-            }
-            state.validate(xmssParams);
         }
     }
 
@@ -234,7 +260,10 @@ public class BDSStateMap
 
     public BDS get(int index)
     {
-        return bdsState.get(Integers.valueOf(index));
+        synchronized (this)
+        {
+            return bdsState.get(Integers.valueOf(index));
+        }
     }
 
     /**
@@ -248,7 +277,7 @@ public class BDSStateMap
      */
     void markUsed()
     {
-        BDS layerZero = bdsState.get(Integers.valueOf(0));
+        BDS layerZero = get(0);
 
         // the state is put in place before the signature is built, but the signature can fail
         // before that happens and this runs from the finally that covers it
@@ -266,19 +295,26 @@ public class BDSStateMap
      */
     boolean isUsed()
     {
-        BDS layerZero = bdsState.get(Integers.valueOf(0));
+        BDS layerZero = get(0);
 
         return layerZero != null && layerZero.isUsed();
     }
 
     BDS update(int index, byte[] publicSeed, byte[] secretKeySeed, OTSHashAddress otsHashAddress)
     {
-        return bdsState.put(Integers.valueOf(index), bdsState.get(Integers.valueOf(index)).getNextState(publicSeed, secretKeySeed, otsHashAddress));
+        synchronized (this)
+        {
+            return bdsState.put(Integers.valueOf(index),
+                bdsState.get(Integers.valueOf(index)).getNextState(publicSeed, secretKeySeed, otsHashAddress));
+        }
     }
 
     void put(int index, BDS bds)
     {
-        bdsState.put(Integers.valueOf(index), bds);
+        synchronized (this)
+        {
+            bdsState.put(Integers.valueOf(index), bds);
+        }
     }
 
     public BDSStateMap withWOTSDigest(ASN1ObjectIdentifier digestName)
@@ -290,11 +326,14 @@ public class BDSStateMap
     {
         BDSStateMap newStateMap = new BDSStateMap(this.maxIndex);
 
-        for (Iterator<Integer> keys = bdsState.keySet().iterator(); keys.hasNext();)
+        synchronized (this)
         {
-            Integer key = keys.next();
+            for (Iterator<Integer> keys = bdsState.keySet().iterator(); keys.hasNext();)
+            {
+                Integer key = keys.next();
 
-            newStateMap.bdsState.put(key, bdsState.get(key).withWOTSDigest(digestName, digestSize));
+                newStateMap.bdsState.put(key, bdsState.get(key).withWOTSDigest(digestName, digestSize));
+            }
         }
 
         return newStateMap;
