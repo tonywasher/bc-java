@@ -215,6 +215,99 @@ public class OneTimeKeyReuseTests
         }
     }
 
+    /**
+     * markUsed() had no read side. The record it leaves travels with the state - it is copied by
+     * every BDS copy constructor and written into the encoding - so a key can arrive holding a
+     * state that says it has already signed, and nothing looked. The way there is ordinary: take
+     * the traversal state off a live key, let that key sign, and the object taken is the one the
+     * signature marked, because a signature marks its state and then replaces it. Build a key back
+     * around what was taken and it sits on the index the signature spent, which RFC 8391 sec. 1.1
+     * makes a private key compromise rather than a surprising result - both signatures verify.
+     */
+    public void testSigningIsRefusedOnAStateThatHasAlreadySigned()
+        throws Exception
+    {
+        XMSSParameters params = new XMSSParameters(HEIGHT, new SHA256Digest());
+        XMSSKeyPairGenerator kpg = new XMSSKeyPairGenerator();
+
+        kpg.init(new XMSSKeyGenerationParameters(params, new SecureRandom()));
+
+        XMSSPrivateKeyParameters key = (XMSSPrivateKeyParameters)kpg.generateKeyPair().getPrivate();
+        BDS spent = key.getBDSState();
+
+        XMSSEngine.generateSignature(key, new byte[]{0x01});
+
+        assertTrue("the signature must mark the state it spent", spent.isUsed());
+        assertEquals("and roll the key past it", 1, key.getIndex());
+
+        XMSSPrivateKeyParameters rolledBack = new XMSSPrivateKeyParameters.Builder(params)
+            .withSecretKeySeed(key.getSecretKeySeed()).withSecretKeyPRF(key.getSecretKeyPRF())
+            .withPublicSeed(key.getPublicSeed()).withRoot(key.getRoot())
+            .withBDSState(spent).build();
+
+        assertEquals("the rebuilt key is back on the index that signature spent",
+            0, rolledBack.getIndex());
+
+        try
+        {
+            XMSSEngine.generateSignature(rolledBack, new byte[]{0x02});
+            fail("a state that has already signed must not sign again");
+        }
+        catch (IllegalStateException e)
+        {
+            assertEquals("one time key at index 0 has already signed", e.getMessage());
+        }
+    }
+
+    /**
+     * The XMSS^MT counterpart, on the layer zero state - the one whose leaf signs the message.
+     * <p>
+     * The check has to make the allowance BDSStateMap.validate(params, globalIndex) makes: on the
+     * first leaf of a subtree the signer builds layer zero fresh, so the marked state carried over
+     * from the end of the previous subtree is legitimate at that one position. Signing every leaf
+     * of a subtree and on into the next covers it.
+     * </p>
+     */
+    public void testMTSigningIsRefusedOnALayerZeroStateThatHasAlreadySigned()
+        throws Exception
+    {
+        XMSSMTParameters params = new XMSSMTParameters(HEIGHT, LAYERS, new SHA256Digest());
+        XMSSMTPrivateKeyParameters key = mtKey(params);
+
+        // one signature, so layer zero exists and sits somewhere other than a subtree boundary
+        XMSSEngine.generateMTSignature(key, new byte[]{0x01});
+
+        BDSStateMap spent = key.getBDSState();
+
+        XMSSEngine.generateMTSignature(key, new byte[]{0x02});
+
+        assertTrue("the signature must mark the layer zero state it spent", spent.get(0).isUsed());
+
+        XMSSMTPrivateKeyParameters rolledBack = new XMSSMTPrivateKeyParameters.Builder(params)
+            .withSecretKeySeed(key.getSecretKeySeed()).withSecretKeyPRF(key.getSecretKeyPRF())
+            .withPublicSeed(key.getPublicSeed()).withRoot(key.getRoot())
+            .withIndex(1L).withBDSState(spent).build();
+
+        try
+        {
+            XMSSEngine.generateMTSignature(rolledBack, new byte[]{0x03});
+            fail("a layer zero state that has already signed must not sign again");
+        }
+        catch (IllegalStateException e)
+        {
+            assertEquals("one time key at index 1 has already signed", e.getMessage());
+        }
+
+        // and the allowance: a whole key signed through, across every subtree boundary in it
+        XMSSMTPrivateKeyParameters walked = mtKey(params);
+
+        for (long i = 0; i != (1L << HEIGHT); i++)
+        {
+            assertEquals(i, walked.getIndex());
+            XMSSEngine.generateMTSignature(walked, new byte[]{(byte)i});
+        }
+    }
+
     private static XMSSMTPrivateKeyParameters mtKey(XMSSMTParameters params)
     {
         XMSSMTKeyPairGenerator kpg = new XMSSMTKeyPairGenerator();

@@ -219,6 +219,21 @@ public final class XMSSEngine
         {
             throw new IllegalStateException("not initialized");
         }
+        //
+        // the read side of the markUsed() below, which until now nothing performed: a state that
+        // has signed is replaced by the rollKey() beside it, so a key still holding a marked one
+        // did not come from this engine - it was captured from a live key through getBDSState()
+        // before the signature that spent it, or restored from an encoding written that way, and
+        // both put the key back on an index it has already used. RFC 8391 sec. 1.1 makes signing
+        // there a private key compromise, so it is refused here rather than reported by the
+        // signature. Ahead of the try, as the two checks above are: a refused signature must not
+        // reach the finally that rolls the key.
+        //
+        if (privateKey.getBDSState().isUsed())
+        {
+            throw new IllegalStateException(
+                "one time key at index " + privateKey.getIndex() + " has already signed");
+        }
 
         try
         {
@@ -327,6 +342,19 @@ public final class XMSSEngine
         if (privateKey.getBDSState().isEmpty())
         {
             throw new IllegalStateException("not initialized");
+        }
+        //
+        // as the XMSS path above, on the layer zero state - the one whose leaf signs the message,
+        // and so the one a second signature must never reuse. The allowance is the same one
+        // BDSStateMap.validate(params, globalIndex) makes: on the first leaf of a subtree the
+        // signer builds layer zero fresh, so the marked state carried over from the end of the
+        // previous subtree is legitimate there and is about to be thrown away.
+        //
+        if (XMSSUtil.getLeafIndex(privateKey.getIndex(), xmssParams.getHeight()) != 0
+            && privateKey.getBDSState().isUsed())
+        {
+            throw new IllegalStateException(
+                "one time key at index " + privateKey.getIndex() + " has already signed");
         }
 
         try

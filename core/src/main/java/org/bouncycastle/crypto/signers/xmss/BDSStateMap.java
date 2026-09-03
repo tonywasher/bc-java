@@ -258,6 +258,19 @@ public class BDSStateMap
         }
     }
 
+    /**
+     * Whether the layer zero state is sitting on a one-time key it has already signed with, the
+     * record {@link #markUsed()} leaves. Read by {@link XMSSEngine#generateMTSignature} before it
+     * commits to an existing layer zero state; a state map whose layer zero is absent has nothing
+     * to answer for, since the signer builds that layer fresh.
+     */
+    boolean isUsed()
+    {
+        BDS layerZero = bdsState.get(Integers.valueOf(0));
+
+        return layerZero != null && layerZero.isUsed();
+    }
+
     BDS update(int index, byte[] publicSeed, byte[] secretKeySeed, OTSHashAddress otsHashAddress)
     {
         return bdsState.put(Integers.valueOf(index), bdsState.get(Integers.valueOf(index)).getNextState(publicSeed, secretKeySeed, otsHashAddress));
