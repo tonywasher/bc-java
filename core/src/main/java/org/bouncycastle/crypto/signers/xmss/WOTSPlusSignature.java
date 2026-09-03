@@ -5,12 +5,10 @@ package org.bouncycastle.crypto.signers.xmss;
  */
 final class WOTSPlusSignature
 {
-
     private final byte[][] signature;
 
     public WOTSPlusSignature(WOTSPlusParameters params, byte[][] signature)
     {
-        super();
         this.signature = params.checkedClone(signature, "signature");
     }
 

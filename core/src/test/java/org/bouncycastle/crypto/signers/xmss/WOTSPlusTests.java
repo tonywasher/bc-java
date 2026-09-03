@@ -104,14 +104,14 @@ public class WOTSPlusTests
     {
         assertEquals(67, XMSSEngine.getWOTSPlusLen(NISTObjectIdentifiers.id_sha256, 32));
         assertEquals(131, XMSSEngine.getWOTSPlusLen(NISTObjectIdentifiers.id_sha512, 64));
-        assertEquals(16, XMSSEngine.getWinternitzParameter());
     }
 
     /**
-     * A WOTS+ secret key, public key and signature are the same len-by-n array, and the three
-     * classes carrying one had a copy each of the check on that shape. They had drifted: the
-     * secret key called a wrong element count a "format" problem where the other two called it a
-     * "size" one. Written as a pair of tables so the two halves have to keep agreeing.
+     * A WOTS+ public key and signature are the same len-by-n array, and the classes carrying one
+     * had a copy each of the check on that shape. They had drifted, one calling a wrong element
+     * count a "format" problem where the others called it a "size" one, so the check now lives
+     * once in {@link WOTSPlusParameters#checkedClone}. Written as a pair of tables so the two
+     * halves have to keep agreeing.
      */
     public void testWOTSPlusShapeRejectionsAgree()
     {
@@ -131,9 +131,8 @@ public class WOTSPlusTests
 
         for (int i = 0; i != bad.length; i++)
         {
-            assertEquals("privateKey" + expected[i], rejection(params, bad[i], 0));
-            assertEquals("publicKey" + expected[i], rejection(params, bad[i], 1));
-            assertEquals("signature" + expected[i], rejection(params, bad[i], 2));
+            assertEquals("publicKey" + expected[i], rejection(params, bad[i], 0));
+            assertEquals("signature" + expected[i], rejection(params, bad[i], 1));
         }
     }
 
@@ -145,17 +144,13 @@ public class WOTSPlusTests
     {
         try
         {
-            switch (which)
+            if (which == 0)
             {
-            case 0:
-                new WOTSPlusPrivateKeyParameters(params, value);
-                break;
-            case 1:
                 new WOTSPlusPublicKeyParameters(params, value);
-                break;
-            default:
+            }
+            else
+            {
                 new WOTSPlusSignature(params, value);
-                break;
             }
         }
         catch (NullPointerException e)

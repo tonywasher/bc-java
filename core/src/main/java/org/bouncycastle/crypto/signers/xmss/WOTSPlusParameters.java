@@ -144,17 +144,17 @@ final class WOTSPlusParameters
     }
 
     /**
-     * Confirm that {@code value} is the len-by-n array a WOTS+ secret key, public key and
-     * signature all are, and return a copy of it for the caller to hold.
+     * Confirm that {@code value} is the len-by-n array a WOTS+ public key and signature both are,
+     * and return a copy of it for the caller to hold.
      * <p>
-     * The three classes that carry one of those arrays had a constructor each, checking the same
-     * four things in the same order and differing only in the name in the message - and they had
-     * drifted, the secret key calling a wrong element count a "format" problem where the other
-     * two called it a "size" one. Only the name varies now.
+     * The classes that carry one of those arrays had a constructor each, checking the same four
+     * things in the same order and differing only in the name in the message - and they had
+     * drifted, one calling a wrong element count a "format" problem where the others called it a
+     * "size" one. Only the name varies now.
      * </p>
      *
      * @param value the array to check.
-     * @param name what to call it in a message: "privateKey", "publicKey" or "signature".
+     * @param name what to call it in a message: "publicKey" or "signature".
      */
     byte[][] checkedClone(byte[][] value, String name)
     {

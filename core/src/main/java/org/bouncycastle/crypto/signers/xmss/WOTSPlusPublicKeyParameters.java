@@ -5,12 +5,10 @@ package org.bouncycastle.crypto.signers.xmss;
  */
 final class WOTSPlusPublicKeyParameters
 {
-
     private final byte[][] publicKey;
 
     public WOTSPlusPublicKeyParameters(WOTSPlusParameters params, byte[][] publicKey)
     {
-        super();
         this.publicKey = params.checkedClone(publicKey, "publicKey");
     }
 
