@@ -107,7 +107,7 @@ final class WOTSPlus
         {
             otsHashAddress = withChainAddress(otsHashAddress, i);
             publicKey[i] = chain(signature.toByteArray()[i], baseWMessage.get(i),
-                params.getWinternitzParameter() - 1 - baseWMessage.get(i), otsHashAddress);
+                WOTSPlusParameters.WINTERNITZ_PARAMETER - 1 - baseWMessage.get(i), otsHashAddress);
         }
         return new WOTSPlusPublicKeyParameters(params, publicKey);
     }
@@ -129,7 +129,7 @@ final class WOTSPlus
         {
             throw new IllegalArgumentException("startHash needs to be " + n + "bytes");
         }
-        if ((startIndex + steps) > params.getWinternitzParameter() - 1)
+        if ((startIndex + steps) > WOTSPlusParameters.WINTERNITZ_PARAMETER - 1)
         {
             throw new IllegalArgumentException("max chain length must not be greater than w");
         }
@@ -196,19 +196,19 @@ final class WOTSPlus
      */
     private List<Integer> baseWMessageWithChecksum(byte[] messageDigest)
     {
-        List<Integer> baseWMessage = convertToBaseW(messageDigest, params.getWinternitzParameter(), params.getLen1());
+        List<Integer> baseWMessage = convertToBaseW(messageDigest, WOTSPlusParameters.WINTERNITZ_PARAMETER, params.getLen1());
 
         /* create checksum */
         int checksum = 0;
         for (int i = 0; i < params.getLen1(); i++)
         {
-            checksum += params.getWinternitzParameter() - 1 - baseWMessage.get(i);
+            checksum += WOTSPlusParameters.WINTERNITZ_PARAMETER - 1 - baseWMessage.get(i);
         }
-        checksum <<= (8 - ((params.getLen2() * XMSSUtil.log2(params.getWinternitzParameter())) % 8));
+        checksum <<= (8 - ((params.getLen2() * XMSSUtil.log2(WOTSPlusParameters.WINTERNITZ_PARAMETER)) % 8));
         int len2Bytes = (int)Math
-            .ceil((double)(params.getLen2() * XMSSUtil.log2(params.getWinternitzParameter())) / 8);
+            .ceil((double)(params.getLen2() * XMSSUtil.log2(WOTSPlusParameters.WINTERNITZ_PARAMETER)) / 8);
         List<Integer> baseWChecksum = convertToBaseW(XMSSUtil.toBytesBigEndian(checksum, len2Bytes),
-            params.getWinternitzParameter(), params.getLen2());
+            WOTSPlusParameters.WINTERNITZ_PARAMETER, params.getLen2());
 
         /* msg || checksum */
         baseWMessage.addAll(baseWChecksum);
@@ -325,7 +325,7 @@ final class WOTSPlus
         for (int i = 0; i < params.getLen(); i++)
         {
             otsHashAddress = withChainAddress(otsHashAddress, i);
-            publicKey[i] = chain(expandSecretKeySeed(i), 0, params.getWinternitzParameter() - 1, otsHashAddress);
+            publicKey[i] = chain(expandSecretKeySeed(i), 0, WOTSPlusParameters.WINTERNITZ_PARAMETER - 1, otsHashAddress);
         }
         return new WOTSPlusPublicKeyParameters(params, publicKey);
     }

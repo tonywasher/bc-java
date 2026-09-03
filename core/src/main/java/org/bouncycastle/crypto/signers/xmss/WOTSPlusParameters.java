@@ -32,6 +32,14 @@ final class WOTSPlusParameters
     private final ASN1ObjectIdentifier treeDigest;
 
     /**
+     * The Winternitz parameter, fixed at 16 by RFC 8391 sec. 5. It is a constant rather than a
+     * field with a getter because no parameter set varies it: len1, len2 and the OID lookup below
+     * are derived from it here, and WOTSPlus reads it directly for the chain lengths and the
+     * base-w conversion.
+     */
+    static final int WINTERNITZ_PARAMETER = 16;
+
+    /**
      * Constructor...
      *
      * @param treeDigest The digest used for WOTS+.
@@ -56,8 +64,6 @@ final class WOTSPlusParameters
         }
         this.treeDigest = treeDigest;
         this.digestSize = digestSize;
-        // The Winternitz parameter, fixed at 16 by RFC 8391 sec. 5.
-        int WINTERNITZ_PARAMETER = 16;
         len1 = (int)Math.ceil((double)(8 * digestSize) / XMSSUtil.log2(WINTERNITZ_PARAMETER));
         len2 = (int)Math.floor(XMSSUtil.log2(len1 * (WINTERNITZ_PARAMETER - 1)) / XMSSUtil.log2(WINTERNITZ_PARAMETER)) + 1;
         len = len1 + len2;
