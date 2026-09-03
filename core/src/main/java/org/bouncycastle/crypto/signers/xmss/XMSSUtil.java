@@ -11,7 +11,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import org.bouncycastle.crypto.Digest;
 import org.bouncycastle.util.Arrays;
 
 /**
@@ -241,30 +240,6 @@ class XMSSUtil
             throw new IllegalStateException("index must not be negative");
         }
         return index < (1L << height);
-    }
-
-    /**
-     * Determine digest size of digest.
-     *
-     * @param digest Digest.
-     * @return Digest size.
-     */
-    public static int getDigestSize(Digest digest)
-    {
-        if (digest == null)
-        {
-            throw new NullPointerException("digest == null");
-        }
-        String algorithmName = digest.getAlgorithmName();
-        if (algorithmName.equals("SHAKE128"))
-        {
-            return 32;
-        }
-        if (algorithmName.equals("SHAKE256"))
-        {
-            return 64;
-        }
-        return digest.getDigestSize();
     }
 
     public static long getTreeIndex(long index, int xmssTreeHeight)

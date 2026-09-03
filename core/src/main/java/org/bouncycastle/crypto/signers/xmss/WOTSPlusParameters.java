@@ -48,7 +48,7 @@ final class WOTSPlusParameters
      */
     public WOTSPlusParameters(ASN1ObjectIdentifier treeDigest)
     {
-        this(treeDigest, XMSSUtil.getDigestSize(DigestUtil.getDigest(treeDigest)));
+        this(treeDigest, DigestUtil.getDigest(treeDigest).getDigestSize());
     }
 
     /**

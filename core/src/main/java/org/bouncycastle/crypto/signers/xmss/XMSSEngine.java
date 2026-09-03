@@ -53,7 +53,7 @@ public final class XMSSEngine
      */
     public static int getDigestSize(ASN1ObjectIdentifier oid)
     {
-        return XMSSUtil.getDigestSize(DigestUtil.getDigest(oid));
+        return DigestUtil.getDigest(oid).getDigestSize();
     }
 
     /**

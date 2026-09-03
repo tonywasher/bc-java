@@ -15,7 +15,6 @@ final class XMSSNode
 
     public XMSSNode(int height, byte[] value)
     {
-        super();
         this.height = height;
         this.value = value;
     }
