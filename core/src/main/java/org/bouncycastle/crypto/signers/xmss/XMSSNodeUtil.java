@@ -6,21 +6,21 @@ class XMSSNodeUtil
 {
     /**
      * Compresses a WOTS+ public key to a single n-byte string.
+     * <p>
+     * The key and the length it is walked with arrive from two places - the array from publicKey,
+     * len from wotsPlus - and nothing in the signature ties them together. They agree because every
+     * caller takes the key from the same WOTSPlus instance it passes here, a line or two earlier:
+     * BDS and BDSTreeHash from getPublicKey(), XMSSVerifierUtil from getPublicKeyFromSignature().
+     * A key from another parameter set would index past the end of the array, or leave its tail
+     * unread. That pairing is this method's real precondition and it is the caller's to keep.
+     * </p>
      *
      * @param publicKey WOTS+ public key to compress.
      * @param address   Address.
      * @return Compressed n-byte string of public key.
      */
-    public static XMSSNode lTree(WOTSPlus wotsPlus, WOTSPlusPublicKeyParameters publicKey, LTreeAddress address)
+    static XMSSNode lTree(WOTSPlus wotsPlus, WOTSPlusPublicKeyParameters publicKey, LTreeAddress address)
     {
-        if (publicKey == null)
-        {
-            throw new NullPointerException("publicKey == null");
-        }
-        if (address == null)
-        {
-            throw new NullPointerException("address == null");
-        }
         int len = wotsPlus.getParams().getLen();
             /* duplicate public key to XMSSNode Array */
         byte[][] publicKeyBytes = publicKey.toByteArray();
@@ -49,29 +49,27 @@ class XMSSNodeUtil
 
     /**
      * Randomization of nodes in binary tree.
+     * <p>
+     * Unlike the addresses, the nodes reaching here are not always built a line earlier: they come
+     * from a BDS state's stack, authentication path, kept nodes or a tree hash's tail, and such a
+     * state can have arrived by deserialization. That they are there at all is settled where the
+     * state enters rather than here - BDS.readObject refuses a stream carrying null collections or
+     * null entries, BDS.validate walks every node a state holds, and nextAuthenticationPath names
+     * the one node it fetches by index ("missing keep node in BDS state") because an NPE out of the
+     * hash below would not say what was wrong. The equal-height check is a different thing again:
+     * the algorithm only ever hashes two nodes of the same height together.
+     * </p>
      *
      * @param left    Left node.
      * @param right   Right node.
      * @param address Address.
      * @return Randomized hash of parent of left / right node.
      */
-    public static XMSSNode randomizeHash(WOTSPlus wotsPlus, XMSSNode left, XMSSNode right, XMSSAddress address)
+    static XMSSNode randomizeHash(WOTSPlus wotsPlus, XMSSNode left, XMSSNode right, XMSSAddress address)
     {
-        if (left == null)
-        {
-            throw new NullPointerException("left == null");
-        }
-        if (right == null)
-        {
-            throw new NullPointerException("right == null");
-        }
         if (left.getHeight() != right.getHeight())
         {
             throw new IllegalStateException("height of both nodes must be equal");
-        }
-        if (address == null)
-        {
-            throw new NullPointerException("address == null");
         }
         byte[] publicSeed = wotsPlus.getPublicSeed();
 
