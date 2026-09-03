@@ -22,10 +22,6 @@ final class XMSSMTSignature
     private XMSSMTSignature(Builder builder)
     {
         params = builder.params;
-        if (params == null)
-        {
-            throw new NullPointerException("params == null");
-        }
         int n = params.getTreeDigestSize();
         byte[] signature = builder.signature;
         if (signature != null)

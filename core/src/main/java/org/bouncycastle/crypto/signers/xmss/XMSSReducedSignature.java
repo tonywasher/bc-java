@@ -17,10 +17,6 @@ class XMSSReducedSignature
     public XMSSReducedSignature(Builder builder)
     {
         params = builder.params;
-        if (params == null)
-        {
-            throw new NullPointerException("params == null");
-        }
         int n = params.getTreeDigestSize();
         int len = params.getLen();
         int height = params.getHeight();

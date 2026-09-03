@@ -37,10 +37,6 @@ final class WOTSPlus
      */
     WOTSPlus(WOTSPlusParameters params)
     {
-        if (params == null)
-        {
-            throw new NullPointerException("params == null");
-        }
         this.params = params;
         int n = params.getTreeDigestSize();
         khf = new KeyedHashFunctions(params.getTreeDigest(), n);
@@ -56,17 +52,9 @@ final class WOTSPlus
      */
     void importKeys(byte[] secretKeySeed, byte[] publicSeed)
     {
-        if (secretKeySeed == null)
-        {
-            throw new NullPointerException("secretKeySeed == null");
-        }
         if (secretKeySeed.length != params.getTreeDigestSize())
         {
             throw new IllegalArgumentException("size of secretKeySeed needs to be equal to size of digest");
-        }
-        if (publicSeed == null)
-        {
-            throw new NullPointerException("publicSeed == null");
         }
         if (publicSeed.length != params.getTreeDigestSize())
         {
@@ -239,10 +227,6 @@ final class WOTSPlus
      */
     private List<Integer> convertToBaseW(byte[] messageDigest, int w, int outLength)
     {
-        if (messageDigest == null)
-        {
-            throw new NullPointerException("msg == null");
-        }
         if (w != 4 && w != 16)
         {
             throw new IllegalArgumentException("w needs to be 4 or 16");

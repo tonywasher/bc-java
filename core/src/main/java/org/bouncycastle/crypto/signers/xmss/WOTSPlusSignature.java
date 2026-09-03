@@ -11,10 +11,6 @@ final class WOTSPlusSignature
     public WOTSPlusSignature(WOTSPlusParameters params, byte[][] signature)
     {
         super();
-        if (params == null)
-        {
-            throw new NullPointerException("params == null");
-        }
         this.signature = params.checkedClone(signature, "signature");
     }
 

@@ -33,10 +33,6 @@ final class KeyedHashFunctions
 
     KeyedHashFunctions(ASN1ObjectIdentifier treeDigest, int digestSize)
     {
-        if (treeDigest == null)
-        {
-            throw new NullPointerException("digest == null");
-        }
         this.digest = DigestUtil.getDigest(treeDigest);
         this.digestSize = digestSize;
     }

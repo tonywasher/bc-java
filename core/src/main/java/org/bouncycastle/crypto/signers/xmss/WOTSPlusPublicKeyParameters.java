@@ -11,10 +11,6 @@ final class WOTSPlusPublicKeyParameters
     public WOTSPlusPublicKeyParameters(WOTSPlusParameters params, byte[][] publicKey)
     {
         super();
-        if (params == null)
-        {
-            throw new NullPointerException("params == null");
-        }
         this.publicKey = params.checkedClone(publicKey, "publicKey");
     }
 
