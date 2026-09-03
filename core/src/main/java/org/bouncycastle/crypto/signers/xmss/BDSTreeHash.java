@@ -91,6 +91,11 @@ class BDSTreeHash
                 node = XMSSNodeUtil.randomizeHash(wotsPlus, tailNode, node, hashTreeAddress);
                 node = node.incrementHeight();
                 tailNode = node;
+                // the last step of the same climb the loop above makes - parent, hash, then name
+                // the level above. This is the final climb, so nothing reads the result; it is
+                // kept so both merges read alike and so the code still matches the unconditional
+                // increment that closes the loop of RFC 8391 sec. 4.1.6 algorithm 9. The address
+                // names the height of the children, so the hash above is at the right level.
                 hashTreeAddress = XMSSNodeUtil.withTreeHeight(hashTreeAddress,
                     hashTreeAddress.getTreeHeight() + 1);
             }
