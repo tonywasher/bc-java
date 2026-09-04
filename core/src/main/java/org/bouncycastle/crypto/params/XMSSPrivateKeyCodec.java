@@ -130,6 +130,25 @@ class XMSSPrivateKeyCodec
      * can be written straight into the array that is returned: appending it afterwards meant
      * allocating the fixed part on its own and then copying both halves into a second array of the
      * full size.
+     * </p><p>
+     * An index the field cannot hold is refused rather than written narrowed. Exactly one index
+     * can fail: the exhausted position 2^h, at an XMSS^MT total height that is a multiple of eight,
+     * where {@link #mtIndexSize(int)} leaves h bits for a value needing h + 1. Written narrowed it
+     * came back as zero, and nothing downstream could say so - the index a key declares is cross
+     * checked against its per-layer traversal states by decomposing it into a leaf index per layer,
+     * and 2^h and 0 have the same decomposition at every layer, so the check that exists for
+     * exactly this disagreement is blind to this one value. What came back was a key at index 0
+     * reporting a full tree of unused one-time keys, which is the opposite of the truth about where
+     * a one-time key scheme has got to (RFC 8391 sec. 1.1). It could not sign - the traversal state
+     * a key is left holding at exhaustion is empty, and that survives the round trip - so this was a
+     * stored key that lied rather than one that signed twice; a stateful scheme's stored position is
+     * still the one thing that must not be written wrong.
+     * </p><p>
+     * Nothing that could be written before is refused now. Every position a live key sits on, 0 to
+     * 2^h - 1, fits at every height of either family, and the XMSS field is four bytes against a
+     * largest index of 2^30. What an exhausted key at such a height loses is the raw form, and the
+     * RFC 9802 PKCS#8 that carries the raw form; the legacy ASN.1 form, whose index field is an
+     * integer with no width of its own, still holds it.
      * </p>
      *
      * @param index     the position the key is at.
@@ -139,6 +158,14 @@ class XMSSPrivateKeyCodec
     static byte[] encode(long index, int indexSize, byte[] secretKeySeed, byte[] secretKeyPRF,
         byte[] publicSeed, byte[] root, byte[] bdsState)
     {
+        // shifting by 8 * indexSize rather than comparing against 1L << (8 * indexSize), which at
+        // the eight byte width - heights 57 to 62 - would shift by 64 and produce 1
+        if (indexSize < 8 && (index >>> (8 * indexSize)) != 0)
+        {
+            throw new IllegalStateException("index " + index + " does not fit the " + indexSize
+                + " byte index field of a stored private key");
+        }
+
         /* index || secretKeySeed || secretKeyPRF || publicSeed || root || bdsState */
         byte[] out = new byte[indexSize + secretKeySeed.length + secretKeyPRF.length
             + publicSeed.length + root.length + bdsState.length];

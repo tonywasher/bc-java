@@ -168,6 +168,58 @@ public class ExhaustedKeyTests
     }
 
     /**
+     * The raw encoding refuses an exhausted XMSS^MT index it cannot carry, rather than narrowing it.
+     * <p>
+     * The index field of the raw layout is ceil(h / 8) bytes, and the largest index a key can hold
+     * is 2^h - the position it stops at when its last one-time key is spent - so at a height that
+     * is a multiple of eight the field is one bit short. It used to be written narrowed, and read
+     * back as zero: the key came back declaring a full tree of unused one-time keys. Nothing caught
+     * it, because the index a key declares is checked against its per-layer states by decomposing
+     * it into a leaf index per layer, and 2^h decomposes to the same leaf index as 0 does at every
+     * layer.
+     * </p><p>
+     * Height 8 over 2 layers, so the field is one byte and the exhausted key sits at 256. The
+     * standard sets this reaches are the XMSSMT_*_40/* ones, whose exhausted index would need a
+     * sixth byte, and they reach it through the RFC 9802 form, which carries the raw encoding.
+     * {@link #testExhaustedKeyAtAByteAlignedHeightRoundTripsThroughPrivateKeyInfo()} is the same
+     * key on the legacy ASN.1 path, whose index field has no width of its own and holds it.
+     * </p><p>
+     * Every position below it still encodes, which is what the refusal must not cost: the loop
+     * asks for the encoding at all 256 of them.
+     * </p>
+     */
+    public void testExhaustedKeyAtAByteAlignedHeightRefusesTheRawEncoding()
+        throws Exception
+    {
+        XMSSMTParameters params = new XMSSMTParameters(8, 2, new SHA256Digest());
+        XMSSMTKeyPairGenerator kpg = new XMSSMTKeyPairGenerator();
+
+        kpg.init(new XMSSMTKeyGenerationParameters(params, new SecureRandom()));
+
+        XMSSMTPrivateKeyParameters privKey = (XMSSMTPrivateKeyParameters)kpg.generateKeyPair().getPrivate();
+
+        for (int i = 0; i != (1 << 8); i++)
+        {
+            assertEquals(i, privKey.getIndex());
+            assertTrue("a live key's position was refused", privKey.getEncoded().length > 0);
+            privKey.rollKey();
+        }
+
+        assertEquals(1L << 8, privKey.getIndex());
+
+        try
+        {
+            privKey.getEncoded();
+            fail("an index the field cannot hold was written narrowed");
+        }
+        catch (IllegalStateException e)
+        {
+            assertEquals("index 256 does not fit the 1 byte index field of a stored private key",
+                e.getMessage());
+        }
+    }
+
+    /**
      * A restored exhausted key refuses to sign, in both families. Restoring one that could sign
      * again would reuse a one-time key, which is the failure RFC 8391 sec. 1.1 exists to prevent.
      */
