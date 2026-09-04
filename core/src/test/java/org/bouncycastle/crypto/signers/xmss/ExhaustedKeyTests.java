@@ -69,7 +69,9 @@ public class ExhaustedKeyTests
 
         XMSSMTPrivateKeyParameters privKey = (XMSSMTPrivateKeyParameters)kpg.generateKeyPair().getPrivate();
 
-        for (int i = 0; i != (1 << HEIGHT); i++)
+        // the parameters' own height, not the constant: the byte-aligned-height case below uses
+        // this helper at a height of its own
+        for (int i = 0; i != (1 << params.getHeight()); i++)
         {
             privKey.rollKey();
         }
@@ -128,6 +130,41 @@ public class ExhaustedKeyTests
 
         assertEquals(0, mtRestored.getUsagesRemaining());
         assertEquals(mtPrivKey.getIndex(), mtRestored.getIndex());
+    }
+
+    /**
+     * An XMSS^MT height whose index does not fit the width the raw encoding writes it in. That
+     * encoding gives the index ceil(height / 8) bytes, and the largest index a key can hold is
+     * 2^height - the position an exhausted key sits at, one past its last leaf - so at every
+     * height that is a multiple of eight the exhausted index is exactly one bit too wide. The
+     * PKCS#8 structure carries the index as an integer of its own and has no such limit, but it
+     * used to be built by encoding the whole key and reading the field back out of those bytes,
+     * which did: an exhausted key was written out as a key at index 0 declaring a full tree of
+     * unused one-time keys, and read back the same way. It could not sign - the traversal state it
+     * carried was still the exhausted one, and the signer refuses that - but a stored key saying
+     * the opposite of the truth about where a one-time key scheme has got to is the thing RFC 8391
+     * sec. 1.1 is about.
+     * <p>
+     * Height 8 over 2 layers, so the index is written in one byte and the exhausted key sits at
+     * 256. The standard sets this reaches are the XMSSMT_*_40/* ones, whose exhausted index needs
+     * a sixth byte, and 2^40 signatures is not a number anyone arrives at - which is why nothing
+     * had met it.
+     * </p>
+     */
+    public void testExhaustedKeyAtAByteAlignedHeightRoundTripsThroughPrivateKeyInfo()
+        throws Exception
+    {
+        XMSSMTParameters params = new XMSSMTParameters(8, 2, new SHA256Digest());
+        XMSSMTPrivateKeyParameters privKey = exhaustedXMSSMT(params);
+
+        assertEquals(1L << 8, privKey.getIndex());
+
+        XMSSMTPrivateKeyParameters restored = (XMSSMTPrivateKeyParameters)PrivateKeyFactory.createKey(
+            PrivateKeyInfoFactory.createPrivateKeyInfo(privKey).getEncoded());
+
+        assertEquals("an exhausted key came back at a position it had signed from",
+            privKey.getIndex(), restored.getIndex());
+        assertEquals(0, restored.getUsagesRemaining());
     }
 
     /**

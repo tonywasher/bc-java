@@ -475,88 +475,102 @@ class XmssKeyUtil
         throw new IllegalArgumentException("unknown tree digest: " + treeDigest);
     }
 
+    /**
+     * The ASN.1 structure an XMSS private key is written as, from the key's own fields.
+     * <p>
+     * It used to be built out of {@code keyParams.getEncoded()}: the whole key was serialized -
+     * the four n-byte fields, and the BDS traversal state with the SHA-256 checksum over it - and
+     * then that same array was taken apart again at computed offsets to recover the fields the key
+     * exposes directly. The state encoding is the only part of it the ASN.1 actually needs, and
+     * that is the only part built here now.
+     * </p><p>
+     * Under the key's monitor for the whole of it, which is what getEncoded() took for its half:
+     * the index, the maximum index and the traversal state are three records of one position, and
+     * reading them in three unsynchronized steps lets a signature land between two of them. That
+     * was already so - the maximum index was read after getEncoded() had returned, outside the
+     * monitor that produced the rest - and this closes it rather than repeating it three times
+     * over. Holding another object's monitor is what BDSStateMap's copy constructor does, and for
+     * the same reason.
+     * </p>
+     */
     private static XMSSPrivateKey xmssCreateKeyStructure(XMSSPrivateKeyParameters keyParams)
         throws IOException
     {
-        byte[] keyData = keyParams.getEncoded();
-
-        int n = keyParams.getParameters().getTreeDigestSize();
         int totalHeight = keyParams.getParameters().getHeight();
-        int indexSize = 4;
 
-        int position = 0;
-        int index = (int)Pack.bigEndianToLong_Low(keyData, position, indexSize);
-        if (!XMSSEngine.isStoredIndexValid(totalHeight, index))
+        synchronized (keyParams)
         {
-            throw new IllegalArgumentException("index out of bounds");
+            BDS bdsState = keyParams.getBDSState();
+            int index = keyParams.getIndex();
+
+            if (!XMSSEngine.isStoredIndexValid(totalHeight, index))
+            {
+                throw new IllegalArgumentException("index out of bounds");
+            }
+
+            byte[] publicSeed = keyParams.getPublicSeed();
+            byte[] bdsStateBinary = XMSSEngine.getEncodedBDSState(bdsState, publicSeed);
+            int maxIndex = bdsState.getMaxIndex();
+
+            if (maxIndex != (1 << totalHeight) - 1)
+            {
+                return new XMSSPrivateKey(index, keyParams.getSecretKeySeed(), keyParams.getSecretKeyPRF(),
+                    publicSeed, keyParams.getRoot(), bdsStateBinary, maxIndex);
+            }
+
+            return new XMSSPrivateKey(index, keyParams.getSecretKeySeed(), keyParams.getSecretKeyPRF(),
+                publicSeed, keyParams.getRoot(), bdsStateBinary);
         }
-        position += indexSize;
-        byte[] secretKeySeed = Arrays.copyOfRange(keyData, position, position + n);
-        position += n;
-        byte[] secretKeyPRF = Arrays.copyOfRange(keyData, position, position + n);
-        position += n;
-        byte[] publicSeed = Arrays.copyOfRange(keyData, position, position + n);
-        position += n;
-        byte[] root = Arrays.copyOfRange(keyData, position, position + n);
-        position += n;
-        /* the serialized BDS state is the tail of the encoding */
-        byte[] bdsStateBinary = Arrays.copyOfRange(keyData, position, keyData.length);
-
-        // read the maximum index off the state itself rather than off the bytes just written from
-        // it: parsing them back to recover a field the key is holding is a whole deserialization,
-        // checksum included, for one number, and it makes the value the ASN.1 records depend on
-        // the codec having preserved it rather than on the key that owns it
-        int maxIndex = keyParams.getBDSState().getMaxIndex();
-
-        if (maxIndex != (1 << totalHeight) - 1)
-        {
-            return new XMSSPrivateKey(index, secretKeySeed, secretKeyPRF, publicSeed, root, bdsStateBinary, maxIndex);
-        }
-
-        return new XMSSPrivateKey(index, secretKeySeed, secretKeyPRF, publicSeed, root, bdsStateBinary);
     }
 
+    /**
+     * As {@link #xmssCreateKeyStructure}, for XMSS^MT, and with one difference that is not merely
+     * the extra layers: the raw encoding this used to be built from writes the index into
+     * {@code ceil(height / 8)} bytes, and the largest index a key can hold is 2^height - the
+     * position an exhausted key sits at, one past its last leaf. At every height that is a
+     * multiple of eight that index does not fit, so the field was written truncated and read back
+     * as zero: an exhausted key was exported as a key at index 0 declaring a full tree of unused
+     * one-time keys. It could not sign - the traversal state it carried was the exhausted one, and
+     * the signer refuses that - but it was still a stored key saying the opposite of the truth
+     * about a one-time key's position, which RFC 8391 sec. 1.1 is about. The index is taken from
+     * the key here, and XMSSMTPrivateKey carries it as a long, so nothing narrows it.
+     * </p><p>
+     * validateIndex() is called for the reason toByteArray() calls it, this being the other place
+     * a key is written out: the index and the per-layer states are two records of one position,
+     * and one that disagrees with itself is refused on the way back in, so it is refused here
+     * rather than persisted.
+     * </p>
+     */
     private static XMSSMTPrivateKey xmssmtCreateKeyStructure(XMSSMTPrivateKeyParameters keyParams)
         throws IOException
     {
-        byte[] keyData = keyParams.getEncoded();
+        XMSSMTParameters params = keyParams.getParameters();
+        int totalHeight = params.getHeight();
 
-        int n = keyParams.getParameters().getTreeDigestSize();
-        int totalHeight = keyParams.getParameters().getHeight();
-        int indexSize = (totalHeight + 7) / 8;
-
-        int position = 0;
-        // read as a long: indexSize is up to eight bytes for a tree taller than 32, and the index
-        // is a long the whole way through - XMSSMTPrivateKey carries one and isStoredIndexValid
-        // takes one. Narrowing to int here truncated silently and did so *before* the bounds check,
-        // so an out-of-range index was not rejected but wrapped into an in-range one, and the key
-        // was then exported and re-imported at a position it had already signed from.
-        long index = Pack.bigEndianToLong_Low(keyData, position, indexSize);
-        if (!XMSSEngine.isStoredIndexValid(totalHeight, index))
+        synchronized (keyParams)
         {
-            throw new IllegalArgumentException("index out of bounds");
+            BDSStateMap bdsState = keyParams.getBDSState();
+            long index = keyParams.getIndex();
+
+            if (!XMSSEngine.isStoredIndexValid(totalHeight, index))
+            {
+                throw new IllegalArgumentException("index out of bounds");
+            }
+
+            bdsState.validateIndex(params, index);
+
+            byte[] publicSeed = keyParams.getPublicSeed();
+            byte[] bdsStateBinary = XMSSEngine.getEncodedBDSState(bdsState, publicSeed);
+            long maxIndex = bdsState.getMaxIndex();
+
+            if (maxIndex != (1L << totalHeight) - 1)
+            {
+                return new XMSSMTPrivateKey(index, keyParams.getSecretKeySeed(), keyParams.getSecretKeyPRF(),
+                    publicSeed, keyParams.getRoot(), bdsStateBinary, maxIndex);
+            }
+
+            return new XMSSMTPrivateKey(index, keyParams.getSecretKeySeed(), keyParams.getSecretKeyPRF(),
+                publicSeed, keyParams.getRoot(), bdsStateBinary);
         }
-        position += indexSize;
-        byte[] secretKeySeed = Arrays.copyOfRange(keyData, position, position + n);
-        position += n;
-        byte[] secretKeyPRF = Arrays.copyOfRange(keyData, position, position + n);
-        position += n;
-        byte[] publicSeed = Arrays.copyOfRange(keyData, position, position + n);
-        position += n;
-        byte[] root = Arrays.copyOfRange(keyData, position, position + n);
-        position += n;
-        /* the serialized BDS state is the tail of the encoding */
-        byte[] bdsStateBinary = Arrays.copyOfRange(keyData, position, keyData.length);
-
-        // as above: off the state, not off the bytes written from it - and here the parse being
-        // dropped is of every layer's traversal state, up to twelve of them
-        long maxIndex = keyParams.getBDSState().getMaxIndex();
-
-        if (maxIndex != (1L << totalHeight) - 1)
-        {
-            return new XMSSMTPrivateKey(index, secretKeySeed, secretKeyPRF, publicSeed, root, bdsStateBinary, maxIndex);
-        }
-
-        return new XMSSMTPrivateKey(index, secretKeySeed, secretKeyPRF, publicSeed, root, bdsStateBinary);
     }
 }
