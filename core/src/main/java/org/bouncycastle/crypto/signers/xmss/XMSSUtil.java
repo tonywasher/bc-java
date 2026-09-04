@@ -57,23 +57,6 @@ class XMSSUtil
         return out;
     }
 
-    /*
-     * Generic convert from big endian byte array to long.
-     */
-    public static long bytesToXBigEndian(byte[] in, int offset, int size)
-    {
-        if (in == null)
-        {
-            throw new NullPointerException("in == null");
-        }
-        long res = 0;
-        for (int i = offset; i < (offset + size); i++)
-        {
-            res = (res << 8) | (in[i] & 0xff);
-        }
-        return res;
-    }
-
     /**
      * Clone a byte array.
      *

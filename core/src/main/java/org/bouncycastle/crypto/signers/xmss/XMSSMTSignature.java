@@ -38,7 +38,7 @@ final class XMSSMTSignature
                 throw new IllegalArgumentException("signature has wrong size");
             }
             int position = 0;
-            index = XMSSUtil.bytesToXBigEndian(signature, position, indexSize);
+            index = Pack.bigEndianToLong_Low(signature, position, indexSize);
 
             if (!XMSSUtil.isIndexValid(params.getHeight(), index))
             {

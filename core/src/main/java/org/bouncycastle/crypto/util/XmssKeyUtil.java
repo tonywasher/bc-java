@@ -485,7 +485,7 @@ class XmssKeyUtil
         int indexSize = 4;
 
         int position = 0;
-        int index = (int)XMSSEngine.bytesToXBigEndian(keyData, position, indexSize);
+        int index = (int)Pack.bigEndianToLong_Low(keyData, position, indexSize);
         if (!XMSSEngine.isStoredIndexValid(totalHeight, index))
         {
             throw new IllegalArgumentException("index out of bounds");
@@ -531,7 +531,7 @@ class XmssKeyUtil
         // takes one. Narrowing to int here truncated silently and did so *before* the bounds check,
         // so an out-of-range index was not rejected but wrapped into an in-range one, and the key
         // was then exported and re-imported at a position it had already signed from.
-        long index = XMSSEngine.bytesToXBigEndian(keyData, position, indexSize);
+        long index = Pack.bigEndianToLong_Low(keyData, position, indexSize);
         if (!XMSSEngine.isStoredIndexValid(totalHeight, index))
         {
             throw new IllegalArgumentException("index out of bounds");

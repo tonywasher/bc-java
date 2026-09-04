@@ -21,6 +21,7 @@ import org.bouncycastle.crypto.params.XMSSPrivateKeyParameters;
 import org.bouncycastle.crypto.params.XMSSPublicKeyParameters;
 import org.bouncycastle.util.Integers;
 import org.bouncycastle.util.Longs;
+import org.bouncycastle.util.Pack;
 
 /**
  * RFC 8391 sec. 1.1: each one-time key must be used exactly once. A WOTS+ key used twice discloses
@@ -124,7 +125,7 @@ public class OneTimeKeyReuseTests
                 }
 
                 // an XMSS signature leads with its 4-byte big-endian index (RFC 8391 sec. 4.1.8)
-                Integer index = Integers.valueOf((int)XMSSEngine.bytesToXBigEndian(sig, 0, 4));
+                Integer index = Integers.valueOf((int)Pack.bigEndianToLong_Low(sig, 0, 4));
 
                 assertTrue("one-time key at index " + index + " signed twice", seen.add(index));
             }
@@ -162,7 +163,7 @@ public class OneTimeKeyReuseTests
                 }
 
                 // an XMSS^MT signature leads with its ceil(h/8)-byte index (RFC 8391 sec. 4.2.5)
-                Long index = Longs.valueOf(XMSSEngine.bytesToXBigEndian(sig, 0, indexSize));
+                Long index = Longs.valueOf(Pack.bigEndianToLong_Low(sig, 0, indexSize));
 
                 assertTrue("one-time key at index " + index + " signed twice", seen.add(index));
             }

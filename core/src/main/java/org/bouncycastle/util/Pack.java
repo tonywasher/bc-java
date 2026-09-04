@@ -153,6 +153,22 @@ public abstract class Pack
         return bigEndianToLong_Low(bs, off, len) << ((8 - len) << 3);
     }
 
+    /**
+     * Reads the <code>len</code> bytes at <code>bs[off]</code> as a big-endian value and returns it
+     * in the low <code>len</code> bytes of the result: a <code>len</code> of 3 returns what
+     * {@link #bigEndianToLong(byte[], int)} would return for those three bytes preceded by five
+     * zero ones.
+     * <p>
+     * It is the read side of {@link #longToBigEndian_Low(long, byte[], int, int)} and carries the
+     * same unenforced 1..8 bound, for a related reason: the first byte is read ahead of the loop,
+     * so a <code>len</code> of 0 reads one byte anyway and returns it rather than returning zero,
+     * and a <code>len</code> above 8 goes on shifting and so yields the last eight bytes read
+     * rather than the first. The callers here are the XMSS ones reading back RFC 8391's
+     * toByte(x, y) - the index field of an XMSS^MT signature and of an XMSS^MT private key, and
+     * the two index reads in {@code XmssKeyUtil} - each of which passes either the constant 4 or
+     * ceil(h/8) for a height its parameter class holds to 2..62, so all of them are inside the
+     * bound already.
+     */
     public static long bigEndianToLong_Low(byte[] bs, int off, int len)
     {
 //        assert 1 <= len && len <= 8;

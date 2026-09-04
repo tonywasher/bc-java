@@ -50,7 +50,7 @@ public final class XMSSMTPrivateKeyParameters
                 throw new IllegalArgumentException("private key has wrong size");
             }
             int position = 0;
-            index = XMSSEngine.bytesToXBigEndian(privateKey, position, indexSize);
+            index = Pack.bigEndianToLong_Low(privateKey, position, indexSize);
             if (!XMSSEngine.isStoredIndexValid(totalHeight, index))
             {
                 throw new IllegalArgumentException("index out of bounds");
