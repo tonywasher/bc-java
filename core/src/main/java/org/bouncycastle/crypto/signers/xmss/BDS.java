@@ -695,15 +695,26 @@ public final class BDS
         return k;
     }
 
+    /**
+     * The retain queues, as a copy - through the same cloneRetain() the constructors take a state
+     * apart with, so the copy reaches the queues and not just the map holding them.
+     * <p>
+     * putAll() was what it did, which copies the map and leaves every value pointing at the queue
+     * the live state reads from: the queues nextAuthenticationPath() calls remove(0) on as it
+     * descends, one node at a time, each of them the only copy of that node the state has. A
+     * caller that emptied one - or took a node out of one to look at it - would leave the key
+     * either refused at the next signature that reaches that height, "missing retain node in BDS
+     * state", or building an authentication path from the wrong node, which is a signature a
+     * verifier rejects and nothing on this side reports.
+     * </p>
+     */
     Map<Integer, List<XMSSNode>> getRetain()
     {
-        Map<Integer, List<XMSSNode>> result = new TreeMap<Integer, List<XMSSNode>>();
-        result.putAll(retain);
-        return result;
+        return cloneRetain(retain);
     }
 
     /*
-     * These three hand out a copy, as getAuthenticationPath() and getRetain() beside them do and
+     * These three hand out a copy, as getAuthenticationPath() and getRetain() above them do and
      * as the constructors do when they take a state apart: what they are copying is the live
      * traversal state of a one-time key, and a caller that changed it would corrupt the signing
      * position with nothing to catch it. They copy to the same depth the constructors do - the
