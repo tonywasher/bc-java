@@ -9,7 +9,11 @@ final class LTreeAddress
     extends XMSSAddress
 {
 
-    private static final int TYPE = 0x01;
+    /**
+     * The type word of an L-tree address, named for {@link XMSSAddress#subtreeAddressOf(byte[],
+     * int)} to stamp on an encoding it takes the tree of from an address of another type.
+     */
+    static final int TYPE = 0x01;
 
     /**
      * Offset of the L-tree address word in the 32-byte encoding {@link #toByteArray()} produces.

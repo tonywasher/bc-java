@@ -29,15 +29,11 @@ class XMSSVerifierUtil
         }
 
         /* prepare adresses */
-        int layerAddress = XMSSAddress.layerAddressOf(otsAddress);
-        long treeAddress = XMSSAddress.treeAddressOf(otsAddress);
         int otsIndex = OTSHashAddress.otsAddressOf(otsAddress);
-        byte[] lTreeAddress = new LTreeAddress.Builder()
-            .withLayerAddress(layerAddress).withTreeAddress(treeAddress)
-            .withLTreeAddress(otsIndex).build().toByteArray();
-        byte[] hashTreeAddress = new HashTreeAddress.Builder()
-            .withLayerAddress(layerAddress).withTreeAddress(treeAddress)
-            .withTreeIndex(otsIndex).build().toByteArray();
+        byte[] lTreeAddress = XMSSAddress.subtreeAddressOf(otsAddress, LTreeAddress.TYPE);
+        Pack.intToBigEndian(otsIndex, lTreeAddress, LTreeAddress.LTREE_ADDRESS_OFFSET);
+        byte[] hashTreeAddress = XMSSAddress.subtreeAddressOf(otsAddress, HashTreeAddress.TYPE);
+        Pack.intToBigEndian(otsIndex, hashTreeAddress, HashTreeAddress.TREE_INDEX_OFFSET);
         /* the tree index of that encoding, kept alongside it as the climb halves it */
         int hashTreeIndex = otsIndex;
         /* and one pair of working buffers for every node hashed below, L-tree and climb alike; see

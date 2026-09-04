@@ -63,14 +63,12 @@ class BDSTreeHash
         }
             /* prepare addresses */
         Pack.intToBigEndian(nextIndex, otsAddress, OTSHashAddress.OTS_ADDRESS_OFFSET);
-        int layerAddress = XMSSAddress.layerAddressOf(otsAddress);
-        long treeAddress = XMSSAddress.treeAddressOf(otsAddress);
-        byte[] lTreeAddress = new LTreeAddress.Builder()
-            .withLayerAddress(layerAddress).withTreeAddress(treeAddress)
-            .withLTreeAddress(nextIndex).build().toByteArray();
-        byte[] hashTreeAddress = new HashTreeAddress.Builder()
-            .withLayerAddress(layerAddress).withTreeAddress(treeAddress)
-            .withTreeIndex(nextIndex).build().toByteArray();
+        /* the leaf's own two addresses, taken from the tree its encoding names and then named for
+         * the same leaf a second and a third time */
+        byte[] lTreeAddress = XMSSAddress.subtreeAddressOf(otsAddress, LTreeAddress.TYPE);
+        Pack.intToBigEndian(nextIndex, lTreeAddress, LTreeAddress.LTREE_ADDRESS_OFFSET);
+        byte[] hashTreeAddress = XMSSAddress.subtreeAddressOf(otsAddress, HashTreeAddress.TYPE);
+        Pack.intToBigEndian(nextIndex, hashTreeAddress, HashTreeAddress.TREE_INDEX_OFFSET);
         /* the two words of that encoding this climb moves, kept alongside it so stepping one is an
          * increment rather than a read back out of the bytes */
         int hashTreeHeight = 0;

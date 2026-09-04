@@ -269,16 +269,11 @@ public final class BDS
     private void initialize(byte[] publicSeed, byte[] secretSeed, byte[] otsAddress)
     {
         /* prepare addresses - one encoding each for the whole walk, with the words that change
-         * written into them as it goes */
-        int layerAddress = XMSSAddress.layerAddressOf(otsAddress);
-        long treeAddress = XMSSAddress.treeAddressOf(otsAddress);
+         * written into them as it goes. The two below the leaf's are the same tree as it, so they
+         * are taken from its encoding rather than assembled beside it. */
         byte[] leafAddress = Arrays.clone(otsAddress);
-        byte[] lTreeAddress = new LTreeAddress.Builder()
-            .withLayerAddress(layerAddress).withTreeAddress(treeAddress)
-            .build().toByteArray();
-        byte[] hashTreeAddress = new HashTreeAddress.Builder()
-            .withLayerAddress(layerAddress).withTreeAddress(treeAddress)
-            .build().toByteArray();
+        byte[] lTreeAddress = XMSSAddress.subtreeAddressOf(otsAddress, LTreeAddress.TYPE);
+        byte[] hashTreeAddress = XMSSAddress.subtreeAddressOf(otsAddress, HashTreeAddress.TYPE);
         /* and one pair of working buffers for every node hashed below, L-tree and tree alike; see
          * XMSSNodeUtil.randomizeHash for why one pair serves a whole walk */
         int n = wotsPlus.getParams().getTreeDigestSize();
@@ -385,16 +380,11 @@ public final class BDS
             keep.put(tau, authenticationPath.get(tau));
         }
 
-        /* prepare addresses */
-        int layerAddress = XMSSAddress.layerAddressOf(otsAddress);
-        long treeAddress = XMSSAddress.treeAddressOf(otsAddress);
+        /* prepare addresses - the two below the leaf's name the same tree as it, so they are taken
+         * from its encoding rather than assembled beside it */
         byte[] leafAddress = Arrays.clone(otsAddress);
-        byte[] lTreeAddress = new LTreeAddress.Builder()
-            .withLayerAddress(layerAddress).withTreeAddress(treeAddress)
-            .build().toByteArray();
-        byte[] hashTreeAddress = new HashTreeAddress.Builder()
-            .withLayerAddress(layerAddress).withTreeAddress(treeAddress)
-            .build().toByteArray();
+        byte[] lTreeAddress = XMSSAddress.subtreeAddressOf(otsAddress, LTreeAddress.TYPE);
+        byte[] hashTreeAddress = XMSSAddress.subtreeAddressOf(otsAddress, HashTreeAddress.TYPE);
         /* and one pair of working buffers for whichever of the two branches below runs; see
          * XMSSNodeUtil.randomizeHash */
         int n = wotsPlus.getParams().getTreeDigestSize();

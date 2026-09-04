@@ -9,7 +9,13 @@ final class HashTreeAddress
     extends XMSSAddress
 {
 
-    private static final int TYPE = 0x02;
+    /**
+     * The type word of a hash tree address, named for {@link XMSSAddress#subtreeAddressOf(byte[],
+     * int)} to stamp on an encoding it takes the tree of from an address of another type. The
+     * padding word this type puts where the other two put an index needs no such naming: it is
+     * zero, which is what that method leaves everything past the type word at.
+     */
+    static final int TYPE = 0x02;
     private static final int PADDING = 0x00;
 
     /**
