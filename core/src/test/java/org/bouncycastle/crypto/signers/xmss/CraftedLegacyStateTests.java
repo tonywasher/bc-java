@@ -8,6 +8,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.lang.reflect.Field;
 import java.security.SecureRandom;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -227,6 +228,80 @@ public class CraftedLegacyStateTests
             catch (IOException e)
             {
                 assertEquals("incomplete BDS state", e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * A real BDS, serialized with the first node of its authentication path replaced by
+     * {@code node}. Java deserialization writes an object's fields directly, so it can hand back
+     * an XMSSNode holding no value, or one of the wrong length - shapes that none of this
+     * package's calls to that constructor produce, every one of them passing an array it has just
+     * built to the length its parameters fix. BDS.readObject() does not walk into the nodes its
+     * collections hold, and says so; validate() is what checks them.
+     * <p>
+     * The authentication path rather than the root because the root has a second net behind it:
+     * validateRoot() compares it against the one the private key declares and would refuse either
+     * shape there whatever validate() did. Nothing stands behind a path node, which is hashed by
+     * randomizeHash() the next time the state advances.
+     */
+    private static PrivateKeyInfo keyWithNodeInAuthenticationPath(XMSSNode node)
+        throws Exception
+    {
+        XMSSParameters params = new XMSSParameters(4, NISTObjectIdentifiers.id_sha256);
+        XMSSKeyPairGenerator kpg = new XMSSKeyPairGenerator();
+
+        kpg.init(new XMSSKeyGenerationParameters(params, new SecureRandom()));
+
+        AsymmetricCipherKeyPair kp = kpg.generateKeyPair();
+
+        // as in keyWithNullKeyIn above, take the key apart while its state is still sound
+        PrivateKeyInfo info = PrivateKeyInfoFactory.createPrivateKeyInfo(kp.getPrivate());
+        XMSSPrivateKey asn1 = XMSSPrivateKey.getInstance(info.parsePrivateKey());
+
+        BDS bds = ((XMSSPrivateKeyParameters)kp.getPrivate()).getBDSState();
+
+        // getAuthenticationPath() hands back a copy, so the field itself is replaced
+        List<XMSSNode> path = bds.getAuthenticationPath();
+
+        path.set(0, node);
+
+        Field f = BDS.class.getDeclaredField("authenticationPath");
+
+        f.setAccessible(true);
+        f.set(bds, path);
+
+        return new PrivateKeyInfo(info.getPrivateKeyAlgorithm(),
+            new XMSSPrivateKey(asn1.getIndex(), asn1.getSecretKeySeed(), asn1.getSecretKeyPRF(),
+                asn1.getPublicSeed(), asn1.getRoot(), serialize(bds)));
+    }
+
+    /**
+     * A node whose value is not the tree digest's size is out of bounds, and one carrying no
+     * value at all is reported rather than dereferenced. validate() asks both questions at once
+     * through hasValueLength(), which answers false for an absent value; asking through
+     * getValue() would answer the same by cloning the value first, and asking through
+     * getValueLength() would not answer at all.
+     * <p>
+     * Both nodes are given the height validate() expects of the first node of a path, so that
+     * what it reports is the value rather than a height out of bounds - the two share a message.
+     */
+    public void testCraftedNodeValueReported()
+        throws Exception
+    {
+        XMSSNode[] nodes = new XMSSNode[]{new XMSSNode(0, null), new XMSSNode(0, new byte[31])};
+
+        for (int i = 0; i != nodes.length; i++)
+        {
+            try
+            {
+                PrivateKeyFactory.createKey(keyWithNodeInAuthenticationPath(nodes[i]));
+                fail("XMSS node with a bad value accepted");
+            }
+            catch (IOException e)
+            {
+                assertEquals("malformed XMSS private key: XMSS node in BDS state out of bounds",
+                    e.getMessage());
             }
         }
     }

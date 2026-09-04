@@ -55,6 +55,24 @@ final class XMSSNode
     }
 
     /**
+     * Whether this node's value is exactly {@code length} bytes.
+     * <p>
+     * BDS.validate() asks this of every node a state holds, and asks it here rather than through
+     * {@link #getValueLength()} because such a state can have arrived by Java deserialization,
+     * which writes an object's fields directly and so can leave this value null where none of the
+     * calls to the constructor above can - every one of them passes an array it has just built.
+     * Reporting such a node rather than dereferencing it is that method's job.
+     * <p>
+     * It asked through {@link #getValue()} before, which answers the same question by cloning the
+     * whole value to look at its length: a 32-byte array per node of every state validated at the
+     * SHA-256 parameter sets, which is per node of every private key decoded.
+     */
+    boolean hasValueLength(int length)
+    {
+        return value != null && value.length == length;
+    }
+
+    /**
      * Write this node's value to {@code out}. The BDS state codec only reads it, so writing it
      * straight to the stream - rather than through the defensive copy {@link #getValue()} makes -
      * saves a clone per node of every state encoded, and lets nothing escape either.

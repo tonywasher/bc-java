@@ -651,9 +651,8 @@ public final class BDS
     {
         if (node != null)
         {
-            byte[] value = node.getValue();
             if (node.getHeight() < minimumHeight || node.getHeight() > maximumHeight
-                || value == null || value.length != digestSize)
+                || !node.hasValueLength(digestSize))
             {
                 throw new IllegalStateException("XMSS node in BDS state out of bounds");
             }
