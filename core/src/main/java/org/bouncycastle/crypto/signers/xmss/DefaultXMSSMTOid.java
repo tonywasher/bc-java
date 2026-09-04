@@ -5,10 +5,11 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * XMSSOid^MT class.
+ * The XMSS^MT parameter sets, keyed by the parameters that pick one: RFC 8391 sec. 5.4 and NIST
+ * SP 800-208 sec. 5.
  */
 final class DefaultXMSSMTOid
-    implements XMSSOid
+    extends XMSSOid
 {
     /**
      * XMSS^MT OID lookup table.
@@ -140,25 +141,9 @@ final class DefaultXMSSMTOid
         oidLookupTable = Collections.unmodifiableMap(map);
     }
 
-    /**
-     * OID.
-     */
-    private final int oid;
-    /**
-     * String representation of OID.
-     */
-    private final String stringRepresentation;
-
-    /**
-     * Constructor...
-     *
-     * @param oid                  OID.
-     * @param stringRepresentation String representation of OID.
-     */
     private DefaultXMSSMTOid(int oid, String stringRepresentation)
     {
-        this.oid = oid;
-        this.stringRepresentation = stringRepresentation;
+        super(oid, stringRepresentation);
     }
 
     /**
@@ -177,34 +162,5 @@ final class DefaultXMSSMTOid
             throw new NullPointerException("algorithmName == null");
         }
         return oidLookupTable.get(createKey(algorithmName, digestSize, winternitzParameter, len, height, layers));
-    }
-
-    /**
-     * Create a key based on parameters.
-     *
-     * @param algorithmName       Algorithm name.
-     * @param winternitzParameter Winternitz Parameter.
-     * @param height              Binary tree height.
-     * @return String representation of parameters for lookup table.
-     */
-    private static String createKey(String algorithmName, int digestSize, int winternitzParameter, int len, int height,
-                                    int layers)
-    {
-        return algorithmName + "-" + digestSize + "-" + winternitzParameter + "-" + len + "-" + height + "-" + layers;
-    }
-
-    /**
-     * Getter OID.
-     *
-     * @return OID.
-     */
-    public int getOid()
-    {
-        return oid;
-    }
-
-    public String toString()
-    {
-        return stringRepresentation;
     }
 }

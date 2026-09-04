@@ -5,12 +5,12 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * XMSSOid class.
+ * The XMSS parameter sets, keyed by the parameters that pick one: RFC 8391 sec. 5.3 and NIST
+ * SP 800-208 sec. 5.
  */
 final class DefaultXMSSOid
-    implements XMSSOid
+    extends XMSSOid
 {
-
     /**
      * XMSS OID lookup table.
      */
@@ -51,25 +51,9 @@ final class DefaultXMSSOid
         oidLookupTable = Collections.unmodifiableMap(map);
     }
 
-    /**
-     * OID.
-     */
-    private final int oid;
-    /**
-     * String representation of OID.
-     */
-    private final String stringRepresentation;
-
-    /**
-     * Constructor...
-     *
-     * @param oid                  OID.
-     * @param stringRepresentation String representation of OID.
-     */
     private DefaultXMSSOid(int oid, String stringRepresentation)
     {
-        this.oid = oid;
-        this.stringRepresentation = stringRepresentation;
+        super(oid, stringRepresentation);
     }
 
     /**
@@ -88,35 +72,5 @@ final class DefaultXMSSOid
             throw new NullPointerException("algorithmName == null");
         }
         return oidLookupTable.get(createKey(algorithmName, digestSize, winternitzParameter, len, height));
-    }
-
-    /**
-     * Create a key based on parameters.
-     *
-     * @param algorithmName       Algorithm name.
-     * @param winternitzParameter Winternitz Parameter.
-     * @param height              Binary tree height.
-     * @return String representation of parameters for lookup table.
-     */
-    private static String createKey(String algorithmName, int digestSize, int winternitzParameter, int len,
-                                    int height)
-    {
-        return algorithmName + "-" + digestSize + "-" + winternitzParameter + "-" + len + "-" + height;
-    }
-
-    /**
-     * Getter OID.
-     *
-     * @return OID.
-     */
-    public int getOid()
-    {
-        return oid;
-    }
-
-    @Override
-    public String toString()
-    {
-        return stringRepresentation;
     }
 }

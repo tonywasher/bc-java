@@ -5,14 +5,14 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * WOTS+ OID class.
+ * The WOTS+ parameter sets, keyed by the parameters that pick one: RFC 8391 sec. 5.2 and NIST
+ * SP 800-208 sec. 5.
  */
 final class WOTSPlusOid
-    implements XMSSOid
+    extends XMSSOid
 {
-
     /**
-     * XMSS OID lookup table.
+     * WOTS+ OID lookup table.
      */
     private static final Map<String, WOTSPlusOid> oidLookupTable;
 
@@ -33,25 +33,9 @@ final class WOTSPlusOid
         oidLookupTable = Collections.unmodifiableMap(map);
     }
 
-    /**
-     * OID.
-     */
-    private final int oid;
-    /**
-     * String representation of OID.
-     */
-    private final String stringRepresentation;
-
-    /**
-     * Constructor...
-     *
-     * @param oid                  OID.
-     * @param stringRepresentation String representation of OID.
-     */
     private WOTSPlusOid(int oid, String stringRepresentation)
     {
-        this.oid = oid;
-        this.stringRepresentation = stringRepresentation;
+        super(oid, stringRepresentation);
     }
 
     /**
@@ -68,32 +52,5 @@ final class WOTSPlusOid
             throw new NullPointerException("algorithmName == null");
         }
         return oidLookupTable.get(createKey(algorithmName, digestSize, winternitzParameter, len));
-    }
-
-    /**
-     * Create a key based on parameters.
-     *
-     * @param algorithmName       Algorithm name.
-     * @param winternitzParameter Winternitz Parameter.
-     * @return String representation of parameters for lookup table.
-     */
-    private static String createKey(String algorithmName, int digestSize, int winternitzParameter, int len)
-    {
-        return algorithmName + "-" + digestSize + "-" + winternitzParameter + "-" + len;
-    }
-
-    /**
-     * Getter OID.
-     *
-     * @return OID.
-     */
-    public int getOid()
-    {
-        return oid;
-    }
-
-    public String toString()
-    {
-        return stringRepresentation;
     }
 }
