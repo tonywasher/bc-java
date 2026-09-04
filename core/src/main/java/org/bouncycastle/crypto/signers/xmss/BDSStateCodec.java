@@ -40,6 +40,13 @@ final class BDSStateCodec
     private static final int MAX_NODES = 4096;
     private static final int CHECKSUM_SIZE = 32;
 
+    /**
+     * The bytes withChecksum() reserves at the end of the stream before copying the encoding out of
+     * it, overwritten with the checksum itself the moment it has. Only ever read from, so sharing it
+     * says nothing about threads.
+     */
+    private static final byte[] CHECKSUM_PLACEHOLDER = new byte[CHECKSUM_SIZE];
+
     private BDSStateCodec()
     {
     }
@@ -63,7 +70,7 @@ final class BDSStateCodec
         dataOut.writeInt(STATE_VERSION);
         writeBDS(dataOut, state);
         dataOut.flush();
-        return checkedEncoding(withChecksum(byteOut.toByteArray(), publicSeed));
+        return checkedEncoding(withChecksum(byteOut, publicSeed));
     }
 
     public static byte[] encode(BDSStateMap stateMap, byte[] publicSeed)
@@ -88,7 +95,7 @@ final class BDSStateCodec
             writeBDS(dataOut, states.get(layer));
         }
         dataOut.flush();
-        return checkedEncoding(withChecksum(byteOut.toByteArray(), publicSeed));
+        return checkedEncoding(withChecksum(byteOut, publicSeed));
     }
 
     public static BDS decodeBDS(byte[] encoding, byte[] publicSeed)
@@ -351,15 +358,15 @@ final class BDSStateCodec
         {
             throw new IOException("null XMSS node");
         }
-        byte[] value = node.getValue();
+        int valueLength = node.getValueLength();
         if (node.getHeight() < 0 || node.getHeight() > treeHeight
-            || value.length < 1 || value.length > MAX_DIGEST_SIZE)
+            || valueLength < 1 || valueLength > MAX_DIGEST_SIZE)
         {
             throw new IOException("XMSS node out of bounds");
         }
         dataOut.writeInt(node.getHeight());
-        dataOut.writeInt(value.length);
-        dataOut.write(value);
+        dataOut.writeInt(valueLength);
+        node.encodeTo(dataOut);
     }
 
     private static XMSSNode readOptionalNode(DataInputStream dataIn, int treeHeight, NodeBudget nodeBudget)
@@ -416,7 +423,7 @@ final class BDSStateCodec
      *
      * @param publicSeed the key's public seed, or null to bind nothing.
      */
-    private static byte[] checksum(byte[] encoding, int length, byte[] publicSeed)
+    private static void checksumTo(byte[] encoding, int length, byte[] publicSeed, byte[] out, int outOff)
     {
         Digest digest = new SHA256Digest();
 
@@ -426,15 +433,27 @@ final class BDSStateCodec
         }
         digest.update(encoding, 0, length);
 
-        byte[] rv = new byte[digest.getDigestSize()];
-        digest.doFinal(rv, 0);
-
-        return rv;
+        digest.doFinal(out, outOff);
     }
 
-    private static byte[] withChecksum(byte[] body, byte[] publicSeed)
+    /**
+     * The encoding held by {@code byteOut}, with its checksum appended.
+     * <p>
+     * The stream's own bytes are the body, so the checksum's room is reserved in the stream before
+     * the one copy that takes the encoding out of it, and the checksum is then written straight into
+     * the tail of that copy. Appending it afterwards with Arrays.concatenate meant a second copy of
+     * the whole body - which for a private key encoding is the bulk of it, and the encode path
+     * copies it once more on the way into the key.
+     */
+    private static byte[] withChecksum(ByteArrayOutputStream byteOut, byte[] publicSeed)
     {
-        return Arrays.concatenate(body, checksum(body, body.length, publicSeed));
+        int bodyLength = byteOut.size();
+        byteOut.write(CHECKSUM_PLACEHOLDER, 0, CHECKSUM_SIZE);
+
+        byte[] encoding = byteOut.toByteArray();
+        checksumTo(encoding, bodyLength, publicSeed, encoding, bodyLength);
+
+        return encoding;
     }
 
     /**
@@ -450,7 +469,8 @@ final class BDSStateCodec
         }
 
         int bodyLength = encoding.length - CHECKSUM_SIZE;
-        byte[] expected = checksum(encoding, bodyLength, publicSeed);
+        byte[] expected = new byte[CHECKSUM_SIZE];
+        checksumTo(encoding, bodyLength, publicSeed, expected, 0);
 
         // an error-detecting checksum over material that is not secret, so a plain comparison is
         // what is wanted here - see the note on checksum()

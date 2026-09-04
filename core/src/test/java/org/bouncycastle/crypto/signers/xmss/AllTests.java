@@ -37,6 +37,7 @@ public class AllTests
         suite.addTestSuite(LargeIndexEncodingTests.class);
         suite.addTestSuite(CraftedLegacyStateTests.class);
         suite.addTestSuite(IsaraOidKeyTests.class);
+        suite.addTestSuite(PrivateKeyEncodingLayoutTests.class);
 
         return new BCTestSetup(suite);
     }

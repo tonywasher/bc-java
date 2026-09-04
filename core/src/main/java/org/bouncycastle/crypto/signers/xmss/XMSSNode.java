@@ -1,5 +1,7 @@
 package org.bouncycastle.crypto.signers.xmss;
 
+import java.io.IOException;
+import java.io.OutputStream;
 import java.io.Serializable;
 
 import org.bouncycastle.util.Bytes;
@@ -40,6 +42,26 @@ final class XMSSNode
     void encodeTo(byte[] out, int position)
     {
         System.arraycopy(value, 0, out, position, value.length);
+    }
+
+    /**
+     * The length of this node's value, for a caller that needs it before writing the value out and
+     * would otherwise take {@link #getValue()}'s defensive copy just to ask.
+     */
+    int getValueLength()
+    {
+        return value.length;
+    }
+
+    /**
+     * Write this node's value to {@code out}. The BDS state codec only reads it, so writing it
+     * straight to the stream - rather than through the defensive copy {@link #getValue()} makes -
+     * saves a clone per node of every state encoded, and lets nothing escape either.
+     */
+    void encodeTo(OutputStream out)
+        throws IOException
+    {
+        out.write(value, 0, value.length);
     }
 
     /**

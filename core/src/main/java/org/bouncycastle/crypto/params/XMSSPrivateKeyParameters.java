@@ -345,11 +345,24 @@ public final class XMSSPrivateKeyParameters
     {
         synchronized (this)
         {
-            /* index || secretKeySeed || secretKeyPRF || publicSeed || root */
+            /* index || secretKeySeed || secretKeyPRF || publicSeed || root || bdsState */
             int n = params.getTreeDigestSize();
             int indexSize = 4;
             int totalSize = indexSize + n + n + n + n;
-            byte[] out = new byte[totalSize];
+            // the state is encoded first so the rest can be written straight into the array that is
+            // returned: appending it with Arrays.concatenate meant allocating the fixed part on its
+            // own and then copying both halves into a second array of the full size
+            byte[] bdsStateOut;
+            try
+            {
+                bdsStateOut = XMSSEngine.getEncodedBDSState(bdsState, publicSeed);
+            }
+            catch (IOException e)
+            {
+                throw Exceptions.illegalStateException("error encoding BDS state", e);
+            }
+
+            byte[] out = new byte[totalSize + bdsStateOut.length];
             int position = 0;
             /* copy index */
             Pack.intToBigEndian(bdsState.getIndex(), out, position);
@@ -365,18 +378,11 @@ public final class XMSSPrivateKeyParameters
             position += n;
             /* copy root */
             System.arraycopy(root, 0, out, position, root.length);
-            /* concatenate bdsState */
-            byte[] bdsStateOut;
-            try
-            {
-                bdsStateOut = XMSSEngine.getEncodedBDSState(bdsState, publicSeed);
-            }
-            catch (IOException e)
-            {
-                throw Exceptions.illegalStateException("error encoding BDS state", e);
-            }
+            position += n;
+            /* copy bdsState */
+            System.arraycopy(bdsStateOut, 0, out, position, bdsStateOut.length);
 
-            return Arrays.concatenate(out, bdsStateOut);
+            return out;
         }
     }
 

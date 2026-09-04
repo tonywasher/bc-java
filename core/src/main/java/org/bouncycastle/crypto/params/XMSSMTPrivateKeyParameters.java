@@ -292,16 +292,29 @@ public final class XMSSMTPrivateKeyParameters
     {
         synchronized (this)
         {
-            /* index || secretKeySeed || secretKeyPRF || publicSeed || root */
+            /* index || secretKeySeed || secretKeyPRF || publicSeed || root || bdsState */
             int n = params.getTreeDigestSize();
             int indexSize = (params.getHeight() + 7) / 8;
             int totalSize = indexSize + n + n + n + n;
-            byte[] out = new byte[totalSize];
-            int position = 0;
             // the two records of the position are about to be written out beside each other, and a
             // stored key that disagrees with itself is refused on the way back in, so say so here
             // rather than persisting one that cannot be read
             bdsState.validateIndex(params, index);
+            // the state is encoded first so the rest can be written straight into the array that is
+            // returned: appending it with Arrays.concatenate meant allocating the fixed part on its
+            // own and then copying both halves into a second array of the full size
+            byte[] bdsStateOut;
+            try
+            {
+                bdsStateOut = XMSSEngine.getEncodedBDSState(bdsState, publicSeed);
+            }
+            catch (IOException e)
+            {
+                throw Exceptions.illegalStateException("error encoding BDS state map", e);
+            }
+
+            byte[] out = new byte[totalSize + bdsStateOut.length];
+            int position = 0;
             /* copy index - indexSize is 1..8 for every height the parameters admit (2..62) */
             Pack.longToBigEndian_Low(index, out, position, indexSize);
             position += indexSize;
@@ -316,15 +329,11 @@ public final class XMSSMTPrivateKeyParameters
             position += n;
             /* copy root */
             System.arraycopy(root, 0, out, position, root.length);
-            /* concatenate bdsState */
-            try
-            {
-                return Arrays.concatenate(out, XMSSEngine.getEncodedBDSState(bdsState, publicSeed));
-            }
-            catch (IOException e)
-            {
-                throw Exceptions.illegalStateException("error encoding BDS state map", e);
-            }
+            position += n;
+            /* copy bdsState */
+            System.arraycopy(bdsStateOut, 0, out, position, bdsStateOut.length);
+
+            return out;
         }
     }
 
