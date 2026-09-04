@@ -143,9 +143,6 @@ public final class XMSSEngine
 
         BDSStateMap bdsState = new BDSStateMap((1L << params.getHeight()) - 1);
 
-        /* import to xmss */
-        newWOTSPlus(xmssParams).importKeys(new byte[n], publicSeed);
-
         /* get root */
         int rootLayerIndex = params.getLayers() - 1;
         OTSHashAddress otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder().withLayerAddress(rootLayerIndex)
