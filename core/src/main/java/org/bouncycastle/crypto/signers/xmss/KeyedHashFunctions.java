@@ -24,10 +24,40 @@ import org.bouncycastle.crypto.Xof;
  * <p>
  * coreDigest also takes it that digestSize is at most the underlying digest's own output size, which
  * likewise nothing checks - the admissible (digest, n) pairs are fixed by {@link WOTSPlusOid}, and
- * one breaking that would leave the tail of the result zero rather than throw.
+ * one breaking that would leave the tail of the result zero rather than throw. The same bound is
+ * what keeps digestSize inside the toByte table below, whose width is the largest n that fixes;
+ * one above it fails there instead, on the offset, which is at least loud.
  */
 final class KeyedHashFunctions
 {
+    /**
+     * The largest tree digest size {@link WOTSPlusOid} admits, that being SHA-512's and SHAKE256's
+     * 64; the others are 32 and, for the two SP 800-208 parameter sets, 24.
+     */
+    private static final int MAX_TREE_DIGEST_SIZE = 64;
+
+    /**
+     * toByte(i, n) for the four domain separators, as the constants they are rather than as
+     * something rebuilt per hash: each is n - 1 zero bytes followed by i, because i is 0..3. One
+     * table serves every n, because toByte(i, n) is then the last n bytes of
+     * toByte(i, MAX_TREE_DIGEST_SIZE) - so coreDigest hashes that tail in place.
+     * <p>
+     * coreDigest had been calling XMSSUtil.toBytesBigEndian(i, n) instead, which is an n-byte
+     * array plus an eight-byte write of seven zeros and one value byte, on every F, H, H_msg and
+     * PRF - one per chain step of every leaf's len chains, plus the L-tree and the tree hash above
+     * them, so a key generation at h=10 made millions. The table is only ever read, so sharing it
+     * says nothing about threads.
+     */
+    private static final byte[][] TO_BYTE = new byte[4][MAX_TREE_DIGEST_SIZE];
+
+    static
+    {
+        for (int i = 0; i != TO_BYTE.length; i++)
+        {
+            TO_BYTE[i][MAX_TREE_DIGEST_SIZE - 1] = (byte)i;
+        }
+    }
+
     private final Digest digest;
     private final int digestSize;
 
@@ -39,9 +69,8 @@ final class KeyedHashFunctions
 
     private byte[] coreDigest(int fixedValue, byte[] key, byte[] index)
     {
-        byte[] in = XMSSUtil.toBytesBigEndian(fixedValue, digestSize);
         /* fill first n byte of out buffer */
-        digest.update(in, 0, in.length);
+        digest.update(TO_BYTE[fixedValue], MAX_TREE_DIGEST_SIZE - digestSize, digestSize);
         /* add key */
         digest.update(key, 0, key.length);
         /* add index */
