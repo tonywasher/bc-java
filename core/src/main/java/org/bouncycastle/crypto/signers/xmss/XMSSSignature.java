@@ -52,7 +52,7 @@ final class XMSSSignature
 
         public Builder withRandom(byte[] val)
         {
-            random = XMSSUtil.cloneArray(val);
+            random = Arrays.clone(val);
             return this;
         }
 

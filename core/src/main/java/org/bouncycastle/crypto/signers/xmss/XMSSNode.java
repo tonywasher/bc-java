@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.Serializable;
 
+import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Bytes;
 
 /**
@@ -30,7 +31,7 @@ final class XMSSNode
 
     public byte[] getValue()
     {
-        return XMSSUtil.cloneArray(value);
+        return Arrays.clone(value);
     }
 
     /**

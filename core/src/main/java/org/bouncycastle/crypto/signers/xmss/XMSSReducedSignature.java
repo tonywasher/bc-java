@@ -105,7 +105,7 @@ class XMSSReducedSignature
 
         public Builder withReducedSignature(byte[] val)
         {
-            reducedSignature = XMSSUtil.cloneArray(val);
+            reducedSignature = Arrays.clone(val);
             return this;
         }
 

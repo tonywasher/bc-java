@@ -58,21 +58,6 @@ class XMSSUtil
     }
 
     /**
-     * Clone a byte array.
-     *
-     * @param in byte array.
-     * @return Copy of byte array.
-     */
-    public static byte[] cloneArray(byte[] in)
-    {
-        if (in == null)
-        {
-            throw new NullPointerException("in == null");
-        }
-        return Arrays.clone(in);
-    }
-
-    /**
      * Return {@code value} once it is confirmed to be {@code size} bytes long, or a freshly
      * allocated all-zero array of that size if {@code value} is null.
      * <p>
@@ -112,21 +97,6 @@ class XMSSUtil
         }
 
         return value;
-    }
-
-    /**
-     * Clone a 2d byte array.
-     *
-     * @param in 2d byte array.
-     * @return Copy of 2d byte array.
-     */
-    public static byte[][] cloneArray(byte[][] in)
-    {
-        if (hasNullPointer(in))
-        {
-            throw new NullPointerException("in has null pointers");
-        }
-        return Arrays.clone(in);
     }
 
     /**

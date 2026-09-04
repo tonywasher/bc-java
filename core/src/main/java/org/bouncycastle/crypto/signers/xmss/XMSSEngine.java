@@ -690,14 +690,6 @@ public final class XMSSEngine
     }
 
     /**
-     * A copy of {@code in}.
-     */
-    public static byte[] cloneArray(byte[] in)
-    {
-        return XMSSUtil.cloneArray(in);
-    }
-
-    /**
      * Return {@code value} once it is confirmed to be {@code size} bytes long, or a freshly
      * allocated all-zero array of that size if {@code value} is null. {@code name} is how the
      * field is named in the message a wrong-sized one is refused with.

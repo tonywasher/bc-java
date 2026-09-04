@@ -3,6 +3,7 @@ package org.bouncycastle.crypto.params;
 import java.io.IOException;
 
 import org.bouncycastle.crypto.signers.xmss.XMSSEngine;
+import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Encodable;
 
 /**
@@ -72,19 +73,19 @@ public final class XMSSPublicKeyParameters
 
         public Builder withRoot(byte[] val)
         {
-            root = XMSSEngine.cloneArray(val);
+            root = Arrays.clone(val);
             return this;
         }
 
         public Builder withPublicSeed(byte[] val)
         {
-            publicSeed = XMSSEngine.cloneArray(val);
+            publicSeed = Arrays.clone(val);
             return this;
         }
 
         public Builder withPublicKey(byte[] val)
         {
-            publicKey = XMSSEngine.cloneArray(val);
+            publicKey = Arrays.clone(val);
             return this;
         }
 
@@ -105,12 +106,12 @@ public final class XMSSPublicKeyParameters
 
     public byte[] getRoot()
     {
-        return XMSSEngine.cloneArray(root);
+        return Arrays.clone(root);
     }
 
     public byte[] getPublicSeed()
     {
-        return XMSSEngine.cloneArray(publicSeed);
+        return Arrays.clone(publicSeed);
     }
 
     public XMSSParameters getParameters()

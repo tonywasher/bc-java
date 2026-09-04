@@ -196,25 +196,25 @@ public final class XMSSMTPrivateKeyParameters
 
         public Builder withSecretKeySeed(byte[] val)
         {
-            secretKeySeed = XMSSEngine.cloneArray(val);
+            secretKeySeed = Arrays.clone(val);
             return this;
         }
 
         public Builder withSecretKeyPRF(byte[] val)
         {
-            secretKeyPRF = XMSSEngine.cloneArray(val);
+            secretKeyPRF = Arrays.clone(val);
             return this;
         }
 
         public Builder withPublicSeed(byte[] val)
         {
-            publicSeed = XMSSEngine.cloneArray(val);
+            publicSeed = Arrays.clone(val);
             return this;
         }
 
         public Builder withRoot(byte[] val)
         {
-            root = XMSSEngine.cloneArray(val);
+            root = Arrays.clone(val);
             return this;
         }
 
@@ -269,7 +269,7 @@ public final class XMSSMTPrivateKeyParameters
 
         public Builder withPrivateKey(byte[] privateKeyVal)
         {
-            privateKey = XMSSEngine.cloneArray(privateKeyVal);
+            privateKey = Arrays.clone(privateKeyVal);
             xmss = params.getXMSSParameters();
             return this;
         }
@@ -352,22 +352,22 @@ public final class XMSSMTPrivateKeyParameters
 
     public byte[] getSecretKeySeed()
     {
-        return XMSSEngine.cloneArray(secretKeySeed);
+        return Arrays.clone(secretKeySeed);
     }
 
     public byte[] getSecretKeyPRF()
     {
-        return XMSSEngine.cloneArray(secretKeyPRF);
+        return Arrays.clone(secretKeyPRF);
     }
 
     public byte[] getPublicSeed()
     {
-        return XMSSEngine.cloneArray(publicSeed);
+        return Arrays.clone(publicSeed);
     }
 
     public byte[] getRoot()
     {
-        return XMSSEngine.cloneArray(root);
+        return Arrays.clone(root);
     }
 
     public BDSStateMap getBDSState()

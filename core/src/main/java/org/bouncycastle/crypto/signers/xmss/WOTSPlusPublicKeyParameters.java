@@ -1,5 +1,7 @@
 package org.bouncycastle.crypto.signers.xmss;
 
+import org.bouncycastle.util.Arrays;
+
 /**
  * WOTS+ public key.
  */
@@ -43,7 +45,7 @@ final class WOTSPlusPublicKeyParameters
 
     public byte[][] toByteArray()
     {
-        return XMSSUtil.cloneArray(publicKey);
+        return Arrays.clone(publicKey);
     }
 
     /**
