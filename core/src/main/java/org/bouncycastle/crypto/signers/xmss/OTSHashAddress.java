@@ -4,6 +4,10 @@ import org.bouncycastle.util.Pack;
 
 /**
  * OTS hash address.
+ * <p>
+ * As with the other two address types, what this is for is producing the encoding a walk then
+ * carries; see {@link XMSSAddress}.
+ * </p>
  */
 final class OTSHashAddress
     extends XMSSAddress
@@ -108,20 +112,5 @@ final class OTSHashAddress
     static int otsAddressOf(byte[] address)
     {
         return Pack.bigEndianToInt(address, OTS_ADDRESS_OFFSET);
-    }
-
-    public int getOTSAddress()
-    {
-        return otsAddress;
-    }
-
-    public int getChainAddress()
-    {
-        return chainAddress;
-    }
-
-    public int getHashAddress()
-    {
-        return hashAddress;
     }
 }

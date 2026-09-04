@@ -4,6 +4,13 @@ import org.bouncycastle.util.Pack;
 
 /**
  * XMSS address.
+ * <p>
+ * An address is built in order to be encoded, and it is the 32 bytes {@link #toByteArray()}
+ * produces that this package hands around and steps - so an address answers nothing about itself
+ * beyond that method, and what a walk needs back off the encoding it was handed it reads from the
+ * bytes: {@link #layerAddressOf(byte[])} and {@link #treeAddressOf(byte[])} here, and
+ * {@link OTSHashAddress#otsAddressOf(byte[])} for the one further word that walk names a leaf by.
+ * </p>
  */
 abstract class XMSSAddress
 {
@@ -103,25 +110,5 @@ abstract class XMSSAddress
     static long treeAddressOf(byte[] address)
     {
         return Pack.bigEndianToLong(address, 4);
-    }
-
-    public final int getLayerAddress()
-    {
-        return layerAddress;
-    }
-
-    public final long getTreeAddress()
-    {
-        return treeAddress;
-    }
-
-    public final int getType()
-    {
-        return type;
-    }
-
-    public final int getKeyAndMask()
-    {
-        return keyAndMask;
     }
 }
