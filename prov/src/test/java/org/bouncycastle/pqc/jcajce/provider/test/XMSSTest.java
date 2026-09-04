@@ -825,6 +825,49 @@ public class XMSSTest
         assertTrue(s.verify(sig));
     }
 
+    /**
+     * equals() answers on the whole key, including the traversal state it is sitting on, and the
+     * fields it looks at before re-encoding anything are a shortcut to that answer rather than a
+     * different one. So: the same key twice is equal, a key round-tripped through its encoding is
+     * equal to what it came from, a key that has signed and moved on is not equal to the key it
+     * was, and two key pairs are not equal to each other at the same index.
+     */
+    public void testXMSSPrivateKeyEquality()
+        throws Exception
+    {
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("XMSS", "BCPQC");
+
+        kpg.initialize(new XMSSParameterSpec(4, XMSSParameterSpec.SHA256), new SecureRandom());
+
+        KeyPair kp = kpg.generateKeyPair();
+        KeyFactory kf = KeyFactory.getInstance("XMSS", "BCPQC");
+
+        // a key of its own, so that signing with kp's does not move this one too
+        PrivateKey atZero = kf.generatePrivate(new PKCS8EncodedKeySpec(kp.getPrivate().getEncoded()));
+
+        assertEquals(atZero, atZero);
+        assertEquals(kp.getPrivate(), atZero);
+        assertEquals(atZero, kf.generatePrivate(new PKCS8EncodedKeySpec(atZero.getEncoded())));
+
+        StateAwareSignature sig =
+            (StateAwareSignature)Signature.getInstance("SHA256withXMSS", "BCPQC");
+
+        sig.initSign(kp.getPrivate());
+        sig.update(msg, 0, msg.length);
+        sig.sign();
+
+        PrivateKey atOne = sig.getUpdatedPrivateKey();
+
+        assertFalse("a key that has signed equals the key it was", atZero.equals(atOne));
+        assertFalse("a key that has signed equals the key it was", atOne.equals(atZero));
+
+        PrivateKey other = kf.generatePrivate(
+            new PKCS8EncodedKeySpec(kpg.generateKeyPair().getPrivate().getEncoded()));
+
+        assertFalse("two key pairs are equal at the same index", atZero.equals(other));
+        assertFalse("two key pairs are equal at the same index", other.equals(atZero));
+    }
+
     public void testKeyExtraction()
         throws Exception
     {
