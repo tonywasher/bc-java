@@ -128,43 +128,4 @@ final class WOTSPlusParameters
     {
         return treeDigest;
     }
-
-    /**
-     * Confirm that {@code value} is the len-by-n array a WOTS+ public key and signature both are,
-     * and return it.
-     * <p>
-     * The classes that carry one of those arrays had a constructor each, checking the same four
-     * things in the same order and differing only in the name in the message - and they had
-     * drifted, one calling a wrong element count a "format" problem where the others called it a
-     * "size" one. Only the name varies now.
-     * </p>
-     *
-     * @param value the array to check.
-     * @param name what to call it in a message: "publicKey" or "signature".
-     * @return value.
-     */
-    byte[][] validateShape(byte[][] value, String name)
-    {
-        if (value == null)
-        {
-            throw new NullPointerException(name + " == null");
-        }
-        if (XMSSUtil.hasNullPointer(value))
-        {
-            throw new NullPointerException(name + " byte array == null");
-        }
-        if (value.length != len)
-        {
-            throw new IllegalArgumentException("wrong " + name + " size");
-        }
-        for (int i = 0; i != value.length; i++)
-        {
-            if (value[i].length != digestSize)
-            {
-                throw new IllegalArgumentException("wrong " + name + " format");
-            }
-        }
-
-        return value;
-    }
 }

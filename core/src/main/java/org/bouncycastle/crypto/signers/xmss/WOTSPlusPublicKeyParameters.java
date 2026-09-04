@@ -26,12 +26,19 @@ final class WOTSPlusPublicKeyParameters
      * {@link #toNodes()} hands the blocks to a walk that only reads them - so the copy this drops
      * was of a len-by-n array no one else could reach. It was made per one-time key, which is per
      * leaf of every tree built: len + 1 arrays a leaf, 68 of them at the SHA-256 parameter sets.
+     * <p>
+     * The shape is the caller's as well, and nothing here measures it. Both build the array as
+     * new byte[params.getLen()][] and fill every entry with what chain() returns, which is a
+     * byte[params.getTreeDigestSize()], from the one WOTSPlusParameters the check that stood here
+     * was handed as well - so it could only compare each of those two values with itself. That is
+     * why it is gone rather than kept as cheap insurance: it read as a guard against a
+     * wrong-shaped key while being unable to answer for one.
      *
      * @param publicKey the len n-byte blocks of the key, which this instance takes over.
      */
-    public WOTSPlusPublicKeyParameters(WOTSPlusParameters params, byte[][] publicKey)
+    public WOTSPlusPublicKeyParameters(byte[][] publicKey)
     {
-        this.publicKey = params.validateShape(publicKey, "publicKey");
+        this.publicKey = publicKey;
     }
 
     public byte[][] toByteArray()

@@ -26,12 +26,21 @@ final class WOTSPlusSignature
      * Nothing escapes that did not before: {@link #toByteArray()} still copies on the way out, and
      * {@link #getBlock(int)} and {@link #encodeTo(byte[], int)} say for themselves that their
      * callers only read. What goes is a copy of a len-by-n array no one else could reach.
+     * <p>
+     * The shape is the caller's as well, and nothing here measures it. sign() builds the array as
+     * new byte[params.getLen()][] and fills every entry with what chain() returns, which is a
+     * byte[params.getTreeDigestSize()], from the WOTSPlusParameters it holds. The other two read
+     * their len and n from an XMSSParameters, whose len is what new WOTSPlusParameters(its tree
+     * digest OID, its tree digest size).getLen() answers - so the check that stood here, against a
+     * WOTSPlusParameters built from that same pair, could only compare each of those two values
+     * with itself. That is why it is gone rather than kept as cheap insurance: it read as a guard
+     * against a wrong-shaped signature while being unable to answer for one.
      *
      * @param signature the len n-byte blocks of the signature, which this instance takes over.
      */
-    public WOTSPlusSignature(WOTSPlusParameters params, byte[][] signature)
+    public WOTSPlusSignature(byte[][] signature)
     {
-        this.signature = params.validateShape(signature, "signature");
+        this.signature = signature;
     }
 
     public byte[][] toByteArray()

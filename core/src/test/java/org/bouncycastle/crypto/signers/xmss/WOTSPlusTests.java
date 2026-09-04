@@ -182,65 +182,6 @@ public class WOTSPlusTests
     }
 
     /**
-     * A WOTS+ public key and signature are the same len-by-n array, and the classes carrying one
-     * had a copy each of the check on that shape. They had drifted, one calling a wrong element
-     * count a "format" problem where the others called it a "size" one, so the check now lives
-     * once in {@link WOTSPlusParameters#validateShape}. Written as a pair of tables so the two
-     * halves have to keep agreeing.
-     */
-    public void testWOTSPlusShapeRejectionsAgree()
-    {
-        WOTSPlusParameters params = new WOTSPlusParameters(NISTObjectIdentifiers.id_sha256);
-        int len = params.getLen();
-        int n = params.getTreeDigestSize();
-
-        byte[][] shortArray = new byte[len - 1][n];
-        byte[][] shortElement = new byte[len][n];
-        byte[][] nullElement = new byte[len][];
-
-        shortElement[len - 1] = new byte[n - 1];
-        nullElement[0] = new byte[n];
-
-        byte[][][] bad = new byte[][][]{null, nullElement, shortArray, shortElement};
-        String[] expected = new String[]{" == null", " byte array == null", " size", " format"};
-
-        for (int i = 0; i != bad.length; i++)
-        {
-            assertEquals("publicKey" + expected[i], rejection(params, bad[i], 0));
-            assertEquals("signature" + expected[i], rejection(params, bad[i], 1));
-        }
-    }
-
-    /**
-     * The message the class at {@code which} rejects {@code value} with, with the leading "wrong "
-     * of the size and format messages dropped so all four read as a suffix of the field's name.
-     */
-    private static String rejection(WOTSPlusParameters params, byte[][] value, int which)
-    {
-        try
-        {
-            if (which == 0)
-            {
-                new WOTSPlusPublicKeyParameters(params, value);
-            }
-            else
-            {
-                new WOTSPlusSignature(params, value);
-            }
-        }
-        catch (NullPointerException e)
-        {
-            return e.getMessage();
-        }
-        catch (IllegalArgumentException e)
-        {
-            return e.getMessage().substring("wrong ".length());
-        }
-
-        return "accepted";
-    }
-
-    /**
      * importKeys is the one place a WOTS+ instance takes key material, and the two things it has
      * to say about a wrong argument are that a wrong length is a wrong length - the message the
      * rest of the package uses for it - and that an absent one is not a field to be filled in.

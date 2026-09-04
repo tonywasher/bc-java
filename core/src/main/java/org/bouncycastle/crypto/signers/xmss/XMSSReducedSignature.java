@@ -39,7 +39,7 @@ class XMSSReducedSignature
                 wotsPlusSignature[i] = Arrays.copyOfRange(reducedSignature, position, position + n);
                 position += n;
             }
-            this.wotsPlusSignature = new WOTSPlusSignature(XMSSEngine.newWOTSPlusParameters(params), wotsPlusSignature);
+            this.wotsPlusSignature = new WOTSPlusSignature(wotsPlusSignature);
 
             List<XMSSNode> nodeList = new ArrayList<XMSSNode>();
             for (int i = 0; i < height; i++)
@@ -59,7 +59,7 @@ class XMSSReducedSignature
             }
             else
             {
-                wotsPlusSignature = new WOTSPlusSignature(XMSSEngine.newWOTSPlusParameters(params), new byte[len][n]);
+                wotsPlusSignature = new WOTSPlusSignature(new byte[len][n]);
             }
             List<XMSSNode> tmpAuthPath = builder.authPath;
             if (tmpAuthPath != null)

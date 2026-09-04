@@ -111,7 +111,7 @@ final class WOTSPlus
             expandSecretKeySeed(i, indexBuffer, startHash);
             signature[i] = chain(startHash, 0, baseWMessage.get(i), address, key, tmpMasked);
         }
-        return new WOTSPlusSignature(params, signature);
+        return new WOTSPlusSignature(signature);
     }
 
     /**
@@ -150,7 +150,7 @@ final class WOTSPlus
             publicKey[i] = chain(signature.getBlock(i), baseWMessage.get(i),
                 WOTSPlusParameters.WINTERNITZ_PARAMETER - 1 - baseWMessage.get(i), address, key, tmpMasked);
         }
-        return new WOTSPlusPublicKeyParameters(params, publicKey);
+        return new WOTSPlusPublicKeyParameters(publicKey);
     }
 
     /**
@@ -207,12 +207,12 @@ final class WOTSPlus
         // it is masked in, where xorTo turns it into the masked value.
         //
         // out is this method's own and is what it returns, one array per call: the caller collects
-        // the len returns in a byte[][] that WOTSPlusSignature and WOTSPlusPublicKeyParameters
-        // clone afterwards, so one shared across a key's chains would leave every entry holding
-        // the last chain's value. Within the chain it is reused - F's result goes into out, which
-        // the next step reads as tmp and folds into tmpMasked before F writes out again, so out's
-        // previous contents are dead by the time they are overwritten, and that reuse rests on
-        // this rather than on how coreDigest orders its own work.
+        // the len returns in a byte[][] that becomes a WOTSPlusSignature or a
+        // WOTSPlusPublicKeyParameters as it stands, so one shared across a key's chains would
+        // leave every entry holding the last chain's value. Within the chain it is reused - F's
+        // result goes into out, which the next step reads as tmp and folds into tmpMasked before F
+        // writes out again, so out's previous contents are dead by the time they are overwritten,
+        // and that reuse rests on this rather than on how coreDigest orders its own work.
         //
         // A zero-step chain copies startHash into out rather than handing startHash itself back.
         // That is what lets a caller reuse one startHash buffer across the len chains as well: the
@@ -422,6 +422,6 @@ final class WOTSPlus
             expandSecretKeySeed(i, indexBuffer, startHash);
             publicKey[i] = chain(startHash, 0, WOTSPlusParameters.WINTERNITZ_PARAMETER - 1, address, key, tmpMasked);
         }
-        return new WOTSPlusPublicKeyParameters(params, publicKey);
+        return new WOTSPlusPublicKeyParameters(publicKey);
     }
 }
