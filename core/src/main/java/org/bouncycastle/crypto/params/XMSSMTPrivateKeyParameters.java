@@ -7,6 +7,7 @@ import org.bouncycastle.crypto.signers.xmss.XMSSEngine;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Encodable;
 import org.bouncycastle.util.Exceptions;
+import org.bouncycastle.util.Pack;
 
 /**
  * XMSS^MT Private Key.
@@ -301,9 +302,8 @@ public final class XMSSMTPrivateKeyParameters
             // stored key that disagrees with itself is refused on the way back in, so say so here
             // rather than persisting one that cannot be read
             bdsState.validateIndex(params, index);
-            /* copy index */
-            byte[] indexBytes = XMSSEngine.toBytesBigEndian(index, indexSize);
-            System.arraycopy(indexBytes, 0, out, position, indexBytes.length);
+            /* copy index - indexSize is 1..8 for every height the parameters admit (2..62) */
+            Pack.longToBigEndian_Low(index, out, position, indexSize);
             position += indexSize;
             /* copy secretKeySeed */
             System.arraycopy(secretKeySeed, 0, out, position, secretKeySeed.length);

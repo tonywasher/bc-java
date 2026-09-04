@@ -6,6 +6,7 @@ import java.util.List;
 import org.bouncycastle.crypto.params.XMSSMTParameters;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Encodable;
+import org.bouncycastle.util.Pack;
 
 /**
  * XMSS^MT Signature.
@@ -121,9 +122,8 @@ final class XMSSMTSignature
         int totalSize = indexSize + n + reducedSignaturesSizeTotal;
         byte[] out = new byte[totalSize];
         int position = 0;
-        /* copy index */
-        byte[] indexBytes = XMSSUtil.toBytesBigEndian(index, indexSize);
-        System.arraycopy(indexBytes, 0, out, position, indexBytes.length);
+        /* copy index - indexSize is 1..8 for every height the parameters admit (2..62) */
+        Pack.longToBigEndian_Low(index, out, position, indexSize);
         position += indexSize;
         /* copy random */
         System.arraycopy(random, 0, out, position, random.length);
@@ -131,8 +131,7 @@ final class XMSSMTSignature
         /* copy reduced signatures */
         for (XMSSReducedSignature reducedSignature : reducedSignatures)
         {
-            byte[] signature = reducedSignature.toByteArray();
-            System.arraycopy(signature, 0, out, position, signature.length);
+            reducedSignature.encodeTo(out, position);
             position += reducedSignatureSizeSingle;
         }
         return out;

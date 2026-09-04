@@ -121,24 +121,33 @@ class XMSSReducedSignature
         int n = params.getTreeDigestSize();
         int signatureSize = params.getLen() * n;
         int authPathSize = params.getHeight() * n;
-        int totalSize = signatureSize + authPathSize;
-        byte[] out = new byte[totalSize];
-        int position = 0;
+        byte[] out = new byte[signatureSize + authPathSize];
+        encodeTo(out, 0);
+        return out;
+    }
+
+    /**
+     * Write signature || authentication path into {@code out} at {@code position}.
+     * <p>
+     * The encodings that carry one of these are filling a buffer of their own - XMSSSignature puts
+     * index || random in front of it, XMSSMTSignature lays one down per layer - so writing into the
+     * caller's buffer is what keeps a per-signature array out of the encoding: XMSSMTSignature had
+     * been building one per layer and copying it in, and both had been taking the defensive copies
+     * of the WOTS+ blocks and of every authentication path node on the way past.
+     * </p>
+     */
+    void encodeTo(byte[] out, int position)
+    {
+        int n = params.getTreeDigestSize();
         /* copy signature */
-        byte[][] signature = this.wotsPlusSignature.toByteArray();
-        for (int i = 0; i < signature.length; i++)
-        {
-            System.arraycopy(signature[i], 0, out, position, signature[i].length);
-            position += n;
-        }
+        wotsPlusSignature.encodeTo(out, position);
+        position += params.getLen() * n;
         /* copy authentication path */
         for (int i = 0; i < authPath.size(); i++)
         {
-            byte[] value = authPath.get(i).getValue();
-            System.arraycopy(value, 0, out, position, value.length);
+            authPath.get(i).encodeTo(out, position);
             position += n;
         }
-        return out;
     }
 
     public XMSSParameters getParams()

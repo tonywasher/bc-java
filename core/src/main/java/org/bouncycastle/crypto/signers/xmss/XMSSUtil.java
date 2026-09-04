@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.bouncycastle.util.Arrays;
+import org.bouncycastle.util.Pack;
 
 /**
  * Utils for XMSS implementation.
@@ -36,20 +37,23 @@ class XMSSUtil
     }
 
     /**
-     * Convert int/long to n-byte array.
+     * Convert int/long to n-byte array - RFC 8391 sec. 2.4's toByte(x, y).
+     * <p>
+     * {@code value} is taken as unsigned, so a {@code sizeInByte} under 8 keeps its low
+     * {@code sizeInByte} bytes and one of 8 or more left-pads with zeros. The write is therefore
+     * the low min({@code sizeInByte}, 8) bytes placed at the end of the array, which is what
+     * {@link Pack#longToBigEndian_Low(long, byte[], int, int)} does; that method is defined for a
+     * length of 1..8 only, hence the min.
      *
      * @param value      int/long value.
-     * @param sizeInByte Size of byte array in byte.
+     * @param sizeInByte Size of byte array in byte, at least 1.
      * @return int/long as big-endian byte array of size {@code sizeInByte}.
      */
     public static byte[] toBytesBigEndian(long value, int sizeInByte)
     {
         byte[] out = new byte[sizeInByte];
-        for (int i = (sizeInByte - 1); i >= 0; i--)
-        {
-            out[i] = (byte)value;
-            value >>>= 8;
-        }
+        int len = Math.min(sizeInByte, 8);
+        Pack.longToBigEndian_Low(value, out, sizeInByte - len, len);
         return out;
     }
 

@@ -108,20 +108,8 @@ final class XMSSSignature
         /* copy random */
         System.arraycopy(random, 0, out, position, random.length);
         position += n;
-        /* copy signature */
-        byte[][] signature = getWOTSPlusSignature().toByteArray();
-        for (int i = 0; i < signature.length; i++)
-        {
-            System.arraycopy(signature[i], 0, out, position, signature[i].length);
-            position += n;
-        }
-        /* copy authentication path */
-        for (int i = 0; i < getAuthPath().size(); i++)
-        {
-            byte[] value = getAuthPath().get(i).getValue();
-            System.arraycopy(value, 0, out, position, value.length);
-            position += n;
-        }
+        /* copy signature || authentication path */
+        encodeTo(out, position);
         return out;
     }
 

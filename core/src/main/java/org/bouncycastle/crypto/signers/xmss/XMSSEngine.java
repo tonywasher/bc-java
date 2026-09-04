@@ -661,14 +661,6 @@ public final class XMSSEngine
     }
 
     /**
-     * {@code value} as a big-endian byte string of {@code sizeInByte} bytes.
-     */
-    public static byte[] toBytesBigEndian(long value, int sizeInByte)
-    {
-        return XMSSUtil.toBytesBigEndian(value, sizeInByte);
-    }
-
-    /**
      * The {@code size}-byte big-endian value at {@code offset}.
      */
     public static long bytesToXBigEndian(byte[] in, int offset, int size)

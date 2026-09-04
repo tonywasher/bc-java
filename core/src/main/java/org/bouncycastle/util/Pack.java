@@ -204,6 +204,28 @@ public abstract class Pack
         }
     }
 
+    /**
+     * Writes the most significant <code>len</code> bytes of <code>n</code> to <code>bs</code> at
+     * <code>off</code>, in big-endian order: a <code>len</code> of 3 writes the three bytes
+     * {@link #longToBigEndian(long, byte[], int)} would put at <code>bs[off]</code> to
+     * <code>bs[off + 2]</code>, and drops the other five.
+     * <p>
+     * It is the write side of {@link #bigEndianToLong_High(byte[], int, int)}. The pair is shaped
+     * for the short final block of a big-endian sponge, where the bytes the block has occupy the
+     * top of the rate word and the remainder of that word is padding - so both conversions work
+     * against the high end of the word rather than the low one. The callers are the Ascon v1.2
+     * classes ({@link org.bouncycastle.crypto.engines.AsconEngine},
+     * {@link org.bouncycastle.crypto.digests.AsconDigest},
+     * {@link org.bouncycastle.crypto.digests.AsconXof}), all three now deprecated: final Ascon is
+     * little-endian and goes through {@link #longToLittleEndian_Low(long, byte[], int, int)}.
+     * <p>
+     * <code>len</code> must be 1..8, and nothing enforces it. The first store sits ahead of the
+     * loop, so a <code>len</code> of 0 writes one byte anyway - <code>n</code>'s top one - and
+     * throws <code>ArrayIndexOutOfBoundsException</code> where the array has no room for it; and
+     * because Java takes a shift distance mod 64, a <code>len</code> above 8 wraps round and
+     * repeats <code>n</code>'s bytes rather than running to zero. Callers whose length can reach 0
+     * guard the call themselves.
+     */
     public static void longToBigEndian_High(long n, byte[] bs, int off, int len)
     {
 //        assert 1 <= len && len <= 8;
@@ -217,6 +239,22 @@ public abstract class Pack
         }
     }
 
+    /**
+     * Writes the least significant <code>len</code> bytes of <code>n</code> to <code>bs</code> at
+     * <code>off</code>, in big-endian order: a <code>len</code> of 3 writes the three bytes
+     * {@link #longToBigEndian(long, byte[], int)} would put at <code>bs[off + 5]</code> to
+     * <code>bs[off + 7]</code>, and drops the other five.
+     * <p>
+     * It is {@link #longToBigEndian_High(long, byte[], int, int)} applied to <code>n</code>
+     * shifted up past the bytes being dropped, the write side of
+     * {@link #bigEndianToLong_Low(byte[], int, int)}, and it carries the same unenforced 1..8
+     * bound for the same reason. It is the low-end counterpart of the _High pair the Ascon v1.2
+     * classes use; its callers here are the XMSS ones building RFC 8391's toByte(x, y), which pads
+     * left of the eight bytes rather than absorbing into the top of a word, so it wants the low end
+     * - {@code XMSSUtil.toBytesBigEndian}, whose size is a caller's argument and so takes a min() to
+     * stay inside the bound, and the index fields of {@code XMSSMTPrivateKeyParameters} and
+     * {@code XMSSMTSignature}, whose sizes are inside it already.
+     */
     public static void longToBigEndian_Low(long n, byte[] bs, int off, int len)
     {
         longToBigEndian_High(n << ((8 - len) << 3), bs, off, len);
