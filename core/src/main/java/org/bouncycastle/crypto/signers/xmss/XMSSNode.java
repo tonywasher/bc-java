@@ -65,19 +65,24 @@ final class XMSSNode
     }
 
     /**
-     * XOR the first {@code length} bytes of this node's value with {@code bitmask} into
-     * {@code out} at {@code position}. randomizeHash() masks a pair of nodes into one 2n-byte
-     * buffer this way and only reads them to do it, so masking straight from the value - rather
-     * than through the defensive copy {@link #getValue()} makes - saves two clones per interior
-     * node of every tree walked, and lets nothing escape either.
+     * XOR {@code length} bytes of this node's value into {@code out} at {@code position}, over the
+     * bitmask the caller has already put there. randomizeHash() masks a pair of nodes into one
+     * 2n-byte buffer this way and only reads them to do it, so masking straight from the value -
+     * rather than through the defensive copy {@link #getValue()} makes - saves two clones per
+     * interior node of every tree walked, and lets nothing escape either.
+     * <p>
+     * The bitmask is read out of the destination rather than from an array of its own because
+     * that is where randomizeHash produces it, PRF having written it straight there; the form this
+     * replaces held the two apart, xor'ing the value against a separate bitmask into a third
+     * array, and had no other caller to keep it for.
      * <p>
      * The length is the caller's n rather than this value's own, so a node that is somehow not n
      * bytes still fails here the way it did when randomizeHash passed n to Bytes.xor itself,
-     * instead of quietly masking fewer bytes and leaving the rest of the buffer as it found it.
+     * instead of masking fewer bytes and leaving the rest of the buffer holding the raw bitmask.
      */
-    void maskTo(int length, byte[] bitmask, byte[] out, int position)
+    void maskInto(int length, byte[] out, int position)
     {
-        Bytes.xor(length, value, bitmask, out, position);
+        Bytes.xorTo(length, value, 0, out, position);
     }
 
     /**

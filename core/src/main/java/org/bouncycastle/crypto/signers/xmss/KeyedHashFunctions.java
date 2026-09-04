@@ -22,14 +22,19 @@ import org.bouncycastle.crypto.Xof;
  * bytes. A new call site has to keep that true: a wrong length is not rejected here, it silently
  * hashes to something else.
  * <p>
- * F and PRF each also come in a form that writes into an array the caller owns rather than
- * allocating one, for the chain walk of {@link WOTSPlus} - an h=10 key generation takes a million
- * chain steps, and each of them produces three n-byte results it reads once and drops. Those forms
- * write digestSize bytes from offset 0 and take it, in the same way as everything above, that the
- * buffer they are given holds at least that many; a shorter one fails inside the digest's own
- * doFinal rather than here, which is at least loud. They are not a second implementation of
- * anything: the allocating form is now that one into an array it has just made, so what gets hashed
- * cannot depend on which of the two a call site picked.
+ * Each of them comes in the form its callers want rather than in both: F and H write into an array
+ * the caller owns, PRF does either, H_msg only allocates. That follows the tree walk - an h=10 key
+ * generation takes 1029120 WOTS+ chain steps and 68607 interior nodes, and every F, H and bitmask
+ * on those two paths is read once into a buffer that already exists, while the PRF results that
+ * are not - a one-time key's seed, a chain's starting secret key, a signature's randomness - are
+ * each somebody's return value. A form nothing calls is not kept for symmetry.
+ * <p>
+ * The buffer forms write digestSize bytes at the offset they are given, and take it, in the same
+ * way as everything above, that the buffer holds that many from there; a short one fails inside
+ * the digest's own doFinal or the arraycopy rather than here, which is at least loud. They are not
+ * a second implementation of anything: coreDigest's body is the buffer form, and the allocating
+ * one is that form into an array it has just made, so what gets hashed cannot depend on which of
+ * the two a call site picked.
  * <p>
  * coreDigest also takes it that digestSize is at most the underlying digest's own output size, which
  * likewise nothing checks - the admissible (digest, n) pairs are fixed by {@link WOTSPlusOid}, and
@@ -79,11 +84,11 @@ final class KeyedHashFunctions
     private byte[] coreDigest(int fixedValue, byte[] key, byte[] index)
     {
         byte[] out = new byte[digestSize];
-        coreDigest(fixedValue, key, index, out);
+        coreDigest(fixedValue, key, index, out, 0);
         return out;
     }
 
-    private void coreDigest(int fixedValue, byte[] key, byte[] index, byte[] out)
+    private void coreDigest(int fixedValue, byte[] key, byte[] index, byte[] out, int outOff)
     {
         /* fill first n byte of out buffer */
         digest.update(TO_BYTE[fixedValue], MAX_TREE_DIGEST_SIZE - digestSize, digestSize);
@@ -94,33 +99,28 @@ final class KeyedHashFunctions
 
         if (digest instanceof Xof)
         {
-            ((Xof)digest).doFinal(out, 0, digestSize);
+            ((Xof)digest).doFinal(out, outOff, digestSize);
         }
         else if (digestSize < digest.getDigestSize())
         {
             byte[] full = new byte[digest.getDigestSize()];
             digest.doFinal(full, 0);
-            System.arraycopy(full, 0, out, 0, digestSize);
+            System.arraycopy(full, 0, out, outOff, digestSize);
         }
         else
         {
-            digest.doFinal(out, 0);
+            digest.doFinal(out, outOff);
         }
-    }
-
-    byte[] F(byte[] key, byte[] in)
-    {
-        return coreDigest(0, key, in);
     }
 
     void F(byte[] key, byte[] in, byte[] out)
     {
-        coreDigest(0, key, in, out);
+        coreDigest(0, key, in, out, 0);
     }
 
-    byte[] H(byte[] key, byte[] in)
+    void H(byte[] key, byte[] in, byte[] out)
     {
-        return coreDigest(1, key, in);
+        coreDigest(1, key, in, out, 0);
     }
 
     byte[] HMsg(byte[] key, byte[] in)
@@ -135,6 +135,11 @@ final class KeyedHashFunctions
 
     void PRF(byte[] key, byte[] address, byte[] out)
     {
-        coreDigest(3, key, address, out);
+        coreDigest(3, key, address, out, 0);
+    }
+
+    void PRF(byte[] key, byte[] address, byte[] out, int outOff)
+    {
+        coreDigest(3, key, address, out, outOff);
     }
 }

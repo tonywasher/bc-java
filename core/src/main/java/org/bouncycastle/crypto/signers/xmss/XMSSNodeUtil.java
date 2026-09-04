@@ -1,5 +1,7 @@
 package org.bouncycastle.crypto.signers.xmss;
 
+import org.bouncycastle.util.Pack;
+
 class XMSSNodeUtil
 {
     /**
@@ -65,21 +67,41 @@ class XMSSNodeUtil
             throw new IllegalStateException("height of both nodes must be equal");
         }
         byte[] publicSeed = wotsPlus.getPublicSeed();
-
-        address = withKeyAndMask(address, 0);
-        byte[] key = wotsPlus.getKhf().PRF(publicSeed, address.toByteArray());
-
-        address = withKeyAndMask(address, 1);
-        byte[] bitmask0 = wotsPlus.getKhf().PRF(publicSeed, address.toByteArray());
-
-        address = withKeyAndMask(address, 2);
-        byte[] bitmask1 = wotsPlus.getKhf().PRF(publicSeed, address.toByteArray());
-
+        KeyedHashFunctions khf = wotsPlus.getKhf();
         int n = wotsPlus.getParams().getTreeDigestSize();
+
+        // The three PRFs differ in one word of the address, so they run over one encoding of it
+        // taken once with that word written in, the way WOTSPlus.chain steps its two; the offset
+        // is named on the class that lays the encoding out rather than copied here.
+        //
+        // This is where withKeyAndMask() was, and what it did with an address that was neither an
+        // LTreeAddress nor a HashTreeAddress was return it unchanged - leaving key-and-mask at
+        // whatever it already held, so the three PRFs would be three of the same hash. Writing the
+        // word sets it for every address type. Nothing changes today, no caller passing anything
+        // else - lTree an LTreeAddress, BDS, BDSTreeHash and XMSSVerifierUtil a HashTreeAddress -
+        // but the rule is now the one RFC 8391 sec. 4.1.5 states rather than one about subtypes.
+        //
+        // The two bitmasks are produced straight into the 2n-byte buffer they are masked in, where
+        // maskInto turns each half into the masked value. Only the key needs an array of its own,
+        // being the one of the three that H reads as a key rather than as the data it hashes.
+        byte[] addressBytes = address.toByteArray();
+        byte[] key = new byte[n];
         byte[] tmpMask = new byte[2 * n];
-        left.maskTo(n, bitmask0, tmpMask, 0);
-        right.maskTo(n, bitmask1, tmpMask, n);
-        byte[] out = wotsPlus.getKhf().H(key, tmpMask);
+
+        Pack.intToBigEndian(0, addressBytes, XMSSAddress.KEY_AND_MASK_OFFSET);
+        khf.PRF(publicSeed, addressBytes, key);
+
+        Pack.intToBigEndian(1, addressBytes, XMSSAddress.KEY_AND_MASK_OFFSET);
+        khf.PRF(publicSeed, addressBytes, tmpMask, 0);
+
+        Pack.intToBigEndian(2, addressBytes, XMSSAddress.KEY_AND_MASK_OFFSET);
+        khf.PRF(publicSeed, addressBytes, tmpMask, n);
+
+        left.maskInto(n, tmpMask, 0);
+        right.maskInto(n, tmpMask, n);
+
+        byte[] out = new byte[n];
+        khf.H(key, tmpMask, out);
         return new XMSSNode(left.getHeight(), out);
     }
 
@@ -173,35 +195,5 @@ class XMSSNodeUtil
             .withLayerAddress(address.getLayerAddress()).withTreeAddress(address.getTreeAddress())
             .withLTreeAddress(address.getLTreeAddress()).withTreeHeight(address.getTreeHeight())
             .withTreeIndex(treeIndex).withKeyAndMask(address.getKeyAndMask()).build();
-    }
-
-    /**
-     * The given address with its key-and-mask replaced and every other field carried over, as
-     * randomizeHash() needs for the three PRF calls - key, then the two bitmasks - it makes per
-     * node. Only the two address types that reach a tree hash are rebuilt; any other type is
-     * returned unchanged, exactly as the code this replaces left it.
-     *
-     * @param address    Address to copy.
-     * @param keyAndMask Key and mask to set.
-     * @return address with the given key and mask.
-     */
-    private static XMSSAddress withKeyAndMask(XMSSAddress address, int keyAndMask)
-    {
-        if (address instanceof LTreeAddress)
-        {
-            LTreeAddress tmpAddress = (LTreeAddress)address;
-            return new LTreeAddress.Builder().withLayerAddress(tmpAddress.getLayerAddress())
-                .withTreeAddress(tmpAddress.getTreeAddress()).withLTreeAddress(tmpAddress.getLTreeAddress())
-                .withTreeHeight(tmpAddress.getTreeHeight()).withTreeIndex(tmpAddress.getTreeIndex())
-                .withKeyAndMask(keyAndMask).build();
-        }
-        if (address instanceof HashTreeAddress)
-        {
-            HashTreeAddress tmpAddress = (HashTreeAddress)address;
-            return new HashTreeAddress.Builder().withLayerAddress(tmpAddress.getLayerAddress())
-                .withTreeAddress(tmpAddress.getTreeAddress()).withTreeHeight(tmpAddress.getTreeHeight())
-                .withTreeIndex(tmpAddress.getTreeIndex()).withKeyAndMask(keyAndMask).build();
-        }
-        return address;
     }
 }
