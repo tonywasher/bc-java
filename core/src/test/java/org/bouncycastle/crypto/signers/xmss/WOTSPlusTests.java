@@ -22,6 +22,26 @@ public class WOTSPlusTests
         return new WOTSPlus(new WOTSPlusParameters(NISTObjectIdentifiers.id_sha256, N));
     }
 
+    /**
+     * A copy of {@code key}'s len blocks. {@link WOTSPlusPublicKeyParameters} hands them out only
+     * as {@link XMSSNode}s, which hold the blocks themselves rather than copies of them, so the
+     * copy is made here - and through encodeTo() rather than getValue(), so that it stays a copy
+     * whatever getValue() is later decided to hand back. Two of the tests below snapshot a key and
+     * then compare it against itself after something has run, and a snapshot that aliases the key
+     * asserts nothing at all.
+     */
+    private static byte[][] blocksOf(WOTSPlusPublicKeyParameters key)
+    {
+        XMSSNode[] nodes = key.toNodes();
+        byte[][] blocks = new byte[nodes.length][];
+        for (int i = 0; i != nodes.length; i++)
+        {
+            blocks[i] = new byte[nodes[i].getValueLength()];
+            nodes[i].encodeTo(blocks[i], 0);
+        }
+        return blocks;
+    }
+
     public void testPublicKeyFromSignatureMatchesSigner()
     {
         SecureRandom random = new SecureRandom();
@@ -49,7 +69,7 @@ public class WOTSPlusTests
         // byte[][] overload, so it binds to areEqual(Object[], Object[]) and compares the rows by
         // reference - which makes the assertion below trivially true whatever the keys are
         assertTrue("public key recovered from signature does not match signer",
-            XMSSUtil.areEqual(expected.toByteArray(), recovered.toByteArray()));
+            XMSSUtil.areEqual(blocksOf(expected), blocksOf(recovered)));
     }
 
     public void testPublicKeyFromSignatureDiffersForOtherDigest()
@@ -75,7 +95,7 @@ public class WOTSPlusTests
             wotsPlus.getPublicKeyFromSignature(otherDigest, signature, otsHashAddress);
 
         assertFalse("a signature verified against the wrong digest",
-            XMSSUtil.areEqual(expected.toByteArray(), recovered.toByteArray()));
+            XMSSUtil.areEqual(blocksOf(expected), blocksOf(recovered)));
     }
 
     /**
@@ -97,13 +117,13 @@ public class WOTSPlusTests
 
         OTSHashAddress otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder().withOTSAddress(3).build();
         WOTSPlusPublicKeyParameters publicKey = wotsPlus.getPublicKey(otsHashAddress);
-        byte[][] before = publicKey.toByteArray();
+        byte[][] before = blocksOf(publicKey);
 
         byte[] lTreeAddress = new LTreeAddress.Builder().withLTreeAddress(3).build().toByteArray();
         XMSSNodeUtil.lTree(wotsPlus, publicKey, lTreeAddress, new byte[N], new byte[2 * N]);
 
         assertTrue("compressing a public key changed the key",
-            XMSSUtil.areEqual(before, publicKey.toByteArray()));
+            XMSSUtil.areEqual(before, blocksOf(publicKey)));
     }
 
     /**
@@ -143,14 +163,14 @@ public class WOTSPlusTests
 
         WOTSPlusPublicKeyParameters recovered =
             wotsPlus.getPublicKeyFromSignature(messageDigest, signature, otsHashAddress);
-        byte[][] before = recovered.toByteArray();
+        byte[][] before = blocksOf(recovered);
         for (int i = 0; i != len; i++)
         {
             signature[i][0] ^= 0x01;
         }
 
         assertTrue("a recovered public key shares storage with the signature it came from",
-            XMSSUtil.areEqual(before, recovered.toByteArray()));
+            XMSSUtil.areEqual(before, blocksOf(recovered)));
     }
 
     /**

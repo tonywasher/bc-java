@@ -1,7 +1,5 @@
 package org.bouncycastle.crypto.signers.xmss;
 
-import org.bouncycastle.util.Arrays;
-
 /**
  * WOTS+ public key.
  */
@@ -24,10 +22,10 @@ final class WOTSPlusPublicKeyParameters
      * signature's own blocks, so without that copy a recovered key would share storage with the
      * signature it was recovered from.
      * <p>
-     * Nothing escapes that did not before. {@link #toByteArray()} still copies on the way out, and
-     * {@link #toNodes()} hands the blocks to a walk that only reads them - so the copy this drops
-     * was of a len-by-n array no one else could reach. It was made per one-time key, which is per
-     * leaf of every tree built: len + 1 arrays a leaf, 68 of them at the SHA-256 parameter sets.
+     * Nothing escapes either. {@link #toNodes()} is the only way the blocks leave this class and
+     * it hands them to a walk that only reads them - so the copy this drops was of a len-by-n
+     * array no one else could reach. It was made per one-time key, which is per leaf of every tree
+     * built: len + 1 arrays a leaf, 68 of them at the SHA-256 parameter sets.
      * <p>
      * The shape is the caller's as well, and nothing here measures it. Both build the array as
      * new byte[params.getLen()][] and fill every entry with what chain() returns, which is a
@@ -43,18 +41,13 @@ final class WOTSPlusPublicKeyParameters
         this.publicKey = publicKey;
     }
 
-    public byte[][] toByteArray()
-    {
-        return Arrays.clone(publicKey);
-    }
-
     /**
      * This key's blocks, each wrapped as a height-0 {@link XMSSNode}, as the L-tree walk in
-     * {@link XMSSNodeUtil#lTree} starts from. A node only ever copies its value outwards -
-     * getValue() clones it and encodeTo() writes it elsewhere - so wrapping the blocks themselves,
-     * rather than the deep copy {@link #toByteArray()} makes, lets nothing escape that did not
-     * before, and saves len + 1 arrays per one-time key compressed. That is one key per leaf of
-     * every tree built, so at the SHA-256 parameter sets it is 68 arrays a leaf.
+     * {@link XMSSNodeUtil#lTree} starts from, and the only way they leave this class. A node only
+     * ever copies its value outwards - getValue() clones it and encodeTo() writes it elsewhere -
+     * so wrapping the blocks themselves, rather than a deep copy of them, lets nothing escape and
+     * saves len + 1 arrays per one-time key compressed. That is one key per leaf of every tree
+     * built, so at the SHA-256 parameter sets it is 68 arrays a leaf.
      */
     XMSSNode[] toNodes()
     {
