@@ -12,6 +12,13 @@ import org.bouncycastle.util.Pack;
 final class WOTSPlus
 {
     /**
+     * The length RFC 8391 sec. 4.1.2 fixes PRF's second argument at - the 32 bytes an
+     * {@link XMSSAddress} encodes to, and the width {@link #expandSecretKeySeed} writes an index
+     * in.
+     */
+    private static final int PRF_INDEX_SIZE = 32;
+
+    /**
      * WOTS+ parameters.
      */
     private final WOTSPlusParameters params;
@@ -85,14 +92,24 @@ final class WOTSPlus
         List<Integer> baseWMessage = baseWMessageWithChecksum(messageDigest);
 
         /* create signature */
+        int n = params.getTreeDigestSize();
         byte[][] signature = new byte[params.getLen()][];
         // one encoding for the len chains, the loop stepping the one word they differ in; chain()
         // writes the other two as it goes and says there why that does not carry between chains.
         byte[] address = otsHashAddress.toByteArray();
+        // and one set of working buffers for them, on the same terms: the index PRF is applied to,
+        // the chain's starting secret key, and the pair chain() steps over. Every one of them is
+        // written before it is read on each chain, and none of them is what chain() returns - see
+        // there and expandSecretKeySeed below.
+        byte[] indexBuffer = new byte[PRF_INDEX_SIZE];
+        byte[] startHash = new byte[n];
+        byte[] key = new byte[n];
+        byte[] tmpMasked = new byte[n];
         for (int i = 0; i < params.getLen(); i++)
         {
             Pack.intToBigEndian(i, address, OTSHashAddress.CHAIN_ADDRESS_OFFSET);
-            signature[i] = chain(expandSecretKeySeed(i), 0, baseWMessage.get(i), address);
+            expandSecretKeySeed(i, indexBuffer, startHash);
+            signature[i] = chain(startHash, 0, baseWMessage.get(i), address, key, tmpMasked);
         }
         return new WOTSPlusSignature(params, signature);
     }
@@ -116,18 +133,22 @@ final class WOTSPlus
         // the loop only to index one out, which made a verification len^2 block copies where it
         // needs none: 4489 for the SHA-256 parameter sets, 17161 for SHA-512, and that again for
         // every layer of a hypertree on the XMSS^MT side. Reading them in place is what getBlock()
-        // is for, and it escapes nothing chain() and WOTSPlusPublicKeyParameters did not already
-        // settle between them - see that method.
+        // is for, and nothing escapes by it: chain() only reads the starting value it is given and
+        // returns an array of its own however many steps it takes - see that method.
         //
+        int n = params.getTreeDigestSize();
         byte[][] publicKey = new byte[params.getLen()][];
         // one encoding for the len chains, the loop stepping the one word they differ in; chain()
         // writes the other two as it goes and says there why that does not carry between chains.
         byte[] address = otsHashAddress.toByteArray();
+        // and one pair of working buffers for chain() to step over, likewise for all len of them.
+        byte[] key = new byte[n];
+        byte[] tmpMasked = new byte[n];
         for (int i = 0; i < params.getLen(); i++)
         {
             Pack.intToBigEndian(i, address, OTSHashAddress.CHAIN_ADDRESS_OFFSET);
             publicKey[i] = chain(signature.getBlock(i), baseWMessage.get(i),
-                WOTSPlusParameters.WINTERNITZ_PARAMETER - 1 - baseWMessage.get(i), address);
+                WOTSPlusParameters.WINTERNITZ_PARAMETER - 1 - baseWMessage.get(i), address, key, tmpMasked);
         }
         return new WOTSPlusPublicKeyParameters(params, publicKey);
     }
@@ -135,16 +156,21 @@ final class WOTSPlus
     /**
      * Computes an iteration of F on an n-byte input using outputs of PRF.
      *
-     * @param startHash      Starting point.
+     * @param startHash      Starting point. Read and never written, and never handed back, so the
+     *                       caller may reuse one buffer for it across the chains of a key.
      * @param startIndex     Start index.
      * @param steps          Steps to take.
      * @param address        the 32-byte encoding of this chain's OTS hash address. The caller owns
      *                       it and has set the chain address word; this method writes the hash
      *                       address and key-and-mask words of it as it steps.
-     * @return Value obtained by iterating F for steps times on input startHash,
-     * using the outputs of PRF.
+     * @param key            an n-byte working buffer the caller owns. Written and read within a
+     *                       step, meaningless between calls.
+     * @param tmpMasked      a second n-byte working buffer on the same terms. It must be neither
+     *                       {@code key} nor {@code startHash}.
+     * @return a freshly allocated n-byte array holding the value obtained by iterating F for steps
+     * times on input startHash, using the outputs of PRF.
      */
-    private byte[] chain(byte[] startHash, int startIndex, int steps, byte[] address)
+    private byte[] chain(byte[] startHash, int startIndex, int steps, byte[] address, byte[] key, byte[] tmpMasked)
     {
         int n = params.getTreeDigestSize();
         if (startHash.length != n)
@@ -154,11 +180,6 @@ final class WOTSPlus
         if ((startIndex + steps) > WOTSPlusParameters.WINTERNITZ_PARAMETER - 1)
         {
             throw new IllegalArgumentException("max chain length must not be greater than w");
-        }
-
-        if (steps == 0)
-        {
-            return startHash;
         }
 
         //
@@ -177,19 +198,36 @@ final class WOTSPlus
         // back, which is the same sequence of hash addresses - startIndex, then upwards - in the
         // same order.
         //
-        // The three n-byte results a step produces are written into buffers that last the whole
-        // chain rather than allocated per step. The bitmask is produced straight into the array it
-        // is masked in, where xorTo turns it into the masked value; F's result goes into out, which
-        // the next step reads as tmp and folds into tmpMasked before F writes out again - so out's
-        // previous contents are dead by the time they are overwritten, and the reuse rests on that
-        // rather than on how coreDigest orders its own work. out does have to stay one array per
-        // call: the caller collects the len returns in a byte[][] that WOTSPlusSignature and
-        // WOTSPlusPublicKeyParameters clone afterwards, so one shared across a key's chains would
-        // leave every entry holding the last chain's value.
+        // Of the three n-byte results a step produces, two are working values and one is the
+        // answer. The two are the caller's arrays, one pair for the len chains of a key rather
+        // than a pair per chain, because nothing in either survives the step that writes it: PRF
+        // fills all n bytes of key, and fills all n of tmpMasked before xorTo folds tmp into it,
+        // so whatever the previous step - or the previous chain, or the previous call - left in
+        // them is gone before it is read. The bitmask is thereby produced straight into the array
+        // it is masked in, where xorTo turns it into the masked value.
         //
-        byte[] key = new byte[n];
-        byte[] tmpMasked = new byte[n];
+        // out is this method's own and is what it returns, one array per call: the caller collects
+        // the len returns in a byte[][] that WOTSPlusSignature and WOTSPlusPublicKeyParameters
+        // clone afterwards, so one shared across a key's chains would leave every entry holding
+        // the last chain's value. Within the chain it is reused - F's result goes into out, which
+        // the next step reads as tmp and folds into tmpMasked before F writes out again, so out's
+        // previous contents are dead by the time they are overwritten, and that reuse rests on
+        // this rather than on how coreDigest orders its own work.
+        //
+        // A zero-step chain copies startHash into out rather than handing startHash itself back.
+        // That is what lets a caller reuse one startHash buffer across the len chains as well: the
+        // return is then an array this method has just made whatever steps is, so no caller has to
+        // know that at one particular digit value its buffer would instead escape into a signature
+        // or a public key. It costs the allocation that expandSecretKeySeed used to make for that
+        // same chain, and it is the only case in which anything is copied here.
+        //
         byte[] out = new byte[n];
+        if (steps == 0)
+        {
+            System.arraycopy(startHash, 0, out, 0, n);
+            return out;
+        }
+
         byte[] tmp = startHash;
         for (int i = 0; i != steps; i++)
         {
@@ -205,7 +243,7 @@ final class WOTSPlus
             khf.F(key, tmpMasked, out);
             tmp = out;
         }
-        return tmp;
+        return out;
     }
 
     /**
@@ -294,16 +332,26 @@ final class WOTSPlus
     /**
      * Derive private key at index from secret key seed.
      *
-     * @param index Index.
-     * @return Private key at index.
+     * @param index       Index.
+     * @param indexBuffer a PRF_INDEX_SIZE-byte buffer the caller owns, which this writes
+     *                    toByte(index, 32) into. It reaches only the last eight bytes, so one
+     *                    buffer serves every index of a key: the rest are the zeros a fresh array
+     *                    already carries and nothing here disturbs them.
+     * @param out         an n-byte buffer the private key at index is written into.
      */
-    private byte[] expandSecretKeySeed(int index)
+    private void expandSecretKeySeed(int index, byte[] indexBuffer, byte[] out)
     {
         if (index < 0 || index >= params.getLen())
         {
             throw new IllegalArgumentException("index out of bounds");
         }
-        return khf.PRF(secretKeySeed, XMSSUtil.toBytesBigEndian(index, 32));
+        // toByte(index, 32) of RFC 8391 sec. 2.4, written in place rather than into an array
+        // allocated per chain. This is the same encoding XMSSUtil.toBytesBigEndian(index, 32)
+        // built - the low eight bytes of the value at the end of a 32-byte array, the other 24
+        // left zero - and index is non-negative and below len, so the top four of those eight are
+        // zero as well.
+        Pack.longToBigEndian_Low(index, indexBuffer, PRF_INDEX_SIZE - 8, 8);
+        khf.PRF(secretKeySeed, indexBuffer, out);
     }
 
     /**
@@ -354,15 +402,25 @@ final class WOTSPlus
      */
     WOTSPlusPublicKeyParameters getPublicKey(OTSHashAddress otsHashAddress)
     {
+        int n = params.getTreeDigestSize();
         byte[][] publicKey = new byte[params.getLen()][];
         /* derive public key from secretKeySeed */
         // one encoding for the len chains, the loop stepping the one word they differ in; chain()
         // writes the other two as it goes and says there why that does not carry between chains.
         byte[] address = otsHashAddress.toByteArray();
+        // and one set of working buffers for them, as in sign() above - four arrays for a leaf's
+        // whole public key rather than four per chain of it. This is the tree walk's inner loop:
+        // an h = 10 SHA-256 key generation takes 68608 chains over 1024 leaves, and had been
+        // allocating the index, the starting secret key and chain's pair for every one of them.
+        byte[] indexBuffer = new byte[PRF_INDEX_SIZE];
+        byte[] startHash = new byte[n];
+        byte[] key = new byte[n];
+        byte[] tmpMasked = new byte[n];
         for (int i = 0; i < params.getLen(); i++)
         {
             Pack.intToBigEndian(i, address, OTSHashAddress.CHAIN_ADDRESS_OFFSET);
-            publicKey[i] = chain(expandSecretKeySeed(i), 0, WOTSPlusParameters.WINTERNITZ_PARAMETER - 1, address);
+            expandSecretKeySeed(i, indexBuffer, startHash);
+            publicKey[i] = chain(startHash, 0, WOTSPlusParameters.WINTERNITZ_PARAMETER - 1, address, key, tmpMasked);
         }
         return new WOTSPlusPublicKeyParameters(params, publicKey);
     }

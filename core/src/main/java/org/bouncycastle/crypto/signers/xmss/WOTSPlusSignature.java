@@ -19,11 +19,10 @@ final class WOTSPlusSignature
 
     /**
      * The i'th of this signature's blocks, by reference, for public-key recovery to chain from.
-     * chain() only reads its starting value, and the one case where it hands that same array back
-     * - a zero-step chain - hands it to {@link WOTSPlusPublicKeyParameters}, which clones what it
-     * is given, so no block escapes this object that did not before. What it saves is the deep
-     * copy {@link #toByteArray()} makes, len + 1 arrays per verification and that again per layer
-     * of a hypertree. The caller must not write to what it gets back.
+     * chain() only reads its starting value and returns an array of its own however many steps it
+     * takes, so no block escapes this object. What this saves is the deep copy
+     * {@link #toByteArray()} makes, len + 1 arrays per verification and that again per layer of a
+     * hypertree. The caller must not write to what it gets back.
      */
     byte[] getBlock(int i)
     {
