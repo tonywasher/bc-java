@@ -239,41 +239,54 @@ public class BDSStateMap
      */
     public void validateIndex(XMSSMTParameters params, long globalIndex)
     {
-        int xmssHeight = params.getXMSSParameters().getHeight();
-        int lastLeaf = (1 << xmssHeight) - 1;
-        long treeIndex = globalIndex;
-
-        for (int layer = 0; layer < params.getLayers(); layer++)
+        // On this map's own monitor, for the whole walk, as validate(XMSSMTParameters) and
+        // getStateMap() beside it are. Taking it once per layer instead - which is what a bare
+        // get(layer) does - is a lock held across each read and released between them, so a
+        // signature landing in the middle would leave the walk comparing some layers from before
+        // it against others from after it, and what it reports of a state map in that shape is a
+        // state map no instant produced. Every caller in this tree arrives already holding the
+        // enclosing key's monitor, which the signer holds for a whole descent, so none of them can
+        // reach it; that is a fact about today's callers rather than about this method, which is
+        // public and hands its answer to whoever asks.
+        synchronized (this)
         {
-            // the same walk down the layers the signer and updateState perform
-            int expectedLeaf = XMSSUtil.getLeafIndex(treeIndex, xmssHeight);
-            treeIndex = XMSSUtil.getTreeIndex(treeIndex, xmssHeight);
+            int xmssHeight = params.getXMSSParameters().getHeight();
+            int lastLeaf = (1 << xmssHeight) - 1;
+            long treeIndex = globalIndex;
 
-            BDS state = get(layer);
-            if (state == null)
+            for (int layer = 0; layer < params.getLayers(); layer++)
             {
-                // a layer's state is built lazily, on the first signature that needs it
-                continue;
-            }
+                // the same walk down the layers the signer and updateState perform
+                int expectedLeaf = XMSSUtil.getLeafIndex(treeIndex, xmssHeight);
+                treeIndex = XMSSUtil.getTreeIndex(treeIndex, xmssHeight);
 
-            //
-            // At a leaf index of 0 the layer has just moved into a new subtree and its state has not
-            // been advanced into it: updateState skips the advance on the last leaf of a subtree and
-            // the signer rebuilds the state when it next signs there, so the carried-over final
-            // index of the previous subtree is legitimate at that one position. Every other position
-            // must agree exactly. Enumerating every index of the h=4/d=2, h=6/d=2, h=6/d=3, h=9/d=3
-            // and h=8/d=4 parameter sets produces no other divergence.
-            //
-            int actual = state.getIndex();
-            boolean ok = (expectedLeaf == 0)
-                ? (actual == 0 || actual == lastLeaf)
-                : (actual == expectedLeaf);
+                BDS state = bdsState.get(Integers.valueOf(layer));
+                if (state == null)
+                {
+                    // a layer's state is built lazily, on the first signature that needs it
+                    continue;
+                }
 
-            if (!ok)
-            {
-                throw new IllegalStateException(
-                    "BDS state has wrong index for layer " + layer + ": expected " + expectedLeaf
-                        + " but state is at " + actual);
+                //
+                // At a leaf index of 0 the layer has just moved into a new subtree and its state has
+                // not been advanced into it: updateState skips the advance on the last leaf of a
+                // subtree and the signer rebuilds the state when it next signs there, so the
+                // carried-over final index of the previous subtree is legitimate at that one
+                // position. Every other position must agree exactly. Enumerating every index of the
+                // h=4/d=2, h=6/d=2, h=6/d=3, h=9/d=3 and h=8/d=4 parameter sets produces no other
+                // divergence.
+                //
+                int actual = state.getIndex();
+                boolean ok = (expectedLeaf == 0)
+                    ? (actual == 0 || actual == lastLeaf)
+                    : (actual == expectedLeaf);
+
+                if (!ok)
+                {
+                    throw new IllegalStateException(
+                        "BDS state has wrong index for layer " + layer + ": expected " + expectedLeaf
+                            + " but state is at " + actual);
+                }
             }
         }
     }
