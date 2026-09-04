@@ -54,8 +54,20 @@ public class XMSSPromotionCompatibilityTest
     /**
      * A standard RFC 8391 parameter set, which is encoded in the RFC 9802 form (id-alg-xmss-hashsig
      * with the 4-octet parameter-set OID ahead of the raw key) rather than the legacy
-     * XMSSKeyParams one - a different branch of both key factories. The smallest standard XMSS^MT
-     * set is 20/2, too slow to build here; the provider tests cover that side.
+     * XMSSKeyParams one - a different branch of both key factories.
+     * <p>
+     * It is also the only branch that carries the raw private key layout, the legacy one building
+     * its ASN.1 structure out of the key's own fields instead, so this is where that layout is
+     * compared byte for byte against the deprecated copy - and it therefore has to reach both
+     * families. The XMSS^MT cases elsewhere in this class are non-standard heights and take the
+     * legacy branch, so before XMSSMT-SHA2_20/2_256 was added here nothing in the tree compared an
+     * XMSS^MT raw encoding at all: a build whose XMSS^MT index field was one byte wider than it
+     * should be passed every case of this class. That set was left out as too slow, which its key
+     * is not - a height 10 tree per side, the same shape as the XMSS cases above it - so what it
+     * skips is the signing and cross-verification half of checkXMSSMT, whose first signature at
+     * this height costs as much again as the key does and which the h=4/d=2 sets of
+     * {@link #testXMSSMTKeysAndSignaturesMatchAcrossImplementations()} already cover.
+     * </p>
      */
     public void testStandardParameterSetEncodingMatches()
         throws Exception
@@ -85,6 +97,14 @@ public class XMSSPromotionCompatibilityTest
             new org.bouncycastle.crypto.params.XMSSParameters(10, NISTObjectIdentifiers.id_sha256, 24),
             new org.bouncycastle.pqc.crypto.xmss.XMSSParameters(10, NISTObjectIdentifiers.id_sha256, 24),
             seedFor(12));
+
+        // XMSSMT_SHA2_20/2_256, the smallest standard XMSS^MT set, and the only place an XMSS^MT
+        // raw private key encoding is compared against the deprecated copy at all
+        compareEncodings("XMSSMT-SHA2_20/2_256",
+            newXmssMtKey(new org.bouncycastle.crypto.params.XMSSMTParameters(20, 2, new SHA256Digest()),
+                seedFor(13)),
+            oldXmssMtKey(new org.bouncycastle.pqc.crypto.xmss.XMSSMTParameters(20, 2, new SHA256Digest()),
+                seedFor(13)));
     }
 
     public void testXMSSMTKeysAndSignaturesMatchAcrossImplementations()
