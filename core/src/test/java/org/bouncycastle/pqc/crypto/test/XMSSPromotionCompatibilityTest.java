@@ -71,6 +71,20 @@ public class XMSSPromotionCompatibilityTest
             new org.bouncycastle.crypto.params.XMSSParameters(10, NISTObjectIdentifiers.id_shake256_len, 24),
             new org.bouncycastle.pqc.crypto.xmss.XMSSParameters(10, NISTObjectIdentifiers.id_shake256_len, 24),
             seedFor(11));
+
+        // XMSS_SHA2_10_192, the other SP 800-208 way of getting to n = 24, and the only set in
+        // this class that reaches the truncating branch of KeyedHashFunctions.coreDigest - a
+        // digest that is not an Xof and whose output is longer than n, so every F, H, H_msg and
+        // PRF result is the first 24 bytes of a 32-byte digest. The other five sets here run at
+        // their digest's natural n, and SHAKE256/192 is an Xof, which is squeezed to length
+        // instead. Nothing pinned which 24 bytes those are: making that branch copy from offset 1
+        // passes all six cases of this class, the 83 of crypto.signers.xmss.AllTests and the 54
+        // of the provider's XMSSTest and XMSSMTTest, because a round trip agrees with itself
+        // whichever bytes it keeps. This case is what disagrees.
+        checkXMSS("XMSS-SHA2_10_192",
+            new org.bouncycastle.crypto.params.XMSSParameters(10, NISTObjectIdentifiers.id_sha256, 24),
+            new org.bouncycastle.pqc.crypto.xmss.XMSSParameters(10, NISTObjectIdentifiers.id_sha256, 24),
+            seedFor(12));
     }
 
     public void testXMSSMTKeysAndSignaturesMatchAcrossImplementations()

@@ -22,6 +22,15 @@ import org.bouncycastle.crypto.Xof;
  * bytes. A new call site has to keep that true: a wrong length is not rejected here, it silently
  * hashes to something else.
  * <p>
+ * F and PRF each also come in a form that writes into an array the caller owns rather than
+ * allocating one, for the chain walk of {@link WOTSPlus} - an h=10 key generation takes a million
+ * chain steps, and each of them produces three n-byte results it reads once and drops. Those forms
+ * write digestSize bytes from offset 0 and take it, in the same way as everything above, that the
+ * buffer they are given holds at least that many; a shorter one fails inside the digest's own
+ * doFinal rather than here, which is at least loud. They are not a second implementation of
+ * anything: the allocating form is now that one into an array it has just made, so what gets hashed
+ * cannot depend on which of the two a call site picked.
+ * <p>
  * coreDigest also takes it that digestSize is at most the underlying digest's own output size, which
  * likewise nothing checks - the admissible (digest, n) pairs are fixed by {@link WOTSPlusOid}, and
  * one breaking that would leave the tail of the result zero rather than throw. The same bound is
@@ -69,6 +78,13 @@ final class KeyedHashFunctions
 
     private byte[] coreDigest(int fixedValue, byte[] key, byte[] index)
     {
+        byte[] out = new byte[digestSize];
+        coreDigest(fixedValue, key, index, out);
+        return out;
+    }
+
+    private void coreDigest(int fixedValue, byte[] key, byte[] index, byte[] out)
+    {
         /* fill first n byte of out buffer */
         digest.update(TO_BYTE[fixedValue], MAX_TREE_DIGEST_SIZE - digestSize, digestSize);
         /* add key */
@@ -76,7 +92,6 @@ final class KeyedHashFunctions
         /* add index */
         digest.update(index, 0, index.length);
 
-        byte[] out = new byte[digestSize];
         if (digest instanceof Xof)
         {
             ((Xof)digest).doFinal(out, 0, digestSize);
@@ -91,12 +106,16 @@ final class KeyedHashFunctions
         {
             digest.doFinal(out, 0);
         }
-        return out;
     }
 
     byte[] F(byte[] key, byte[] in)
     {
         return coreDigest(0, key, in);
+    }
+
+    void F(byte[] key, byte[] in, byte[] out)
+    {
+        coreDigest(0, key, in, out);
     }
 
     byte[] H(byte[] key, byte[] in)
@@ -112,5 +131,10 @@ final class KeyedHashFunctions
     byte[] PRF(byte[] key, byte[] address)
     {
         return coreDigest(3, key, address);
+    }
+
+    void PRF(byte[] key, byte[] address, byte[] out)
+    {
+        coreDigest(3, key, address, out);
     }
 }

@@ -155,31 +155,46 @@ final class WOTSPlus
         }
 
         //
-        // Iteratively, over one encoding of the address. The two words a chain step moves are the
-        // hash address and the key-and-mask, PRF reads the address as the 32 bytes it is, and
-        // nothing here reads the incoming values of either word - withHashAddress() overwrote both
-        // at every step - so what the recursion expressed as two rebuilt addresses and two fresh
-        // toByteArray() copies per step is three int writes into one encoding taken once. The
-        // encoding is this method's own: toByteArray() allocates what it returns, and the caller's
-        // address object is left alone exactly as it was when chain() reassigned only its own
-        // parameter. Chained from the front rather than unwound from the back, which is the same
-        // sequence of hash addresses - startIndex, then upwards - in the same order.
+        // Iteratively, over one encoding of the address and one buffer per value a step produces.
+        //
+        // The two words a chain step moves are the hash address and the key-and-mask, PRF reads the
+        // address as the 32 bytes it is, and nothing here reads the incoming values of either word -
+        // withHashAddress() overwrote both at every step - so what the recursion expressed as two
+        // rebuilt addresses and two fresh toByteArray() copies per step is three int writes into one
+        // encoding taken once. The encoding is this method's own: toByteArray() allocates what it
+        // returns, and the caller's address object is left alone exactly as it was when chain()
+        // reassigned only its own parameter. Chained from the front rather than unwound from the
+        // back, which is the same sequence of hash addresses - startIndex, then upwards - in the
+        // same order.
+        //
+        // The three n-byte results a step produces are written into buffers that last the whole
+        // chain rather than allocated per step. The bitmask is produced straight into the array it
+        // is masked in, where xorTo turns it into the masked value; F's result goes into out, which
+        // the next step reads as tmp and folds into tmpMasked before F writes out again - so out's
+        // previous contents are dead by the time they are overwritten, and the reuse rests on that
+        // rather than on how coreDigest orders its own work. out does have to stay one array per
+        // call: the caller collects the len returns in a byte[][] that WOTSPlusSignature and
+        // WOTSPlusPublicKeyParameters clone afterwards, so one shared across a key's chains would
+        // leave every entry holding the last chain's value.
         //
         byte[] address = otsHashAddress.toByteArray();
+        byte[] key = new byte[n];
         byte[] tmpMasked = new byte[n];
+        byte[] out = new byte[n];
         byte[] tmp = startHash;
         for (int i = 0; i != steps; i++)
         {
             Pack.intToBigEndian(startIndex + i, address, OTSHashAddress.HASH_ADDRESS_OFFSET);
 
             Pack.intToBigEndian(0, address, XMSSAddress.KEY_AND_MASK_OFFSET);
-            byte[] key = khf.PRF(publicSeed, address);
+            khf.PRF(publicSeed, address, key);
 
             Pack.intToBigEndian(1, address, XMSSAddress.KEY_AND_MASK_OFFSET);
-            byte[] bitmask = khf.PRF(publicSeed, address);
+            khf.PRF(publicSeed, address, tmpMasked);
 
-            Bytes.xor(n, tmp, bitmask, tmpMasked);
-            tmp = khf.F(key, tmpMasked);
+            Bytes.xorTo(n, tmp, tmpMasked);
+            khf.F(key, tmpMasked, out);
+            tmp = out;
         }
         return tmp;
     }
