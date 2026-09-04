@@ -1,12 +1,15 @@
 package org.bouncycastle.crypto.signers.xmss;
 
-import org.bouncycastle.util.Pack;
-
 /**
- * L-tree address.
+ * The words of an L-tree address, RFC 8391 sec. 2.5.
+ * <p>
+ * Nothing builds one. An L-tree address is the 32 bytes a walk carries, produced from the OTS hash
+ * address of the leaf it belongs to by {@link XMSSAddress#subtreeAddressOf(byte[], int)}, and the
+ * walk writes the words below into that encoding as it moves them. So what this type amounts to
+ * here is where those words sit and what they are called; see {@link XMSSAddress}.
+ * </p>
  */
 final class LTreeAddress
-    extends XMSSAddress
 {
 
     /**
@@ -16,10 +19,9 @@ final class LTreeAddress
     static final int TYPE = 0x01;
 
     /**
-     * Offset of the L-tree address word in the 32-byte encoding {@link #toByteArray()} produces.
-     * One L-tree is walked per leaf of a tree and the leaves differ in this word alone, so a
-     * caller that walks them all steps it through one encoding rather than rebuilding an address
-     * per leaf.
+     * Offset of the L-tree address word in the 32-byte encoding. One L-tree is walked per leaf of
+     * a tree and the leaves differ in this word alone, so a caller that walks them all steps it
+     * through one encoding rather than producing an encoding per leaf.
      */
     static final int LTREE_ADDRESS_OFFSET = 16;
 
@@ -32,71 +34,4 @@ final class LTreeAddress
      */
     static final int TREE_HEIGHT_OFFSET = 20;
     static final int TREE_INDEX_OFFSET = 24;
-
-    private final int lTreeAddress;
-    private final int treeHeight;
-    private final int treeIndex;
-
-    private LTreeAddress(Builder builder)
-    {
-        super(builder);
-        lTreeAddress = builder.lTreeAddress;
-        treeHeight = builder.treeHeight;
-        treeIndex = builder.treeIndex;
-    }
-
-    public static class Builder
-        extends XMSSAddress.Builder<Builder>
-    {
-
-        /* optional */
-        private int lTreeAddress = 0;
-        private int treeHeight = 0;
-        private int treeIndex = 0;
-
-        public Builder()
-        {
-            super(TYPE);
-        }
-
-        public Builder withLTreeAddress(int val)
-        {
-            lTreeAddress = val;
-            return this;
-        }
-
-        public Builder withTreeHeight(int val)
-        {
-            treeHeight = val;
-            return this;
-        }
-
-        public Builder withTreeIndex(int val)
-        {
-            treeIndex = val;
-            return this;
-        }
-
-        @Override
-        public XMSSAddress build()
-        {
-            return new LTreeAddress(this);
-        }
-
-        @Override
-        public Builder getThis()
-        {
-            return this;
-        }
-    }
-
-    @Override
-    public byte[] toByteArray()
-    {
-        byte[] byteRepresentation = super.toByteArray();
-        Pack.intToBigEndian(lTreeAddress, byteRepresentation, LTREE_ADDRESS_OFFSET);
-        Pack.intToBigEndian(treeHeight, byteRepresentation, TREE_HEIGHT_OFFSET);
-        Pack.intToBigEndian(treeIndex, byteRepresentation, TREE_INDEX_OFFSET);
-        return byteRepresentation;
-    }
 }

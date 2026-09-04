@@ -5,6 +5,7 @@ import java.security.SecureRandom;
 import junit.framework.TestCase;
 import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
 import org.bouncycastle.util.Arrays;
+import org.bouncycastle.util.Pack;
 
 /**
  * WOTS+ (RFC 8391 sec. 3), the one-time signature XMSS is built on. It is package-private, so this
@@ -119,7 +120,8 @@ public class WOTSPlusTests
         WOTSPlusPublicKeyParameters publicKey = wotsPlus.getPublicKey(otsHashAddress);
         byte[][] before = blocksOf(publicKey);
 
-        byte[] lTreeAddress = new LTreeAddress.Builder().withLTreeAddress(3).build().toByteArray();
+        byte[] lTreeAddress = XMSSAddress.subtreeAddressOf(otsHashAddress, LTreeAddress.TYPE);
+        Pack.intToBigEndian(3, lTreeAddress, LTreeAddress.LTREE_ADDRESS_OFFSET);
         XMSSNodeUtil.lTree(wotsPlus, publicKey, lTreeAddress, new byte[N], new byte[2 * N]);
 
         assertTrue("compressing a public key changed the key",

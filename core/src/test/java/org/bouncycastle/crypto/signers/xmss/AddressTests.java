@@ -20,18 +20,26 @@ public class AddressTests
     private static final int WORD_6 = 24;
     private static final int KEY_AND_MASK = 28;
 
-    public void testOTSHashAddressLayout()
+    /**
+     * An OTS hash address with every word of it set to something distinguishable. It is the one
+     * address type this package still builds, and the two below are derived from it the way a walk
+     * derives them, so what does and does not carry across is visible.
+     */
+    private static byte[] otsHashAddress()
     {
-        OTSHashAddress address = (OTSHashAddress)new OTSHashAddress.Builder()
+        return new OTSHashAddress.Builder()
             .withOTSAddress(0x11223344)
             .withChainAddress(0x55667788)
             .withHashAddress(0x99aabbcc)
             .withLayerAddress(7)
             .withTreeAddress(0x0102030405060708L)
             .withKeyAndMask(2)
-            .build();
+            .build().toByteArray();
+    }
 
-        byte[] enc = address.toByteArray();
+    public void testOTSHashAddressLayout()
+    {
+        byte[] enc = otsHashAddress();
 
         assertEquals(32, enc.length);
         assertEquals(7, Pack.bigEndianToInt(enc, LAYER));
@@ -43,33 +51,55 @@ public class AddressTests
         assertEquals(2, Pack.bigEndianToInt(enc, KEY_AND_MASK));
     }
 
+    /**
+     * An L-tree address is produced from the OTS hash address of the leaf it belongs to, and the
+     * twelve bytes naming the tree are the whole of what comes across - RFC 8391 sec. 2.5's
+     * copy_subtree_addr, which stops before the type word. The three words below that word mean
+     * something else per type and belong to the walk, which writes its own into them; the last
+     * word of all is the key-and-mask and is not the caller's to carry either.
+     */
     public void testLTreeAddressLayout()
     {
-        LTreeAddress address = (LTreeAddress)new LTreeAddress.Builder()
-            .withLTreeAddress(0x11223344)
-            .withTreeHeight(0x55667788)
-            .withTreeIndex(0x99aabbcc)
-            .build();
+        byte[] enc = XMSSAddress.subtreeAddressOf(otsHashAddress(), LTreeAddress.TYPE);
 
-        byte[] enc = address.toByteArray();
-
+        assertEquals(32, enc.length);
+        assertEquals(7, Pack.bigEndianToInt(enc, LAYER));
+        assertEquals(0x0102030405060708L, Pack.bigEndianToLong(enc, TREE));
         assertEquals(0x01, Pack.bigEndianToInt(enc, TYPE));
+        assertEquals(0, Pack.bigEndianToInt(enc, WORD_4));
+        assertEquals(0, Pack.bigEndianToInt(enc, WORD_5));
+        assertEquals(0, Pack.bigEndianToInt(enc, WORD_6));
+        assertEquals(0, Pack.bigEndianToInt(enc, KEY_AND_MASK));
+
+        Pack.intToBigEndian(0x11223344, enc, LTreeAddress.LTREE_ADDRESS_OFFSET);
+        Pack.intToBigEndian(0x55667788, enc, LTreeAddress.TREE_HEIGHT_OFFSET);
+        Pack.intToBigEndian(0x99aabbcc, enc, LTreeAddress.TREE_INDEX_OFFSET);
+
         assertEquals(0x11223344, Pack.bigEndianToInt(enc, WORD_4));
         assertEquals(0x55667788, Pack.bigEndianToInt(enc, WORD_5));
         assertEquals(0x99aabbcc, Pack.bigEndianToInt(enc, WORD_6));
     }
 
+    /**
+     * The same for the hash tree address, whose word 4 is a reserved padding word rather than an
+     * index - so it is left where the copy leaves it, and nothing writes it.
+     */
     public void testHashTreeAddressLayout()
     {
-        HashTreeAddress address = (HashTreeAddress)new HashTreeAddress.Builder()
-            .withTreeHeight(0x55667788)
-            .withTreeIndex(0x99aabbcc)
-            .build();
+        byte[] enc = XMSSAddress.subtreeAddressOf(otsHashAddress(), HashTreeAddress.TYPE);
 
-        byte[] enc = address.toByteArray();
-
+        assertEquals(32, enc.length);
+        assertEquals(7, Pack.bigEndianToInt(enc, LAYER));
+        assertEquals(0x0102030405060708L, Pack.bigEndianToLong(enc, TREE));
         assertEquals(0x02, Pack.bigEndianToInt(enc, TYPE));
-        // word 4 is the reserved padding word of a hash-tree address and stays zero
+        assertEquals(0, Pack.bigEndianToInt(enc, WORD_4));
+        assertEquals(0, Pack.bigEndianToInt(enc, WORD_5));
+        assertEquals(0, Pack.bigEndianToInt(enc, WORD_6));
+        assertEquals(0, Pack.bigEndianToInt(enc, KEY_AND_MASK));
+
+        Pack.intToBigEndian(0x55667788, enc, HashTreeAddress.TREE_HEIGHT_OFFSET);
+        Pack.intToBigEndian(0x99aabbcc, enc, HashTreeAddress.TREE_INDEX_OFFSET);
+
         assertEquals(0, Pack.bigEndianToInt(enc, WORD_4));
         assertEquals(0x55667788, Pack.bigEndianToInt(enc, WORD_5));
         assertEquals(0x99aabbcc, Pack.bigEndianToInt(enc, WORD_6));
@@ -78,13 +108,19 @@ public class AddressTests
     /**
      * The three address types differ only in their type word and the meaning of words 4 to 6, so a
      * type confusion would not show up as a length or a parse failure - only as a hash computed
-     * over the wrong domain. Assert the three are distinct for the same word values.
+     * over the wrong domain. Assert the three are distinct for the same leaf of the same tree: the
+     * OTS hash address and the L-tree address below name that leaf in the same word, so between
+     * those two it is the type word alone that separates them.
      */
     public void testAddressTypesAreDistinct()
     {
-        byte[] ots = ((OTSHashAddress)new OTSHashAddress.Builder().withOTSAddress(1).build()).toByteArray();
-        byte[] lTree = ((LTreeAddress)new LTreeAddress.Builder().withLTreeAddress(1).build()).toByteArray();
-        byte[] hashTree = ((HashTreeAddress)new HashTreeAddress.Builder().withTreeHeight(1).build()).toByteArray();
+        byte[] ots = new OTSHashAddress.Builder().withOTSAddress(1).build().toByteArray();
+
+        byte[] lTree = XMSSAddress.subtreeAddressOf(ots, LTreeAddress.TYPE);
+        Pack.intToBigEndian(1, lTree, LTreeAddress.LTREE_ADDRESS_OFFSET);
+
+        byte[] hashTree = XMSSAddress.subtreeAddressOf(ots, HashTreeAddress.TYPE);
+        Pack.intToBigEndian(1, hashTree, HashTreeAddress.TREE_INDEX_OFFSET);
 
         assertFalse(org.bouncycastle.util.Arrays.areEqual(ots, lTree));
         assertFalse(org.bouncycastle.util.Arrays.areEqual(ots, hashTree));
