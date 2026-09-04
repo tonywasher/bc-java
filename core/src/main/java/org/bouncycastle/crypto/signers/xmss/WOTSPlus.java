@@ -84,24 +84,26 @@ final class WOTSPlus
      * Creates a signature for the n-byte messageDigest.
      *
      * @param messageDigest  Digest to sign.
-     * @param otsHashAddress OTS hash address for randomization.
+     * @param address        the 32-byte encoding of the OTS hash address this one-time key is at.
+     *                       The caller owns it and has set the OTS address word, which is what
+     *                       names the key; the loop below writes the chain address word of it and
+     *                       {@link #chain} the two after that.
      * @return the len n-byte blocks of the signature, a fresh array of fresh blocks that the
      *         caller takes over.
      */
-    byte[][] sign(byte[] messageDigest, OTSHashAddress otsHashAddress)
+    byte[][] sign(byte[] messageDigest, byte[] address)
     {
         List<Integer> baseWMessage = baseWMessageWithChecksum(messageDigest);
 
         /* create signature */
         int n = params.getTreeDigestSize();
         byte[][] signature = new byte[params.getLen()][];
-        // one encoding for the len chains, the loop stepping the one word they differ in; chain()
-        // writes the other two as it goes and says there why that does not carry between chains.
-        byte[] address = otsHashAddress.toByteArray();
-        // and one set of working buffers for them, on the same terms: the index PRF is applied to,
-        // the chain's starting secret key, and the pair chain() steps over. Every one of them is
-        // written before it is read on each chain, and none of them is what chain() returns - see
-        // there and expandSecretKeySeed below.
+        // the caller's encoding serves the len chains, the loop below stepping the one word they
+        // differ in; chain() writes the other two as it goes and says there why that does not
+        // carry between chains. One set of working buffers serves them on the same terms: the
+        // index PRF is applied to, the chain's starting secret key, and the pair chain() steps
+        // over. Every one of them is written before it is read on each chain, and none of them is
+        // what chain() returns - see there and expandSecretKeySeed below.
         byte[] indexBuffer = new byte[PRF_INDEX_SIZE];
         byte[] startHash = new byte[n];
         byte[] key = new byte[n];
@@ -121,11 +123,11 @@ final class WOTSPlus
      * @param messageDigest  The digest that was signed.
      * @param signature      the len n-byte blocks of the signature on that digest, which this
      *                       method reads and never writes.
-     * @param otsHashAddress OTS hash address for randomization.
+     * @param address        the 32-byte encoding of the OTS hash address the signing key was at;
+     *                       written as in {@link #sign}.
      * @return WOTS+ public key derived from digest and signature.
      */
-    WOTSPlusPublicKeyParameters getPublicKeyFromSignature(byte[] messageDigest, byte[][] signature,
-                                                          OTSHashAddress otsHashAddress)
+    WOTSPlusPublicKeyParameters getPublicKeyFromSignature(byte[] messageDigest, byte[][] signature, byte[] address)
     {
         List<Integer> baseWMessage = baseWMessageWithChecksum(messageDigest);
 
@@ -141,10 +143,10 @@ final class WOTSPlus
         //
         int n = params.getTreeDigestSize();
         byte[][] publicKey = new byte[params.getLen()][];
-        // one encoding for the len chains, the loop stepping the one word they differ in; chain()
-        // writes the other two as it goes and says there why that does not carry between chains.
-        byte[] address = otsHashAddress.toByteArray();
-        // and one pair of working buffers for chain() to step over, likewise for all len of them.
+        // the caller's encoding serves the len chains, the loop below stepping the one word they
+        // differ in; chain() writes the other two as it goes and says there why that does not
+        // carry between chains. One pair of working buffers for chain() to step over serves all
+        // len of them likewise.
         byte[] key = new byte[n];
         byte[] tmpMasked = new byte[n];
         for (int i = 0; i < params.getLen(); i++)
@@ -321,24 +323,20 @@ final class WOTSPlus
      *                       instance holds under the near enough same name. The two are the input
      *                       and the output of this one derivation: every caller hands the result
      *                       straight to {@link #importKeys(byte[], byte[])} on the same object.
-     * @param otsHashAddress one time hash address. Read and never written, and only its layer
-     *                       address, tree address and OTS address take part: the three words below
-     *                       those are zero in the address this derivation is over, whatever the
-     *                       caller left in them.
+     * @param address    the 32-byte encoding of the OTS hash address this one-time key is at. The
+     *                   caller owns it and has set the OTS address word; only that, the layer
+     *                   address and the tree address take part in the derivation, and this method
+     *                   clears the three words below them in place - see below.
      * @return WOTS+ secret key at index.
      */
-    byte[] getWOTSPlusSecretKey(byte[] secretSeed, OTSHashAddress otsHashAddress)
+    byte[] getWOTSPlusSecretKey(byte[] secretSeed, byte[] address)
     {
         // The address this is the PRF of is the caller's with its chain address, hash address and
-        // key-and-mask cleared, and it was reached by building a second OTSHashAddress out of the
-        // three fields that survive that - a Builder and an address per one-time key, so 1024 of
-        // each in an h = 10 key generation - and then encoding it. The caller's own encoding
-        // differs from that one in exactly the three words being cleared, each of which is already
-        // named here, so the zeros go into it directly and the layout stays where toByteArray()
-        // keeps it. Same bytes by construction: the rebuild copied the layer address, the tree
-        // address and the OTS address across, and both addresses carry the OTS type word, so the
-        // only words the two encodings could disagree in are the three a Builder left at zero.
-        byte[] address = otsHashAddress.toByteArray();
+        // key-and-mask cleared, so the zeros go into the caller's encoding where the address would
+        // otherwise be rebuilt without them. That the three are cleared rather than assumed absent
+        // is what lets one encoding serve a whole leaf walk: getPublicKey() and sign() below leave
+        // the last chain's chain address, hash address and key-and-mask in the encoding they are
+        // handed, and the next leaf's one-time key is derived from that same encoding.
         Pack.intToBigEndian(0, address, OTSHashAddress.CHAIN_ADDRESS_OFFSET);
         Pack.intToBigEndian(0, address, OTSHashAddress.HASH_ADDRESS_OFFSET);
         Pack.intToBigEndian(0, address, XMSSAddress.KEY_AND_MASK_OFFSET);
@@ -411,21 +409,22 @@ final class WOTSPlus
 
     /**
      * Calculates a new public key based on the state of secretKeySeed,
-     * publicSeed and otsHashAddress.
+     * publicSeed and the address given.
      *
-     * @param otsHashAddress OTS hash address for randomization.
+     * @param address the 32-byte encoding of the OTS hash address this one-time key is at; written
+     *                as in {@link #sign}.
      * @return WOTS+ public key.
      */
-    WOTSPlusPublicKeyParameters getPublicKey(OTSHashAddress otsHashAddress)
+    WOTSPlusPublicKeyParameters getPublicKey(byte[] address)
     {
         int n = params.getTreeDigestSize();
         byte[][] publicKey = new byte[params.getLen()][];
         /* derive public key from secretKeySeed */
-        // one encoding for the len chains, the loop stepping the one word they differ in; chain()
-        // writes the other two as it goes and says there why that does not carry between chains.
-        byte[] address = otsHashAddress.toByteArray();
-        // and one set of working buffers for them, as in sign() above - four arrays for a leaf's
-        // whole public key rather than four per chain of it. This is the tree walk's inner loop:
+        // the caller's encoding serves the len chains, the loop below stepping the one word they
+        // differ in; chain() writes the other two as it goes and says there why that does not
+        // carry between chains. One set of working buffers serves them, as in sign() above - four
+        // arrays for a leaf's whole public key rather than four per chain of it. This is the tree
+        // walk's inner loop:
         // an h = 10 SHA-256 key generation takes 68608 chains over 1024 leaves, and had been
         // allocating the index, the starting secret key and chain's pair for every one of them.
         byte[] indexBuffer = new byte[PRF_INDEX_SIZE];

@@ -131,30 +131,4 @@ class XMSSNodeUtil
         khf.H(key, tmpMask, out);
         return new XMSSNode(left.getHeight(), out);
     }
-
-    /*
-     * An XMSS address is immutable, so setting one of its fields means rebuilding the whole
-     * address and carrying the others over by hand. The helper below is that rebuild, and it is
-     * the last one: the OTS hash address is the only address still handed on as an address rather
-     * than as the bytes it encodes to, because WOTSPlus reads its fields. Every field a tree walk
-     * steps - tree height, tree index, the L-tree address of a leaf - is now a word written into
-     * an encoding the walk holds, so the rebuilds that spelled those out are gone with them.
-     */
-
-    /**
-     * The given address with its OTS address replaced and every other field carried over, as the
-     * leaf walks in BDS and BDSTreeHash need when they step to the next one-time key.
-     *
-     * @param address    OTS hash address to copy.
-     * @param otsAddress OTS address to set.
-     * @return address with the given OTS address.
-     */
-    static OTSHashAddress withOTSAddress(OTSHashAddress address, int otsAddress)
-    {
-        return (OTSHashAddress)new OTSHashAddress.Builder()
-            .withLayerAddress(address.getLayerAddress()).withTreeAddress(address.getTreeAddress())
-            .withOTSAddress(otsAddress).withChainAddress(address.getChainAddress())
-            .withHashAddress(address.getHashAddress()).withKeyAndMask(address.getKeyAndMask())
-            .build();
-    }
 }

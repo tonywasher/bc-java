@@ -10,6 +10,13 @@ final class OTSHashAddress
 {
 
     /**
+     * Offset of the OTS address word in the 32-byte encoding {@link #toByteArray()} produces.
+     * The one-time keys of a tree differ in this word alone, so the leaf walks in {@link BDS} and
+     * {@link BDSTreeHash} step it through one encoding rather than rebuilding an address per leaf.
+     */
+    static final int OTS_ADDRESS_OFFSET = 16;
+
+    /**
      * Offset of the chain address word in the 32-byte encoding {@link #toByteArray()} produces.
      * The len chains of a WOTS+ key differ in this word alone, so the three loops that walk them
      * step it through one encoding rather than rebuilding an address per chain.
@@ -84,10 +91,23 @@ final class OTSHashAddress
     public byte[] toByteArray()
     {
         byte[] byteRepresentation = super.toByteArray();
-        Pack.intToBigEndian(otsAddress, byteRepresentation,16);
+        Pack.intToBigEndian(otsAddress, byteRepresentation, OTS_ADDRESS_OFFSET);
         Pack.intToBigEndian(chainAddress, byteRepresentation, CHAIN_ADDRESS_OFFSET);
         Pack.intToBigEndian(hashAddress, byteRepresentation, HASH_ADDRESS_OFFSET);
         return byteRepresentation;
+    }
+
+    /**
+     * The OTS address word of an OTS hash address encoding, for the verification walk that names
+     * a leaf by it twice over - as the L-tree address of the leaf, and as where its climb through
+     * the tree starts.
+     *
+     * @param address the 32-byte encoding of an OTS hash address.
+     * @return its OTS address.
+     */
+    static int otsAddressOf(byte[] address)
+    {
+        return Pack.bigEndianToInt(address, OTS_ADDRESS_OFFSET);
     }
 
     public int getOTSAddress()

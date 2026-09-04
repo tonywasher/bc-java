@@ -112,7 +112,7 @@ public final class XMSSEngine
         byte[] publicSeed = new byte[n];
         prng.nextBytes(publicSeed);
 
-        BDS bdsState = new BDS(params, publicSeed, secretKeySeed, (OTSHashAddress)new OTSHashAddress.Builder().build());
+        BDS bdsState = new BDS(params, publicSeed, secretKeySeed, new OTSHashAddress.Builder().build().toByteArray());
         byte[] root = bdsState.getRoot().getValue();
 
         XMSSPrivateKeyParameters privateKey = new XMSSPrivateKeyParameters.Builder(params)
@@ -145,11 +145,11 @@ public final class XMSSEngine
 
         /* get root */
         int rootLayerIndex = params.getLayers() - 1;
-        OTSHashAddress otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder().withLayerAddress(rootLayerIndex)
-            .build();
+        byte[] otsAddress = new OTSHashAddress.Builder().withLayerAddress(rootLayerIndex)
+            .build().toByteArray();
 
         /* store BDS instance of root xmss instance */
-        BDS bdsRoot = new BDS(xmssParams, publicSeed, secretKeySeed, otsHashAddress);
+        BDS bdsRoot = new BDS(xmssParams, publicSeed, secretKeySeed, otsAddress);
         byte[] root = bdsRoot.getRoot().getValue();
         bdsState.put(rootLayerIndex, bdsRoot);
 
@@ -244,9 +244,9 @@ public final class XMSSEngine
             byte[] messageDigest = khf.HMsg(concatenated, message);
 
             /* create signature for messageDigest */
-            OTSHashAddress otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder().withOTSAddress(index).build();
+            byte[] otsAddress = new OTSHashAddress.Builder().withOTSAddress(index).build().toByteArray();
             byte[][] wotsPlusSignature = wotsSign(wotsPlus, privateKey.getSecretKeySeed(),
-                privateKey.getPublicSeed(), messageDigest, otsHashAddress);
+                privateKey.getPublicSeed(), messageDigest, otsAddress);
 
             return new XMSSSignature.Builder(params).withIndex(index).withRandom(random)
                 .withWOTSPlusSignature(wotsPlusSignature)
@@ -307,9 +307,9 @@ public final class XMSSEngine
         int indexLeaf = XMSSUtil.getLeafIndex(index, xmssHeight);
 
         /* get root from signature */
-        OTSHashAddress otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder().withOTSAddress(index).build();
+        byte[] otsAddress = new OTSHashAddress.Builder().withOTSAddress(index).build().toByteArray();
         XMSSNode rootNodeFromSignature = XMSSVerifierUtil.getRootNodeFromSignature(wotsPlus, xmssHeight, messageDigest,
-            sig, otsHashAddress, indexLeaf);
+            sig, otsAddress, indexLeaf);
 
         return Arrays.constantTimeAreEqual(rootNodeFromSignature.getValue(), publicKey.getRoot());
     }
@@ -393,18 +393,18 @@ public final class XMSSEngine
                 /* create signature with XMSS tree on layer 0 */
 
                 /* adjust addresses */
-                OTSHashAddress otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder().withTreeAddress(indexTree)
-                    .withOTSAddress(indexLeaf).build();
+                byte[] otsAddress = new OTSHashAddress.Builder().withTreeAddress(indexTree)
+                    .withOTSAddress(indexLeaf).build().toByteArray();
 
                 /* get authentication path from BDS */
                 if (bdsState.get(0) == null || indexLeaf == 0)
                 {
-                    bdsState.put(0, new BDS(xmssParams, publicSeed, secretKeySeed, otsHashAddress));
+                    bdsState.put(0, new BDS(xmssParams, publicSeed, secretKeySeed, otsAddress));
                 }
 
                 /* sign message digest */
                 byte[][] wotsPlusSignature = wotsSign(wotsPlus, secretKeySeed,
-                    publicSeed, messageDigest, otsHashAddress);
+                    publicSeed, messageDigest, otsAddress);
 
                 XMSSReducedSignature reducedSignature = new XMSSReducedSignature.Builder(xmssParams)
                     .withWOTSPlusSignature(wotsPlusSignature).withAuthPath(bdsState.get(0).getAuthenticationPath())
@@ -422,17 +422,17 @@ public final class XMSSEngine
                     indexTree = XMSSUtil.getTreeIndex(indexTree, xmssHeight);
 
                     /* adjust addresses */
-                    otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder().withLayerAddress(layer)
-                        .withTreeAddress(indexTree).withOTSAddress(indexLeaf).build();
+                    otsAddress = new OTSHashAddress.Builder().withLayerAddress(layer)
+                        .withTreeAddress(indexTree).withOTSAddress(indexLeaf).build().toByteArray();
 
                     /* sign root digest of layer - 1 */
                     wotsPlusSignature = wotsSign(wotsPlus, secretKeySeed,
-                        publicSeed, root.getValue(), otsHashAddress);
+                        publicSeed, root.getValue(), otsAddress);
 
                     /* get authentication path from BDS */
                     if (bdsState.get(layer) == null || XMSSUtil.isNewBDSInitNeeded(globalIndex, xmssHeight, layer))
                     {
-                        bdsState.put(layer, new BDS(xmssParams, publicSeed, secretKeySeed, otsHashAddress));
+                        bdsState.put(layer, new BDS(xmssParams, publicSeed, secretKeySeed, otsAddress));
                     }
 
                     reducedSignature = new XMSSReducedSignature.Builder(xmssParams)
@@ -496,13 +496,13 @@ public final class XMSSEngine
         wotsPlus.importKeys(new byte[params.getTreeDigestSize()], publicKey.getPublicSeed());
 
         /* prepare addresses */
-        OTSHashAddress otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder().withTreeAddress(indexTree)
-            .withOTSAddress(indexLeaf).build();
+        byte[] otsAddress = new OTSHashAddress.Builder().withTreeAddress(indexTree)
+            .withOTSAddress(indexLeaf).build().toByteArray();
 
         /* get root node on layer 0 */
         XMSSReducedSignature xmssMTSignature = sig.getReducedSignatures().get(0);
         XMSSNode rootNode = XMSSVerifierUtil.getRootNodeFromSignature(wotsPlus, xmssHeight, messageDigest,
-            xmssMTSignature, otsHashAddress, indexLeaf);
+            xmssMTSignature, otsAddress, indexLeaf);
         for (int layer = 1; layer < params.getLayers(); layer++)
         {
             xmssMTSignature = sig.getReducedSignatures().get(layer);
@@ -510,12 +510,12 @@ public final class XMSSEngine
             indexTree = XMSSUtil.getTreeIndex(indexTree, xmssHeight);
 
             /* adjust address */
-            otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder().withLayerAddress(layer)
-                .withTreeAddress(indexTree).withOTSAddress(indexLeaf).build();
+            otsAddress = new OTSHashAddress.Builder().withLayerAddress(layer)
+                .withTreeAddress(indexTree).withOTSAddress(indexLeaf).build().toByteArray();
 
             /* get root node */
             rootNode = XMSSVerifierUtil.getRootNodeFromSignature(wotsPlus, xmssHeight, rootNode.getValue(),
-                xmssMTSignature, otsHashAddress, indexLeaf);
+                xmssMTSignature, otsAddress, indexLeaf);
         }
 
         /* compare roots */
@@ -552,7 +552,7 @@ public final class XMSSEngine
             return new BDS(params, maxIndex, index);
         }
 
-        return new BDS(params, publicSeed, secretKeySeed, (OTSHashAddress)new OTSHashAddress.Builder().build(), index);
+        return new BDS(params, publicSeed, secretKeySeed, new OTSHashAddress.Builder().build().toByteArray(), index);
     }
 
     /**
@@ -560,7 +560,7 @@ public final class XMSSEngine
      */
     public static BDS getNextBDSState(BDS bdsState, byte[] publicSeed, byte[] secretKeySeed)
     {
-        return bdsState.getNextState(publicSeed, secretKeySeed, (OTSHashAddress)new OTSHashAddress.Builder().build());
+        return bdsState.getNextState(publicSeed, secretKeySeed, new OTSHashAddress.Builder().build().toByteArray());
     }
 
     /**
@@ -717,7 +717,7 @@ public final class XMSSEngine
     }
 
     /**
-     * Signs the n-byte messageDigest with the one-time key at otsHashAddress.
+     * Signs the n-byte messageDigest with the one-time key at the given OTS hash address.
      * <p>
      * The length is checked against the WOTS+ instance's own n - the one khf and chain use - and
      * this is the only place it is checked: nothing downstream would catch a wrong length, since
@@ -728,16 +728,16 @@ public final class XMSSEngine
      * before the key holding it could be constructed.
      */
     private static byte[][] wotsSign(WOTSPlus wotsPlus, byte[] secretKeySeed,
-                                     byte[] publicSeed, byte[] messageDigest, OTSHashAddress otsHashAddress)
+                                     byte[] publicSeed, byte[] messageDigest, byte[] otsAddress)
     {
         if (messageDigest.length != wotsPlus.getParams().getTreeDigestSize())
         {
             throw new IllegalArgumentException("size of messageDigest needs to be equal to size of digest");
         }
         /* (re)initialize WOTS+ instance */
-        wotsPlus.importKeys(wotsPlus.getWOTSPlusSecretKey(secretKeySeed, otsHashAddress), publicSeed);
+        wotsPlus.importKeys(wotsPlus.getWOTSPlusSecretKey(secretKeySeed, otsAddress), publicSeed);
 
         /* create WOTS+ signature */
-        return wotsPlus.sign(messageDigest, otsHashAddress);
+        return wotsPlus.sign(messageDigest, otsAddress);
     }
 }

@@ -76,6 +76,35 @@ abstract class XMSSAddress
         return byteRepresentation;
     }
 
+    /**
+     * The layer address word of a 32-byte address encoding.
+     * <p>
+     * RFC 8391 sec. 2.5 gives every address type the same first four words, so this and
+     * {@link #treeAddressOf(byte[])} read the same two fields whichever type produced the
+     * encoding. They are what a walk carrying one address as bytes needs in order to name the
+     * other two addresses of the same tree - an encoding is handed on where an address used to be,
+     * and these are the only fields of it read back rather than written.
+     * </p>
+     *
+     * @param address a 32-byte address encoding.
+     * @return its layer address.
+     */
+    static int layerAddressOf(byte[] address)
+    {
+        return Pack.bigEndianToInt(address, 0);
+    }
+
+    /**
+     * The tree address of a 32-byte address encoding; see {@link #layerAddressOf(byte[])}.
+     *
+     * @param address a 32-byte address encoding.
+     * @return its tree address.
+     */
+    static long treeAddressOf(byte[] address)
+    {
+        return Pack.bigEndianToLong(address, 4);
+    }
+
     public final int getLayerAddress()
     {
         return layerAddress;

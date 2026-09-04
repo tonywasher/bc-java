@@ -15,10 +15,13 @@ class XMSSVerifierUtil
      *
      * @param messageDigest Message digest.
      * @param signature     XMSS signature.
+     * @param otsAddress    the 32-byte encoding of the OTS hash address the signing key was at.
+     *                      The OTS address word of it names the leaf, and is read out before
+     *                      getPublicKeyFromSignature below writes the three words after it.
      * @return Root node calculated from signature.
      */
     static XMSSNode getRootNodeFromSignature(WOTSPlus wotsPlus, int height, byte[] messageDigest, XMSSReducedSignature signature,
-                                              OTSHashAddress otsHashAddress, int indexLeaf)
+                                              byte[] otsAddress, int indexLeaf)
     {
         if (messageDigest.length != wotsPlus.getParams().getTreeDigestSize())
         {
@@ -26,14 +29,17 @@ class XMSSVerifierUtil
         }
 
         /* prepare adresses */
+        int layerAddress = XMSSAddress.layerAddressOf(otsAddress);
+        long treeAddress = XMSSAddress.treeAddressOf(otsAddress);
+        int otsIndex = OTSHashAddress.otsAddressOf(otsAddress);
         byte[] lTreeAddress = new LTreeAddress.Builder()
-            .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
-            .withLTreeAddress(otsHashAddress.getOTSAddress()).build().toByteArray();
+            .withLayerAddress(layerAddress).withTreeAddress(treeAddress)
+            .withLTreeAddress(otsIndex).build().toByteArray();
         byte[] hashTreeAddress = new HashTreeAddress.Builder()
-            .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
-            .withTreeIndex(otsHashAddress.getOTSAddress()).build().toByteArray();
+            .withLayerAddress(layerAddress).withTreeAddress(treeAddress)
+            .withTreeIndex(otsIndex).build().toByteArray();
         /* the tree index of that encoding, kept alongside it as the climb halves it */
-        int hashTreeIndex = otsHashAddress.getOTSAddress();
+        int hashTreeIndex = otsIndex;
         /* and one pair of working buffers for every node hashed below, L-tree and climb alike; see
          * XMSSNodeUtil.randomizeHash for why one pair serves a whole walk */
         int n = wotsPlus.getParams().getTreeDigestSize();
@@ -43,7 +49,7 @@ class XMSSVerifierUtil
          * calculate WOTS+ public key and compress to obtain original leaf hash
          */
         WOTSPlusPublicKeyParameters wotsPlusPK = wotsPlus.getPublicKeyFromSignature(messageDigest,
-            signature.getWOTSPlusSignature(), otsHashAddress);
+            signature.getWOTSPlusSignature(), otsAddress);
         XMSSNode[] node = new XMSSNode[2];
         node[0] = XMSSNodeUtil.lTree(wotsPlus, wotsPlusPK, lTreeAddress, nodeKey, nodeMask);
 

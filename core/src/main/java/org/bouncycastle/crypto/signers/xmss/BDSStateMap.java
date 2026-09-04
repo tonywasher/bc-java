@@ -69,7 +69,7 @@ public class BDSStateMap
     /**
      * The traversal state for the leaf after {@code globalIndex}, as a new state map: the one this
      * is called on is left where it is. This is the multi-tree counterpart of
-     * {@link BDS#getNextState(byte[], byte[], OTSHashAddress)}, and advancing by replacement rather
+     * {@link BDS#getNextState(byte[], byte[], byte[])}, and advancing by replacement rather
      * than in place is what lets the owning key move its index and its state as one - see
      * {@link XMSSEngine#getNextBDSStateMap}.
      */
@@ -98,18 +98,18 @@ public class BDSStateMap
         long indexTree = XMSSUtil.getTreeIndex(globalIndex, xmssHeight);
         int indexLeaf = XMSSUtil.getLeafIndex(globalIndex, xmssHeight);
 
-        OTSHashAddress otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder().withTreeAddress(indexTree)
-            .withOTSAddress(indexLeaf).build();
+        byte[] otsAddress = new OTSHashAddress.Builder().withTreeAddress(indexTree)
+            .withOTSAddress(indexLeaf).build().toByteArray();
 
         /* prepare authentication path for next leaf */
         if (indexLeaf < ((1 << xmssHeight) - 1))
         {
             if (this.get(0) == null || indexLeaf == 0)
             {
-                this.put(0, new BDS(xmssParams, publicSeed, secretKeySeed, otsHashAddress));
+                this.put(0, new BDS(xmssParams, publicSeed, secretKeySeed, otsAddress));
             }
 
-            this.update(0, publicSeed, secretKeySeed, otsHashAddress);
+            this.update(0, publicSeed, secretKeySeed, otsAddress);
         }
 
         /* loop over remaining layers */
@@ -119,19 +119,19 @@ public class BDSStateMap
             indexLeaf = XMSSUtil.getLeafIndex(indexTree, xmssHeight);
             indexTree = XMSSUtil.getTreeIndex(indexTree, xmssHeight);
                 /* adjust addresses */
-            otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder().withLayerAddress(layer)
-                .withTreeAddress(indexTree).withOTSAddress(indexLeaf).build();
+            otsAddress = new OTSHashAddress.Builder().withLayerAddress(layer)
+                .withTreeAddress(indexTree).withOTSAddress(indexLeaf).build().toByteArray();
 
                 /* prepare authentication path for next leaf */
             if (bdsState.get(layer) == null || XMSSUtil.isNewBDSInitNeeded(globalIndex, xmssHeight, layer))
             {
-                bdsState.put(layer, new BDS(xmssParams, publicSeed, secretKeySeed, otsHashAddress));
+                bdsState.put(layer, new BDS(xmssParams, publicSeed, secretKeySeed, otsAddress));
             }
 
             if (indexLeaf < ((1 << xmssHeight) - 1)
                 && XMSSUtil.isNewAuthenticationPathNeeded(globalIndex, xmssHeight, layer))
             {
-                this.update(layer, publicSeed, secretKeySeed, otsHashAddress);
+                this.update(layer, publicSeed, secretKeySeed, otsAddress);
             }
         }
     }
@@ -333,12 +333,12 @@ public class BDSStateMap
         return layerZero != null && layerZero.isUsed();
     }
 
-    BDS update(int index, byte[] publicSeed, byte[] secretKeySeed, OTSHashAddress otsHashAddress)
+    BDS update(int index, byte[] publicSeed, byte[] secretKeySeed, byte[] otsAddress)
     {
         synchronized (this)
         {
             return bdsState.put(Integers.valueOf(index),
-                bdsState.get(Integers.valueOf(index)).getNextState(publicSeed, secretKeySeed, otsHashAddress));
+                bdsState.get(Integers.valueOf(index)).getNextState(publicSeed, secretKeySeed, otsAddress));
         }
     }
 

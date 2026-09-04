@@ -61,12 +61,13 @@ public final class BDS
      * @param params tree parameters
      * @param publicSeed public seed for tree
      * @param secretKeySeed secret seed for tree
-     * @param otsHashAddress hash address
+     * @param otsAddress the 32-byte encoding of the OTS hash address the tree starts at; read
+     *                   and never written, see {@link #initialize}.
      */
-    BDS(XMSSParameters params, byte[] publicSeed, byte[] secretKeySeed, OTSHashAddress otsHashAddress)
+    BDS(XMSSParameters params, byte[] publicSeed, byte[] secretKeySeed, byte[] otsAddress)
     {
         this(XMSSEngine.newWOTSPlus(params), params.getHeight(), params.getK(), ((1 << params.getHeight()) - 1));
-        this.initialize(publicSeed, secretKeySeed, otsHashAddress);
+        this.initialize(publicSeed, secretKeySeed, otsAddress);
     }
 
     /**
@@ -75,18 +76,19 @@ public final class BDS
      * @param params tree parameters
      * @param publicSeed public seed for tree
      * @param secretKeySeed secret seed for tree
-     * @param otsHashAddress hash address
+     * @param otsAddress the 32-byte encoding of the OTS hash address the tree starts at; read
+     *                   and never written, see {@link #initialize}.
      * @param index index counter for the state to be at.
      */
-    BDS(XMSSParameters params, byte[] publicSeed, byte[] secretKeySeed, OTSHashAddress otsHashAddress, int index)
+    BDS(XMSSParameters params, byte[] publicSeed, byte[] secretKeySeed, byte[] otsAddress, int index)
     {
         this(XMSSEngine.newWOTSPlus(params), params.getHeight(), params.getK(), ((1 << params.getHeight()) - 1));
 
-        this.initialize(publicSeed, secretKeySeed, otsHashAddress);
+        this.initialize(publicSeed, secretKeySeed, otsAddress);
 
         while (this.index < index)
         {
-            this.nextAuthenticationPath(publicSeed, secretKeySeed, otsHashAddress);
+            this.nextAuthenticationPath(publicSeed, secretKeySeed, otsAddress);
             this.used = false;
         }
     }
@@ -182,12 +184,12 @@ public final class BDS
             last.maxIndex, last.used);
     }
 
-    private BDS(BDS last, byte[] publicSeed, byte[] secretKeySeed, OTSHashAddress otsHashAddress)
+    private BDS(BDS last, byte[] publicSeed, byte[] secretKeySeed, byte[] otsAddress)
     {
         // the state being built is the one after last, and it has signed nothing yet
         this(last, new WOTSPlus(last.wotsPlus.getParams()), last.maxIndex, false);
 
-        this.nextAuthenticationPath(publicSeed, secretKeySeed, otsHashAddress);
+        this.nextAuthenticationPath(publicSeed, secretKeySeed, otsAddress);
     }
 
     private BDS(BDS last, ASN1ObjectIdentifier digest, int digestSize)
@@ -249,20 +251,33 @@ public final class BDS
         return clone;
     }
 
-    BDS getNextState(byte[] publicSeed, byte[] secretKeySeed, OTSHashAddress otsHashAddress)
+    BDS getNextState(byte[] publicSeed, byte[] secretKeySeed, byte[] otsAddress)
     {
-        return new BDS(this, publicSeed, secretKeySeed, otsHashAddress);
+        return new BDS(this, publicSeed, secretKeySeed, otsAddress);
     }
 
-    private void initialize(byte[] publicSeed, byte[] secretSeed, OTSHashAddress otsHashAddress)
+    /**
+     * Walk the whole tree, leaf by leaf, and leave this state holding its root and the
+     * authentication path of leaf zero (RFC 8391 sec. 4.1.6 algorithm 9).
+     *
+     * @param otsAddress the 32-byte encoding of the OTS hash address the tree starts at. Read and
+     *                   never written: the walk steps a copy of it, because a caller may go on to
+     *                   use the same starting address - XMSSEngine.generateMTSignature signs with
+     *                   it right after building this state - and the OTS address word of the copy
+     *                   ends the walk at the last leaf of the tree.
+     */
+    private void initialize(byte[] publicSeed, byte[] secretSeed, byte[] otsAddress)
     {
         /* prepare addresses - one encoding each for the whole walk, with the words that change
          * written into them as it goes */
+        int layerAddress = XMSSAddress.layerAddressOf(otsAddress);
+        long treeAddress = XMSSAddress.treeAddressOf(otsAddress);
+        byte[] leafAddress = Arrays.clone(otsAddress);
         byte[] lTreeAddress = new LTreeAddress.Builder()
-            .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
+            .withLayerAddress(layerAddress).withTreeAddress(treeAddress)
             .build().toByteArray();
         byte[] hashTreeAddress = new HashTreeAddress.Builder()
-            .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
+            .withLayerAddress(layerAddress).withTreeAddress(treeAddress)
             .build().toByteArray();
         /* and one pair of working buffers for every node hashed below, L-tree and tree alike; see
          * XMSSNodeUtil.randomizeHash for why one pair serves a whole walk */
@@ -273,14 +288,17 @@ public final class BDS
         /* iterate indexes */
         for (int indexLeaf = 0; indexLeaf < (1 << treeHeight); indexLeaf++)
         {
-            /* generate leaf */
-            otsHashAddress = XMSSNodeUtil.withOTSAddress(otsHashAddress, indexLeaf);
+            /* generate leaf - the one word of the OTS encoding a leaf is named by, stepped through
+             * the walk's own copy of it the way the two encodings above are stepped. What the
+             * previous leaf's chains left in the three words below it is cleared by
+             * getWOTSPlusSecretKey, which says so. */
+            Pack.intToBigEndian(indexLeaf, leafAddress, OTSHashAddress.OTS_ADDRESS_OFFSET);
             /*
              * import WOTSPlusSecretKey as its needed to calculate the public
              * key on the fly
              */
-            wotsPlus.importKeys(wotsPlus.getWOTSPlusSecretKey(secretSeed, otsHashAddress), publicSeed);
-            WOTSPlusPublicKeyParameters wotsPlusPublicKey = wotsPlus.getPublicKey(otsHashAddress);
+            wotsPlus.importKeys(wotsPlus.getWOTSPlusSecretKey(secretSeed, leafAddress), publicSeed);
+            WOTSPlusPublicKeyParameters wotsPlusPublicKey = wotsPlus.getPublicKey(leafAddress);
             Pack.intToBigEndian(indexLeaf, lTreeAddress, LTreeAddress.LTREE_ADDRESS_OFFSET);
             XMSSNode node = XMSSNodeUtil.lTree(wotsPlus, wotsPlusPublicKey, lTreeAddress, nodeKey, nodeMask);
 
@@ -336,7 +354,19 @@ public final class BDS
         root = stack.pop();
     }
 
-    private void nextAuthenticationPath(byte[] publicSeed, byte[] secretSeed, OTSHashAddress otsHashAddress)
+    /**
+     * Advance this state one leaf (RFC 8391 sec. 4.1.6 algorithm 11).
+     *
+     * @param otsAddress the 32-byte encoding of the OTS hash address the tree starts at. Read and
+     *                   never written, as in {@link #initialize}: the leaf branch below and the
+     *                   tree hash updates that close the method both step a copy of it. Here that
+     *                   is the contract rather than a live hazard - nothing reached today reads
+     *                   the OTS address word of what it passed afterwards, and dropping the copy
+     *                   leaves the compatibility oracle and this package's own tests green - but
+     *                   the same starting address is handed in once per leaf a state is walked
+     *                   forward over, and the copy is what keeps those calls independent.
+     */
+    private void nextAuthenticationPath(byte[] publicSeed, byte[] secretSeed, byte[] otsAddress)
     {
         if (used)
         {
@@ -356,11 +386,14 @@ public final class BDS
         }
 
         /* prepare addresses */
+        int layerAddress = XMSSAddress.layerAddressOf(otsAddress);
+        long treeAddress = XMSSAddress.treeAddressOf(otsAddress);
+        byte[] leafAddress = Arrays.clone(otsAddress);
         byte[] lTreeAddress = new LTreeAddress.Builder()
-            .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
+            .withLayerAddress(layerAddress).withTreeAddress(treeAddress)
             .build().toByteArray();
         byte[] hashTreeAddress = new HashTreeAddress.Builder()
-            .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
+            .withLayerAddress(layerAddress).withTreeAddress(treeAddress)
             .build().toByteArray();
         /* and one pair of working buffers for whichever of the two branches below runs; see
          * XMSSNodeUtil.randomizeHash */
@@ -371,13 +404,13 @@ public final class BDS
         /* leaf is a left node */
         if (tau == 0)
         {
-            otsHashAddress = XMSSNodeUtil.withOTSAddress(otsHashAddress, index);
+            Pack.intToBigEndian(index, leafAddress, OTSHashAddress.OTS_ADDRESS_OFFSET);
             /*
              * import WOTSPlusSecretKey as its needed to calculate the public
              * key on the fly
              */
-            wotsPlus.importKeys(wotsPlus.getWOTSPlusSecretKey(secretSeed, otsHashAddress), publicSeed);
-            WOTSPlusPublicKeyParameters wotsPlusPublicKey = wotsPlus.getPublicKey(otsHashAddress);
+            wotsPlus.importKeys(wotsPlus.getWOTSPlusSecretKey(secretSeed, leafAddress), publicSeed);
+            WOTSPlusPublicKeyParameters wotsPlusPublicKey = wotsPlus.getPublicKey(leafAddress);
             Pack.intToBigEndian(index, lTreeAddress, LTreeAddress.LTREE_ADDRESS_OFFSET);
             XMSSNode node = XMSSNodeUtil.lTree(wotsPlus, wotsPlusPublicKey, lTreeAddress, nodeKey, nodeMask);
             authenticationPath.set(0, node);
@@ -391,7 +424,7 @@ public final class BDS
              * import WOTSPlusSecretKey as its needed to calculate the public
              * key on the fly
              */
-            wotsPlus.importKeys(wotsPlus.getWOTSPlusSecretKey(secretSeed, otsHashAddress), publicSeed);
+            wotsPlus.importKeys(wotsPlus.getWOTSPlusSecretKey(secretSeed, leafAddress), publicSeed);
             // the node this state kept the last time the path passed height tau - 1. One that
             // reached this index by signing always has it; one that arrived by import need not, and
             // reading through the gap raises a NullPointerException from inside the hash rather than
@@ -446,7 +479,7 @@ public final class BDS
             BDSTreeHash treeHash = getBDSTreeHashInstanceForUpdate();
             if (treeHash != null)
             {
-                treeHash.update(stack, wotsPlus, publicSeed, secretSeed, otsHashAddress);
+                treeHash.update(stack, wotsPlus, publicSeed, secretSeed, leafAddress);
             }
         }
 

@@ -45,19 +45,31 @@ class BDSTreeHash
         finished = false;
     }
 
-    void update(Stack<XMSSNode> stack, WOTSPlus wotsPlus, byte[] publicSeed, byte[] secretSeed, OTSHashAddress otsHashAddress)
+    /**
+     * Take this tree hash instance one leaf further (RFC 8391 sec. 4.1.6 algorithm 10).
+     *
+     * @param otsAddress the 32-byte encoding of the OTS hash address the tree starts at. This
+     *                   writes the OTS address word of it, naming the leaf below, and WOTSPlus the
+     *                   three words after that; the only caller is the walk in
+     *                   {@link BDS#nextAuthenticationPath}, over the copy it owns, and it calls
+     *                   this several times running - each of which names its own leaf here before
+     *                   anything is derived from the encoding.
+     */
+    void update(Stack<XMSSNode> stack, WOTSPlus wotsPlus, byte[] publicSeed, byte[] secretSeed, byte[] otsAddress)
     {
         if (finished || !initialized)
         {
             throw new IllegalStateException("finished or not initialized");
         }
             /* prepare addresses */
-        otsHashAddress = XMSSNodeUtil.withOTSAddress(otsHashAddress, nextIndex);
+        Pack.intToBigEndian(nextIndex, otsAddress, OTSHashAddress.OTS_ADDRESS_OFFSET);
+        int layerAddress = XMSSAddress.layerAddressOf(otsAddress);
+        long treeAddress = XMSSAddress.treeAddressOf(otsAddress);
         byte[] lTreeAddress = new LTreeAddress.Builder()
-            .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
+            .withLayerAddress(layerAddress).withTreeAddress(treeAddress)
             .withLTreeAddress(nextIndex).build().toByteArray();
         byte[] hashTreeAddress = new HashTreeAddress.Builder()
-            .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
+            .withLayerAddress(layerAddress).withTreeAddress(treeAddress)
             .withTreeIndex(nextIndex).build().toByteArray();
         /* the two words of that encoding this climb moves, kept alongside it so stepping one is an
          * increment rather than a read back out of the bytes */
@@ -69,8 +81,8 @@ class BDSTreeHash
         byte[] nodeKey = new byte[n];
         byte[] nodeMask = new byte[2 * n];
             /* calculate leaf node */
-        wotsPlus.importKeys(wotsPlus.getWOTSPlusSecretKey(secretSeed, otsHashAddress), publicSeed);
-        WOTSPlusPublicKeyParameters wotsPlusPublicKey = wotsPlus.getPublicKey(otsHashAddress);
+        wotsPlus.importKeys(wotsPlus.getWOTSPlusSecretKey(secretSeed, otsAddress), publicSeed);
+        WOTSPlusPublicKeyParameters wotsPlusPublicKey = wotsPlus.getPublicKey(otsAddress);
         XMSSNode node = XMSSNodeUtil.lTree(wotsPlus, wotsPlusPublicKey, lTreeAddress, nodeKey, nodeMask);
 
         while (!stack.isEmpty() && stack.peek().getHeight() == node.getHeight()
