@@ -142,9 +142,15 @@ final class XMSSMTSignature
         return index;
     }
 
-    public byte[] getRandom()
+    /**
+     * This signature's randomizer r, by reference. XMSSEngine is the only caller and copies it
+     * straight into the H_msg key it builds, so the clone this used to return protected nothing:
+     * the class is package-private, the field is written once at construction and never after, and
+     * the one caller only reads it. A new caller must not write to what it gets back.
+     */
+    byte[] getRandom()
     {
-        return XMSSUtil.cloneArray(random);
+        return random;
     }
 
     public List<XMSSReducedSignature> getReducedSignatures()

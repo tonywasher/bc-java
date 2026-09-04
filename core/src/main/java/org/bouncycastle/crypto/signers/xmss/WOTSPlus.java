@@ -108,22 +108,19 @@ final class WOTSPlus
         List<Integer> baseWMessage = baseWMessageWithChecksum(messageDigest);
 
         //
-        // One clone of the signature for the whole loop rather than one per element. toByteArray()
-        // deep-copies all len rows, and asking for it inside the loop only to index a single row
-        // out of it made a verification len^2 row copies where it needs len: 4489 rather than 67
-        // for the SHA-256 parameter sets, 17161 rather than 131 for SHA-512, and that again for
-        // every layer of a hypertree on the XMSS^MT side. Hoisting it is behaviour-preserving -
-        // WOTSPlusSignature is immutable, nothing in the loop can invalidate the copy, and while
-        // chain() returns its argument unchanged for a zero-step chain, the rows it hands back
-        // that way are rows of this local copy and WOTSPlusPublicKeyParameters clones what it is
-        // given, so no row of it escapes.
+        // The signature's blocks are chained from where they lie rather than out of a copy of the
+        // whole signature. toByteArray() deep-copies all len of them, and it had been called inside
+        // the loop only to index one out, which made a verification len^2 block copies where it
+        // needs none: 4489 for the SHA-256 parameter sets, 17161 for SHA-512, and that again for
+        // every layer of a hypertree on the XMSS^MT side. Reading them in place is what getBlock()
+        // is for, and it escapes nothing chain() and WOTSPlusPublicKeyParameters did not already
+        // settle between them - see that method.
         //
-        byte[][] sig = signature.toByteArray();
         byte[][] publicKey = new byte[params.getLen()][];
         for (int i = 0; i < params.getLen(); i++)
         {
             otsHashAddress = withChainAddress(otsHashAddress, i);
-            publicKey[i] = chain(sig[i], baseWMessage.get(i),
+            publicKey[i] = chain(signature.getBlock(i), baseWMessage.get(i),
                 WOTSPlusParameters.WINTERNITZ_PARAMETER - 1 - baseWMessage.get(i), otsHashAddress);
         }
         return new WOTSPlusPublicKeyParameters(params, publicKey);

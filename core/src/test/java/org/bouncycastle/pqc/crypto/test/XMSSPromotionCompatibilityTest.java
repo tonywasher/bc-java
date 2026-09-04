@@ -83,6 +83,48 @@ public class XMSSPromotionCompatibilityTest
     }
 
     /**
+     * Every index a key can reach, not only its first.
+     * <p>
+     * The two implementations agreeing at index 0 says nothing about the idx_sig field of the
+     * H_msg key - r || root || toByte(idx_sig, n) of RFC 8391 sec. 4.1.9 and 4.2.7 - because at
+     * index 0 that field is all zeros whatever is done with it, and every other case above signs
+     * exactly once. Where those bytes sit, and how many of them there are, shows only once the
+     * index is non-zero, and a sign-then-verify round trip cannot show it either: both directions
+     * of one implementation build the key the same way, so they agree with each other while
+     * disagreeing with the other implementation. Comparing the two at every index is what pins it,
+     * and it walks the BDS traversal state through every shape it takes on the way.
+     */
+    public void testSignaturesMatchAtEveryIndexOfAKey()
+        throws Exception
+    {
+        org.bouncycastle.crypto.signers.XMSSSigner newSigner = new org.bouncycastle.crypto.signers.XMSSSigner();
+        newSigner.init(true, newXmssKey(newXmssParams(4, 0), seedFor(30)).getPrivate());
+
+        org.bouncycastle.pqc.crypto.xmss.XMSSSigner oldSigner = new org.bouncycastle.pqc.crypto.xmss.XMSSSigner();
+        oldSigner.init(true, oldXmssKey(oldXmssParams(4, 0), seedFor(30)).getPrivate());
+
+        for (int i = 0; i != 1 << 4; i++)
+        {
+            newSigner.update(MESSAGE, 0, MESSAGE.length);
+            assertTrue("XMSS: signatures differ at index " + i,
+                Arrays.areEqual(newSigner.generateSignature(), oldSigner.generateSignature(MESSAGE)));
+        }
+
+        org.bouncycastle.crypto.signers.XMSSMTSigner newMtSigner = new org.bouncycastle.crypto.signers.XMSSMTSigner();
+        newMtSigner.init(true, newXmssMtKey(newXmssMtParams(4, 2, 0), seedFor(31)).getPrivate());
+
+        org.bouncycastle.pqc.crypto.xmss.XMSSMTSigner oldMtSigner = new org.bouncycastle.pqc.crypto.xmss.XMSSMTSigner();
+        oldMtSigner.init(true, oldXmssMtKey(oldXmssMtParams(4, 2, 0), seedFor(31)).getPrivate());
+
+        for (int i = 0; i != 1 << 4; i++)
+        {
+            newMtSigner.update(MESSAGE, 0, MESSAGE.length);
+            assertTrue("XMSS^MT: signatures differ at index " + i,
+                Arrays.areEqual(newMtSigner.generateSignature(), oldMtSigner.generateSignature(MESSAGE)));
+        }
+    }
+
+    /**
      * The promoted signers implement org.bouncycastle.crypto.Signer rather than the pqc
      * StateAwareMessageSigner, so a message streamed in through update() must sign and verify, and
      * the buffer must be consumed by each operation rather than carried into the next. That the

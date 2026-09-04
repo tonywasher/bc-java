@@ -14,6 +14,7 @@ import org.bouncycastle.crypto.params.XMSSParameters;
 import org.bouncycastle.crypto.params.XMSSPrivateKeyParameters;
 import org.bouncycastle.crypto.params.XMSSPublicKeyParameters;
 import org.bouncycastle.util.Arrays;
+import org.bouncycastle.util.Pack;
 
 /**
  * The XMSS and XMSS^MT (RFC 8391) operations the key parameter classes, the key pair generators and
@@ -241,8 +242,8 @@ public final class XMSSEngine
 
             /* create (randomized keyed) messageDigest of message */
             byte[] random = khf.PRF(privateKey.getSecretKeyPRF(), XMSSUtil.toBytesBigEndian(index, 32));
-            byte[] concatenated = Arrays.concatenate(random, privateKey.getRoot(),
-                XMSSUtil.toBytesBigEndian(index, params.getTreeDigestSize()));
+            byte[] concatenated = hMsgKey(random, privateKey.getRoot(), index,
+                params.getTreeDigestSize());
             byte[] messageDigest = khf.HMsg(concatenated, message);
 
             /* create signature for messageDigest */
@@ -301,8 +302,8 @@ public final class XMSSEngine
         wotsPlus.importKeys(new byte[params.getTreeDigestSize()], publicKey.getPublicSeed());
 
         /* create message digest */
-        byte[] concatenated = Arrays.concatenate(sig.getRandom(), publicKey.getRoot(),
-            XMSSUtil.toBytesBigEndian(index, params.getTreeDigestSize()));
+        byte[] concatenated = hMsgKey(sig.getRandom(), publicKey.getRoot(), index,
+            params.getTreeDigestSize());
         byte[] messageDigest = khf.HMsg(concatenated, message);
 
         int xmssHeight = params.getHeight();
@@ -379,8 +380,8 @@ public final class XMSSEngine
 
                 /* compress message */
                 byte[] random = wotsPlus.getKhf().PRF(privateKey.getSecretKeyPRF(), XMSSUtil.toBytesBigEndian(globalIndex, 32));
-                byte[] concatenated = Arrays.concatenate(random, privateKey.getRoot(),
-                    XMSSUtil.toBytesBigEndian(globalIndex, params.getTreeDigestSize()));
+                byte[] concatenated = hMsgKey(random, privateKey.getRoot(), globalIndex,
+                    params.getTreeDigestSize());
                 byte[] messageDigest = wotsPlus.getKhf().HMsg(concatenated, message);
 
                 XMSSMTSignature signature = new XMSSMTSignature.Builder(params).withIndex(globalIndex).withRandom(random).build();
@@ -485,8 +486,8 @@ public final class XMSSEngine
             return false;
         }
 
-        byte[] concatenated = Arrays.concatenate(sig.getRandom(), publicKey.getRoot(),
-            XMSSUtil.toBytesBigEndian(sig.getIndex(), params.getTreeDigestSize()));
+        byte[] concatenated = hMsgKey(sig.getRandom(), publicKey.getRoot(), sig.getIndex(),
+            params.getTreeDigestSize());
         byte[] messageDigest = wotsPlus.getKhf().HMsg(concatenated, message);
 
         long globalIndex = sig.getIndex();
@@ -658,6 +659,34 @@ public final class XMSSEngine
     public static boolean isStoredIndexValid(int height, long index)
     {
         return index >= 0 && index <= (1L << height);
+    }
+
+    /**
+     * The key H_msg is applied under when a message is compressed, r || root || toByte(idx_sig, n)
+     * of RFC 8391 sec. 4.1.9 and 4.2.7, built straight into the one 3n-byte array
+     * {@link KeyedHashFunctions#HMsg} reads.
+     * <p>
+     * The four call sites - sign and verify, XMSS and XMSS^MT - had each written this as an
+     * Arrays.concatenate of three pieces, the last of which was an n-byte array that
+     * XMSSUtil.toBytesBigEndian allocated only for concatenate to copy in and drop. The index is
+     * written here in place instead, over the zeros a fresh array already carries.
+     * <p>
+     * Taking n of r and n of root rather than however many each happens to hold is not a new
+     * assumption: r is a PRF output or a signature field the builder took at exactly n, and root
+     * is a key field validateOrAllocate pinned there, so all four sites already had both at n.
+     * What changes is that one that somehow were not would fail here rather than quietly produce a
+     * key of another length for H_msg to hash. The min is toBytesBigEndian's, kept so the two say
+     * the same thing about a size under eight bytes; no parameter set WOTSPlusOid admits comes
+     * near that.
+     */
+    private static byte[] hMsgKey(byte[] random, byte[] root, long index, int n)
+    {
+        byte[] concatenated = new byte[3 * n];
+        System.arraycopy(random, 0, concatenated, 0, n);
+        System.arraycopy(root, 0, concatenated, n, n);
+        int len = Math.min(n, 8);
+        Pack.longToBigEndian_Low(index, concatenated, (3 * n) - len, len);
+        return concatenated;
     }
 
     /**

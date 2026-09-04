@@ -1,7 +1,5 @@
 package org.bouncycastle.crypto.signers.xmss;
 
-import org.bouncycastle.util.Bytes;
-
 class XMSSNodeUtil
 {
     /**
@@ -22,13 +20,8 @@ class XMSSNodeUtil
     static XMSSNode lTree(WOTSPlus wotsPlus, WOTSPlusPublicKeyParameters publicKey, LTreeAddress address)
     {
         int len = wotsPlus.getParams().getLen();
-            /* duplicate public key to XMSSNode Array */
-        byte[][] publicKeyBytes = publicKey.toByteArray();
-        XMSSNode[] publicKeyNodes = new XMSSNode[publicKeyBytes.length];
-        for (int i = 0; i < publicKeyBytes.length; i++)
-        {
-            publicKeyNodes[i] = new XMSSNode(0, publicKeyBytes[i]);
-        }
+        /* the key's blocks as the leaves of the L-tree, and the walk overwrites the array, not them */
+        XMSSNode[] publicKeyNodes = publicKey.toNodes();
         address = withTreeHeight(address, 0);
         while (len > 1)
         {
@@ -83,11 +76,9 @@ class XMSSNodeUtil
         byte[] bitmask1 = wotsPlus.getKhf().PRF(publicSeed, address.toByteArray());
 
         int n = wotsPlus.getParams().getTreeDigestSize();
-        byte[] leftValue = left.getValue();
-        byte[] rightValue = right.getValue();
         byte[] tmpMask = new byte[2 * n];
-        Bytes.xor(n, leftValue, bitmask0, tmpMask);
-        Bytes.xor(n, rightValue, bitmask1, tmpMask, n);
+        left.maskTo(n, bitmask0, tmpMask, 0);
+        right.maskTo(n, bitmask1, tmpMask, n);
         byte[] out = wotsPlus.getKhf().H(key, tmpMask);
         return new XMSSNode(left.getHeight(), out);
     }
