@@ -8,11 +8,6 @@ import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 final class WOTSPlusParameters
 {
     /**
-     * OID.
-     */
-    private final XMSSOid oid;
-
-    /**
      * The message digest size.
      */
     private final int digestSize;
@@ -67,23 +62,19 @@ final class WOTSPlusParameters
         len2 = (int)Math.floor(XMSSUtil.log2(len1 * (WINTERNITZ_PARAMETER - 1)) / XMSSUtil.log2(WINTERNITZ_PARAMETER)) + 1;
         len = len1 + len2;
         String algName = DigestUtil.getDigestName(treeDigest);
-        oid = WOTSPlusOid.lookup(algName, digestSize, WINTERNITZ_PARAMETER, len);
-        if (oid == null)
+        // The identifier this answers with is not kept - nothing anywhere reads a WOTS+ parameter
+        // set identifier - but whether there is one at all is the only thing that rejects a
+        // security parameter no XMSS parameter set defines. n arrives unexamined through the
+        // public XMSSParameters(height, tree digest OID, n) and XMSSMTParameters(height, layers,
+        // tree digest OID, n) constructors, and len1, len2 and len above are computed from
+        // whatever it is, so a SHA-256 asked for at n = 17, or truncated to 64, is stopped here
+        // and nowhere else.
+        if (WOTSPlusOid.lookup(algName, digestSize, WINTERNITZ_PARAMETER, len) == null)
         {
             throw new IllegalArgumentException("cannot find OID for digest algorithm: " + algName);
         }
     }
 
-    /**
-     * Getter OID.
-     *
-     * @return WOTS+ OID.
-     */
-    public XMSSOid getOid()
-    {
-        return oid;
-    }
-    
     /**
      * Getter digestSize.
      *

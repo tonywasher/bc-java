@@ -49,6 +49,48 @@ public class ParameterBoundsTests
         }
     }
 
+    /**
+     * The security parameter n is the caller's on both public constructors that take one, and
+     * nothing derived from it is bounded - len1, len2 and len are computed from whatever arrives.
+     * What refuses one that no registered parameter set defines is the WOTS+ parameter set lookup
+     * in WOTSPlusParameters, whose answer is otherwise unread, so this is what says that lookup is
+     * still doing something.
+     */
+    public void testSecurityParameterOutsideRegisteredSetsRefused()
+    {
+        // 32 and 24 are SHA-256's two, being RFC 8391 XMSS-SHA2_*_256 and SP 800-208
+        // XMSS-SHA2_*_192; 64 is SHA-512's n asked for of SHA-256, which is neither. Zero and
+        // below are not here because they are not sizes at all to these constructors - n > 0 is
+        // what asks for an explicit one, and anything else means take the digest's own.
+        int[] sizes = new int[]{1, 16, 17, 20, 31, 33, 48, 64, 128};
+
+        for (int i = 0; i != sizes.length; i++)
+        {
+            try
+            {
+                new XMSSParameters(10, NISTObjectIdentifiers.id_sha256, sizes[i]);
+                fail("n = " + sizes[i] + " accepted for XMSS");
+            }
+            catch (IllegalArgumentException e)
+            {
+                assertEquals("cannot find OID for digest algorithm: SHA-256", e.getMessage());
+            }
+
+            try
+            {
+                new XMSSMTParameters(20, 2, NISTObjectIdentifiers.id_sha256, sizes[i]);
+                fail("n = " + sizes[i] + " accepted for XMSS^MT");
+            }
+            catch (IllegalArgumentException e)
+            {
+                assertEquals("cannot find OID for digest algorithm: SHA-256", e.getMessage());
+            }
+        }
+
+        assertEquals(67, new XMSSParameters(10, NISTObjectIdentifiers.id_sha256, 32).getLen());
+        assertEquals(51, new XMSSParameters(10, NISTObjectIdentifiers.id_sha256, 24).getLen());
+    }
+
     public void testHeightBelowMinimumRefused()
     {
         int[] heights = new int[]{Integer.MIN_VALUE, -1, 0, 1};
