@@ -3,6 +3,8 @@ package org.bouncycastle.crypto.signers.xmss;
 import java.io.Serializable;
 import java.util.Stack;
 
+import org.bouncycastle.util.Pack;
+
 
 class BDSTreeHash
     implements Serializable, Cloneable
@@ -51,12 +53,16 @@ class BDSTreeHash
         }
             /* prepare addresses */
         otsHashAddress = XMSSNodeUtil.withOTSAddress(otsHashAddress, nextIndex);
-        LTreeAddress lTreeAddress = (LTreeAddress)new LTreeAddress.Builder()
+        byte[] lTreeAddress = new LTreeAddress.Builder()
             .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
-            .withLTreeAddress(nextIndex).build();
-        HashTreeAddress hashTreeAddress = (HashTreeAddress)new HashTreeAddress.Builder()
+            .withLTreeAddress(nextIndex).build().toByteArray();
+        byte[] hashTreeAddress = new HashTreeAddress.Builder()
             .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
-            .withTreeIndex(nextIndex).build();
+            .withTreeIndex(nextIndex).build().toByteArray();
+        /* the two words of that encoding this climb moves, kept alongside it so stepping one is an
+         * increment rather than a read back out of the bytes */
+        int hashTreeHeight = 0;
+        int hashTreeIndex = nextIndex;
             /* calculate leaf node */
         wotsPlus.importKeys(wotsPlus.getWOTSPlusSecretKey(secretSeed, otsHashAddress), publicSeed);
         WOTSPlusPublicKeyParameters wotsPlusPublicKey = wotsPlus.getPublicKey(otsHashAddress);
@@ -65,12 +71,11 @@ class BDSTreeHash
         while (!stack.isEmpty() && stack.peek().getHeight() == node.getHeight()
             && stack.peek().getHeight() != initialHeight)
         {
-            hashTreeAddress = XMSSNodeUtil.withTreeIndex(hashTreeAddress,
-                (hashTreeAddress.getTreeIndex() - 1) / 2);
+            hashTreeIndex = (hashTreeIndex - 1) / 2;
+            Pack.intToBigEndian(hashTreeIndex, hashTreeAddress, HashTreeAddress.TREE_INDEX_OFFSET);
             node = XMSSNodeUtil.randomizeHash(wotsPlus, stack.pop(), node, hashTreeAddress);
             node = node.incrementHeight();
-            hashTreeAddress = XMSSNodeUtil.withTreeHeight(hashTreeAddress,
-                hashTreeAddress.getTreeHeight() + 1);
+            Pack.intToBigEndian(++hashTreeHeight, hashTreeAddress, HashTreeAddress.TREE_HEIGHT_OFFSET);
         }
 
         if (tailNode == null)
@@ -81,8 +86,8 @@ class BDSTreeHash
         {
             if (tailNode.getHeight() == node.getHeight())
             {
-                hashTreeAddress = XMSSNodeUtil.withTreeIndex(hashTreeAddress,
-                    (hashTreeAddress.getTreeIndex() - 1) / 2);
+                hashTreeIndex = (hashTreeIndex - 1) / 2;
+                Pack.intToBigEndian(hashTreeIndex, hashTreeAddress, HashTreeAddress.TREE_INDEX_OFFSET);
                 node = XMSSNodeUtil.randomizeHash(wotsPlus, tailNode, node, hashTreeAddress);
                 node = node.incrementHeight();
                 tailNode = node;
@@ -91,8 +96,7 @@ class BDSTreeHash
                 // kept so both merges read alike and so the code still matches the unconditional
                 // increment that closes the loop of RFC 8391 sec. 4.1.6 algorithm 9. The address
                 // names the height of the children, so the hash above is at the right level.
-                hashTreeAddress = XMSSNodeUtil.withTreeHeight(hashTreeAddress,
-                    hashTreeAddress.getTreeHeight() + 1);
+                Pack.intToBigEndian(++hashTreeHeight, hashTreeAddress, HashTreeAddress.TREE_HEIGHT_OFFSET);
             }
             else
             {

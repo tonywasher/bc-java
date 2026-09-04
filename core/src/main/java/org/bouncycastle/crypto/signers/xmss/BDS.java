@@ -244,13 +244,14 @@ public final class BDS
 
     private void initialize(byte[] publicSeed, byte[] secretSeed, OTSHashAddress otsHashAddress)
     {
-        /* prepare addresses */
-        LTreeAddress lTreeAddress = (LTreeAddress)new LTreeAddress.Builder()
+        /* prepare addresses - one encoding each for the whole walk, with the words that change
+         * written into them as it goes */
+        byte[] lTreeAddress = new LTreeAddress.Builder()
             .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
-            .build();
-        HashTreeAddress hashTreeAddress = (HashTreeAddress)new HashTreeAddress.Builder()
+            .build().toByteArray();
+        byte[] hashTreeAddress = new HashTreeAddress.Builder()
             .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
-            .build();
+            .build().toByteArray();
 
         /* iterate indexes */
         for (int indexLeaf = 0; indexLeaf < (1 << treeHeight); indexLeaf++)
@@ -263,16 +264,22 @@ public final class BDS
              */
             wotsPlus.importKeys(wotsPlus.getWOTSPlusSecretKey(secretSeed, otsHashAddress), publicSeed);
             WOTSPlusPublicKeyParameters wotsPlusPublicKey = wotsPlus.getPublicKey(otsHashAddress);
-            lTreeAddress = withLTreeAddress(lTreeAddress, indexLeaf);
+            Pack.intToBigEndian(indexLeaf, lTreeAddress, LTreeAddress.LTREE_ADDRESS_OFFSET);
             XMSSNode node = XMSSNodeUtil.lTree(wotsPlus, wotsPlusPublicKey, lTreeAddress);
 
-            // NOT XMSSNodeUtil.withTreeIndex: the tree height is deliberately left out, so that it
-            // resets to 0 for the new leaf. The loop below walks it back up, so carrying it over
-            // here would start each leaf at the height the previous one finished at.
-            hashTreeAddress = (HashTreeAddress)new HashTreeAddress.Builder()
-                .withLayerAddress(hashTreeAddress.getLayerAddress())
-                .withTreeAddress(hashTreeAddress.getTreeAddress()).withTreeIndex(indexLeaf)
-                .withKeyAndMask(hashTreeAddress.getKeyAndMask()).build();
+            // the two words of the hash tree encoding the climb below moves, kept beside it so
+            // that stepping one is an increment rather than a read back out of the bytes. They
+            // are named for the encoding rather than for the field, because this class's own
+            // treeHeight is the height of the whole tree - which the loop below reads to decide
+            // what is retained - and a local of that name here would hide it silently.
+            //
+            // The height goes back to 0 for the new leaf rather than being carried over: the loop
+            // walks it up, so leaving it where the previous leaf finished would start each leaf
+            // at that height.
+            int hashTreeHeight = 0;
+            int hashTreeIndex = indexLeaf;
+            Pack.intToBigEndian(hashTreeHeight, hashTreeAddress, HashTreeAddress.TREE_HEIGHT_OFFSET);
+            Pack.intToBigEndian(hashTreeIndex, hashTreeAddress, HashTreeAddress.TREE_INDEX_OFFSET);
             while (!stack.isEmpty() && stack.peek().getHeight() == node.getHeight())
             {
                 /* add to authenticationPath if leafIndex == 1 */
@@ -300,12 +307,11 @@ public final class BDS
                         retain.get(node.getHeight()).add(node);
                     }
                 }
-                hashTreeAddress = XMSSNodeUtil.withTreeIndex(hashTreeAddress,
-                    (hashTreeAddress.getTreeIndex() - 1) / 2);
+                hashTreeIndex = (hashTreeIndex - 1) / 2;
+                Pack.intToBigEndian(hashTreeIndex, hashTreeAddress, HashTreeAddress.TREE_INDEX_OFFSET);
                 node = XMSSNodeUtil.randomizeHash(wotsPlus, stack.pop(), node, hashTreeAddress);
                 node = node.incrementHeight();
-                hashTreeAddress = XMSSNodeUtil.withTreeHeight(hashTreeAddress,
-                    hashTreeAddress.getTreeHeight() + 1);
+                Pack.intToBigEndian(++hashTreeHeight, hashTreeAddress, HashTreeAddress.TREE_HEIGHT_OFFSET);
             }
             /* push to stack */
             stack.push(node);
@@ -333,12 +339,12 @@ public final class BDS
         }
 
         /* prepare addresses */
-        LTreeAddress lTreeAddress = (LTreeAddress)new LTreeAddress.Builder()
+        byte[] lTreeAddress = new LTreeAddress.Builder()
             .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
-            .build();
-        HashTreeAddress hashTreeAddress = (HashTreeAddress)new HashTreeAddress.Builder()
+            .build().toByteArray();
+        byte[] hashTreeAddress = new HashTreeAddress.Builder()
             .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
-            .build();
+            .build().toByteArray();
 
         /* leaf is a left node */
         if (tau == 0)
@@ -350,18 +356,15 @@ public final class BDS
              */
             wotsPlus.importKeys(wotsPlus.getWOTSPlusSecretKey(secretSeed, otsHashAddress), publicSeed);
             WOTSPlusPublicKeyParameters wotsPlusPublicKey = wotsPlus.getPublicKey(otsHashAddress);
-            lTreeAddress = withLTreeAddress(lTreeAddress, index);
+            Pack.intToBigEndian(index, lTreeAddress, LTreeAddress.LTREE_ADDRESS_OFFSET);
             XMSSNode node = XMSSNodeUtil.lTree(wotsPlus, wotsPlusPublicKey, lTreeAddress);
             authenticationPath.set(0, node);
         }
         else
         {
             /* add new left node on height tau to authentication path */
-            // two fields at once, so neither of the single-field helpers fits
-            hashTreeAddress = (HashTreeAddress)new HashTreeAddress.Builder()
-                .withLayerAddress(hashTreeAddress.getLayerAddress())
-                .withTreeAddress(hashTreeAddress.getTreeAddress()).withTreeHeight(tau - 1)
-                .withTreeIndex(index >> tau).withKeyAndMask(hashTreeAddress.getKeyAndMask()).build();
+            Pack.intToBigEndian(tau - 1, hashTreeAddress, HashTreeAddress.TREE_HEIGHT_OFFSET);
+            Pack.intToBigEndian(index >> tau, hashTreeAddress, HashTreeAddress.TREE_INDEX_OFFSET);
             /*
              * import WOTSPlusSecretKey as its needed to calculate the public
              * key on the fly
@@ -812,22 +815,5 @@ public final class BDS
         out.defaultWriteObject();
 
         out.writeInt(this.maxIndex);
-    }
-
-    /**
-     * The given address with its L-tree address replaced and every other field carried over, as
-     * the leaf walks in initialize() and nextAuthenticationPath() need when they step to the next
-     * leaf. An XMSS address is immutable, so setting one field means rebuilding the whole address.
-     *
-     * @param address      L-tree address to copy.
-     * @param lTreeAddress L-tree address value to set.
-     * @return address with the given L-tree address.
-     */
-    private static LTreeAddress withLTreeAddress(LTreeAddress address, int lTreeAddress)
-    {
-        return (LTreeAddress)new LTreeAddress.Builder()
-            .withLayerAddress(address.getLayerAddress()).withTreeAddress(address.getTreeAddress())
-            .withLTreeAddress(lTreeAddress).withTreeHeight(address.getTreeHeight())
-            .withTreeIndex(address.getTreeIndex()).withKeyAndMask(address.getKeyAndMask()).build();
     }
 }

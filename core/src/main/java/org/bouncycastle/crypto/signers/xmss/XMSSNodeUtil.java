@@ -16,20 +16,26 @@ class XMSSNodeUtil
      * </p>
      *
      * @param publicKey WOTS+ public key to compress.
-     * @param address   Address.
+     * @param address   the 32-byte encoding of this leaf's L-tree address. The caller owns it and
+     *                  has set the L-tree address word, which is what names the leaf; this walk
+     *                  writes the tree height and tree index words of it, and randomizeHash below
+     *                  writes key-and-mask. Each of those three is written before the hash that
+     *                  reads it, so what a previous leaf's walk left in them is gone before
+     *                  anything is hashed.
      * @return Compressed n-byte string of public key.
      */
-    static XMSSNode lTree(WOTSPlus wotsPlus, WOTSPlusPublicKeyParameters publicKey, LTreeAddress address)
+    static XMSSNode lTree(WOTSPlus wotsPlus, WOTSPlusPublicKeyParameters publicKey, byte[] address)
     {
         int len = wotsPlus.getParams().getLen();
         /* the key's blocks as the leaves of the L-tree, and the walk overwrites the array, not them */
         XMSSNode[] publicKeyNodes = publicKey.toNodes();
-        address = withTreeHeight(address, 0);
+        int treeHeight = 0;
+        Pack.intToBigEndian(treeHeight, address, LTreeAddress.TREE_HEIGHT_OFFSET);
         while (len > 1)
         {
             for (int i = 0; i < (int)Math.floor(len / 2); i++)
             {
-                address = withTreeIndex(address, i);
+                Pack.intToBigEndian(i, address, LTreeAddress.TREE_INDEX_OFFSET);
                 publicKeyNodes[i] = randomizeHash(wotsPlus, publicKeyNodes[2 * i], publicKeyNodes[(2 * i) + 1], address);
             }
             if (len % 2 == 1)
@@ -37,7 +43,7 @@ class XMSSNodeUtil
                 publicKeyNodes[(int)Math.floor(len / 2)] = publicKeyNodes[len - 1];
             }
             len = (int)Math.ceil((double)len / 2);
-            address = withTreeHeight(address, address.getTreeHeight() + 1);
+            Pack.intToBigEndian(++treeHeight, address, LTreeAddress.TREE_HEIGHT_OFFSET);
         }
         return publicKeyNodes[0];
     }
@@ -57,10 +63,12 @@ class XMSSNodeUtil
      *
      * @param left    Left node.
      * @param right   Right node.
-     * @param address Address.
+     * @param address the 32-byte encoding of the address of the node being computed. The caller
+     *                owns it and has written the words that name that node; this method writes the
+     *                key-and-mask word of it, once before each of the three hashes below.
      * @return Randomized hash of parent of left / right node.
      */
-    static XMSSNode randomizeHash(WOTSPlus wotsPlus, XMSSNode left, XMSSNode right, XMSSAddress address)
+    static XMSSNode randomizeHash(WOTSPlus wotsPlus, XMSSNode left, XMSSNode right, byte[] address)
     {
         if (left.getHeight() != right.getHeight())
         {
@@ -71,31 +79,34 @@ class XMSSNodeUtil
         int n = wotsPlus.getParams().getTreeDigestSize();
 
         // The three PRFs differ in one word of the address, so they run over one encoding of it
-        // taken once with that word written in, the way WOTSPlus.chain steps its two; the offset
-        // is named on the class that lays the encoding out rather than copied here.
+        // with that word written in before each, the way WOTSPlus.chain steps its two; the offset
+        // is named on the class that lays the encoding out rather than copied here. Taking the
+        // encoding rather than the address is what lets the caller keep one for a whole walk: at
+        // n = 32 an L-tree over a WOTS+ public key is 66 of these calls and a tree of height 10
+        // another 1023, and every one of them used to rebuild an address and encode it again.
         //
         // This is where withKeyAndMask() was, and what it did with an address that was neither an
         // LTreeAddress nor a HashTreeAddress was return it unchanged - leaving key-and-mask at
         // whatever it already held, so the three PRFs would be three of the same hash. Writing the
-        // word sets it for every address type. Nothing changes today, no caller passing anything
-        // else - lTree an LTreeAddress, BDS, BDSTreeHash and XMSSVerifierUtil a HashTreeAddress -
-        // but the rule is now the one RFC 8391 sec. 4.1.5 states rather than one about subtypes.
+        // word sets it whatever address the encoding was taken from. Nothing changes today, no
+        // caller passing anything else - lTree an L-tree address, BDS, BDSTreeHash and
+        // XMSSVerifierUtil a hash tree address - but the rule is now the one RFC 8391 sec. 4.1.5
+        // states rather than one about subtypes.
         //
         // The two bitmasks are produced straight into the 2n-byte buffer they are masked in, where
         // maskInto turns each half into the masked value. Only the key needs an array of its own,
         // being the one of the three that H reads as a key rather than as the data it hashes.
-        byte[] addressBytes = address.toByteArray();
         byte[] key = new byte[n];
         byte[] tmpMask = new byte[2 * n];
 
-        Pack.intToBigEndian(0, addressBytes, XMSSAddress.KEY_AND_MASK_OFFSET);
-        khf.PRF(publicSeed, addressBytes, key);
+        Pack.intToBigEndian(0, address, XMSSAddress.KEY_AND_MASK_OFFSET);
+        khf.PRF(publicSeed, address, key);
 
-        Pack.intToBigEndian(1, addressBytes, XMSSAddress.KEY_AND_MASK_OFFSET);
-        khf.PRF(publicSeed, addressBytes, tmpMask, 0);
+        Pack.intToBigEndian(1, address, XMSSAddress.KEY_AND_MASK_OFFSET);
+        khf.PRF(publicSeed, address, tmpMask, 0);
 
-        Pack.intToBigEndian(2, addressBytes, XMSSAddress.KEY_AND_MASK_OFFSET);
-        khf.PRF(publicSeed, addressBytes, tmpMask, n);
+        Pack.intToBigEndian(2, address, XMSSAddress.KEY_AND_MASK_OFFSET);
+        khf.PRF(publicSeed, address, tmpMask, n);
 
         left.maskInto(n, tmpMask, 0);
         right.maskInto(n, tmpMask, n);
@@ -107,13 +118,11 @@ class XMSSNodeUtil
 
     /*
      * An XMSS address is immutable, so setting one of its fields means rebuilding the whole
-     * address and carrying the others over by hand. The helpers below are that rebuild, written
-     * once for each (address type, field) pair the tree walks step, so a caller cannot leave a
-     * field out by accident.
-     *
-     * They are NOT a substitute for every builder call in the package: a rebuild that drops a
-     * field on purpose - BDS.initialize resetting treeHeight for each new leaf, or the ones that
-     * change two fields at once - has to stay written out, and says so where it stands.
+     * address and carrying the others over by hand. The helper below is that rebuild, and it is
+     * the last one: the OTS hash address is the only address still handed on as an address rather
+     * than as the bytes it encodes to, because WOTSPlus reads its fields. Every field a tree walk
+     * steps - tree height, tree index, the L-tree address of a leaf - is now a word written into
+     * an encoding the walk holds, so the rebuilds that spelled those out are gone with them.
      */
 
     /**
@@ -131,69 +140,5 @@ class XMSSNodeUtil
             .withOTSAddress(otsAddress).withChainAddress(address.getChainAddress())
             .withHashAddress(address.getHashAddress()).withKeyAndMask(address.getKeyAndMask())
             .build();
-    }
-
-    /**
-     * The given address with its tree height replaced and every other field carried over, as the
-     * tree walks need when they move up a level.
-     *
-     * @param address    Hash tree address to copy.
-     * @param treeHeight Tree height to set.
-     * @return address with the given tree height.
-     */
-    static HashTreeAddress withTreeHeight(HashTreeAddress address, int treeHeight)
-    {
-        return (HashTreeAddress)new HashTreeAddress.Builder()
-            .withLayerAddress(address.getLayerAddress()).withTreeAddress(address.getTreeAddress())
-            .withTreeHeight(treeHeight).withTreeIndex(address.getTreeIndex())
-            .withKeyAndMask(address.getKeyAndMask()).build();
-    }
-
-    /**
-     * The given address with its tree index replaced and every other field carried over, as the
-     * tree walks need when they move to the parent node.
-     *
-     * @param address   Hash tree address to copy.
-     * @param treeIndex Tree index to set.
-     * @return address with the given tree index.
-     */
-    static HashTreeAddress withTreeIndex(HashTreeAddress address, int treeIndex)
-    {
-        return (HashTreeAddress)new HashTreeAddress.Builder()
-            .withLayerAddress(address.getLayerAddress()).withTreeAddress(address.getTreeAddress())
-            .withTreeHeight(address.getTreeHeight()).withTreeIndex(treeIndex)
-            .withKeyAndMask(address.getKeyAndMask()).build();
-    }
-
-    /**
-     * The given address with its tree height replaced and every other field carried over, for the
-     * L-tree walk in lTree().
-     *
-     * @param address    L-tree address to copy.
-     * @param treeHeight Tree height to set.
-     * @return address with the given tree height.
-     */
-    private static LTreeAddress withTreeHeight(LTreeAddress address, int treeHeight)
-    {
-        return (LTreeAddress)new LTreeAddress.Builder()
-            .withLayerAddress(address.getLayerAddress()).withTreeAddress(address.getTreeAddress())
-            .withLTreeAddress(address.getLTreeAddress()).withTreeHeight(treeHeight)
-            .withTreeIndex(address.getTreeIndex()).withKeyAndMask(address.getKeyAndMask()).build();
-    }
-
-    /**
-     * The given address with its tree index replaced and every other field carried over, for the
-     * L-tree walk in lTree().
-     *
-     * @param address   L-tree address to copy.
-     * @param treeIndex Tree index to set.
-     * @return address with the given tree index.
-     */
-    private static LTreeAddress withTreeIndex(LTreeAddress address, int treeIndex)
-    {
-        return (LTreeAddress)new LTreeAddress.Builder()
-            .withLayerAddress(address.getLayerAddress()).withTreeAddress(address.getTreeAddress())
-            .withLTreeAddress(address.getLTreeAddress()).withTreeHeight(address.getTreeHeight())
-            .withTreeIndex(treeIndex).withKeyAndMask(address.getKeyAndMask()).build();
     }
 }

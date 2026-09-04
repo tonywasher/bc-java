@@ -1,5 +1,7 @@
 package org.bouncycastle.crypto.signers.xmss;
 
+import org.bouncycastle.util.Pack;
+
 class XMSSVerifierUtil
 {
     /**
@@ -24,12 +26,14 @@ class XMSSVerifierUtil
         }
 
         /* prepare adresses */
-        LTreeAddress lTreeAddress = (LTreeAddress)new LTreeAddress.Builder()
+        byte[] lTreeAddress = new LTreeAddress.Builder()
             .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
-            .withLTreeAddress(otsHashAddress.getOTSAddress()).build();
-        HashTreeAddress hashTreeAddress = (HashTreeAddress)new HashTreeAddress.Builder()
+            .withLTreeAddress(otsHashAddress.getOTSAddress()).build().toByteArray();
+        byte[] hashTreeAddress = new HashTreeAddress.Builder()
             .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
-            .withTreeIndex(otsHashAddress.getOTSAddress()).build();
+            .withTreeIndex(otsHashAddress.getOTSAddress()).build().toByteArray();
+        /* the tree index of that encoding, kept alongside it as the climb halves it */
+        int hashTreeIndex = otsHashAddress.getOTSAddress();
         /*
          * calculate WOTS+ public key and compress to obtain original leaf hash
          */
@@ -40,17 +44,17 @@ class XMSSVerifierUtil
 
         for (int k = 0; k < height; k++)
         {
-            hashTreeAddress = XMSSNodeUtil.withTreeHeight(hashTreeAddress, k);
+            Pack.intToBigEndian(k, hashTreeAddress, HashTreeAddress.TREE_HEIGHT_OFFSET);
             if (Math.floor(indexLeaf / (1 << k)) % 2 == 0)
             {
-                hashTreeAddress = XMSSNodeUtil.withTreeIndex(hashTreeAddress,
-                    hashTreeAddress.getTreeIndex() / 2);
+                hashTreeIndex = hashTreeIndex / 2;
+                Pack.intToBigEndian(hashTreeIndex, hashTreeAddress, HashTreeAddress.TREE_INDEX_OFFSET);
                 node[1] = XMSSNodeUtil.randomizeHash(wotsPlus, node[0], signature.getAuthPath().get(k), hashTreeAddress);
             }
             else
             {
-                hashTreeAddress = XMSSNodeUtil.withTreeIndex(hashTreeAddress,
-                    (hashTreeAddress.getTreeIndex() - 1) / 2);
+                hashTreeIndex = (hashTreeIndex - 1) / 2;
+                Pack.intToBigEndian(hashTreeIndex, hashTreeAddress, HashTreeAddress.TREE_INDEX_OFFSET);
                 node[1] = XMSSNodeUtil.randomizeHash(wotsPlus, signature.getAuthPath().get(k), node[0], hashTreeAddress);
             }
             node[1] = node[1].incrementHeight();

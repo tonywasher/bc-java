@@ -12,6 +12,16 @@ final class HashTreeAddress
     private static final int TYPE = 0x02;
     private static final int PADDING = 0x00;
 
+    /**
+     * Offsets of the tree height and tree index words in the 32-byte encoding
+     * {@link #toByteArray()} produces. These are the two words a walk of the tree above the leaves
+     * moves as it climbs - BDS, BDSTreeHash and XMSSVerifierUtil - so each of them steps one
+     * encoding rather than rebuilding an address per node. {@link LTreeAddress} lays the same two
+     * fields out at the same two words and names them for itself.
+     */
+    static final int TREE_HEIGHT_OFFSET = 20;
+    static final int TREE_INDEX_OFFSET = 24;
+
     private final int padding;
     private final int treeHeight;
     private final int treeIndex;
@@ -67,18 +77,8 @@ final class HashTreeAddress
     {
         byte[] byteRepresentation = super.toByteArray();
         Pack.intToBigEndian(padding, byteRepresentation,16);
-        Pack.intToBigEndian(treeHeight, byteRepresentation, 20);
-        Pack.intToBigEndian(treeIndex, byteRepresentation, 24);
+        Pack.intToBigEndian(treeHeight, byteRepresentation, TREE_HEIGHT_OFFSET);
+        Pack.intToBigEndian(treeIndex, byteRepresentation, TREE_INDEX_OFFSET);
         return byteRepresentation;
-    }
-
-    public int getTreeHeight()
-    {
-        return treeHeight;
-    }
-
-    public int getTreeIndex()
-    {
-        return treeIndex;
     }
 }
