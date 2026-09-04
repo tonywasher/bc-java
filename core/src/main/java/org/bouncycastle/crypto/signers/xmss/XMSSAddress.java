@@ -7,6 +7,13 @@ import org.bouncycastle.util.Pack;
  */
 abstract class XMSSAddress
 {
+    /**
+     * Offset of the key-and-mask word in the 32-byte encoding {@link #toByteArray()} produces.
+     * Named so that a caller stepping the field through an encoding of its own - WOTSPlus.chain
+     * writes it twice per chain step - says so against the one place that lays the encoding out,
+     * rather than against a copy of the number.
+     */
+    static final int KEY_AND_MASK_OFFSET = 28;
 
     private final int layerAddress;
     private final long treeAddress;
@@ -65,7 +72,7 @@ abstract class XMSSAddress
         Pack.intToBigEndian(layerAddress, byteRepresentation, 0);
         Pack.longToBigEndian(treeAddress, byteRepresentation, 4);
         Pack.intToBigEndian(type, byteRepresentation, 12);
-        Pack.intToBigEndian(keyAndMask, byteRepresentation, 28);
+        Pack.intToBigEndian(keyAndMask, byteRepresentation, KEY_AND_MASK_OFFSET);
         return byteRepresentation;
     }
 

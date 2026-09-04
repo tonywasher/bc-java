@@ -5,6 +5,7 @@ import java.util.List;
 
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Bytes;
+import org.bouncycastle.util.Pack;
 
 /**
  * WOTS+.
@@ -153,15 +154,33 @@ final class WOTSPlus
             return startHash;
         }
 
-        byte[] tmp = chain(startHash, startIndex, steps - 1, otsHashAddress);
-        int hashAddress = startIndex + steps - 1;
-        otsHashAddress = withHashAddress(otsHashAddress, hashAddress, 0);
-        byte[] key = khf.PRF(publicSeed, otsHashAddress.toByteArray());
-        otsHashAddress = withHashAddress(otsHashAddress, hashAddress, 1);
-        byte[] bitmask = khf.PRF(publicSeed, otsHashAddress.toByteArray());
+        //
+        // Iteratively, over one encoding of the address. The two words a chain step moves are the
+        // hash address and the key-and-mask, PRF reads the address as the 32 bytes it is, and
+        // nothing here reads the incoming values of either word - withHashAddress() overwrote both
+        // at every step - so what the recursion expressed as two rebuilt addresses and two fresh
+        // toByteArray() copies per step is three int writes into one encoding taken once. The
+        // encoding is this method's own: toByteArray() allocates what it returns, and the caller's
+        // address object is left alone exactly as it was when chain() reassigned only its own
+        // parameter. Chained from the front rather than unwound from the back, which is the same
+        // sequence of hash addresses - startIndex, then upwards - in the same order.
+        //
+        byte[] address = otsHashAddress.toByteArray();
         byte[] tmpMasked = new byte[n];
-        Bytes.xor(n, tmp, bitmask, tmpMasked);
-        tmp = khf.F(key, tmpMasked);
+        byte[] tmp = startHash;
+        for (int i = 0; i != steps; i++)
+        {
+            Pack.intToBigEndian(startIndex + i, address, OTSHashAddress.HASH_ADDRESS_OFFSET);
+
+            Pack.intToBigEndian(0, address, XMSSAddress.KEY_AND_MASK_OFFSET);
+            byte[] key = khf.PRF(publicSeed, address);
+
+            Pack.intToBigEndian(1, address, XMSSAddress.KEY_AND_MASK_OFFSET);
+            byte[] bitmask = khf.PRF(publicSeed, address);
+
+            Bytes.xor(n, tmp, bitmask, tmpMasked);
+            tmp = khf.F(key, tmpMasked);
+        }
         return tmp;
     }
 
@@ -180,25 +199,6 @@ final class WOTSPlus
             .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
             .withOTSAddress(otsHashAddress.getOTSAddress()).withChainAddress(chainAddress)
             .withHashAddress(otsHashAddress.getHashAddress()).withKeyAndMask(otsHashAddress.getKeyAndMask())
-            .build();
-    }
-
-    /**
-     * The given address with its hash address and key-and-mask replaced and every other field
-     * carried over, as chain() needs for the two PRF calls - key, then bitmask - it makes at each
-     * step of a chain.
-     *
-     * @param otsHashAddress OTS hash address to copy.
-     * @param hashAddress    Hash address to set.
-     * @param keyAndMask     Key and mask to set.
-     * @return otsHashAddress with the given hash address and key and mask.
-     */
-    private static OTSHashAddress withHashAddress(OTSHashAddress otsHashAddress, int hashAddress, int keyAndMask)
-    {
-        return (OTSHashAddress)new OTSHashAddress.Builder()
-            .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
-            .withOTSAddress(otsHashAddress.getOTSAddress()).withChainAddress(otsHashAddress.getChainAddress())
-            .withHashAddress(hashAddress).withKeyAndMask(keyAndMask)
             .build();
     }
 

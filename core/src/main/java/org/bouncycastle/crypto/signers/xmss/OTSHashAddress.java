@@ -9,6 +9,13 @@ final class OTSHashAddress
     extends XMSSAddress
 {
 
+    /**
+     * Offset of the hash address word in the 32-byte encoding {@link #toByteArray()} produces.
+     * See {@link XMSSAddress#KEY_AND_MASK_OFFSET}: these are the two words a WOTS+ chain step
+     * moves, and chain() writes them into an encoding it holds rather than rebuilding one.
+     */
+    static final int HASH_ADDRESS_OFFSET = 24;
+
     private static final int TYPE = 0x00;
 
     private final int otsAddress;
@@ -71,7 +78,7 @@ final class OTSHashAddress
         byte[] byteRepresentation = super.toByteArray();
         Pack.intToBigEndian(otsAddress, byteRepresentation,16);
         Pack.intToBigEndian(chainAddress, byteRepresentation, 20);
-        Pack.intToBigEndian(hashAddress, byteRepresentation, 24);
+        Pack.intToBigEndian(hashAddress, byteRepresentation, HASH_ADDRESS_OFFSET);
         return byteRepresentation;
     }
 
