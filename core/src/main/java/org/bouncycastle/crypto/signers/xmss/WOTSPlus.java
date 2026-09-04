@@ -321,15 +321,28 @@ final class WOTSPlus
      *                       instance holds under the near enough same name. The two are the input
      *                       and the output of this one derivation: every caller hands the result
      *                       straight to {@link #importKeys(byte[], byte[])} on the same object.
-     * @param otsHashAddress one time hash address.
+     * @param otsHashAddress one time hash address. Read and never written, and only its layer
+     *                       address, tree address and OTS address take part: the three words below
+     *                       those are zero in the address this derivation is over, whatever the
+     *                       caller left in them.
      * @return WOTS+ secret key at index.
      */
     byte[] getWOTSPlusSecretKey(byte[] secretSeed, OTSHashAddress otsHashAddress)
     {
-        otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder()
-            .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
-            .withOTSAddress(otsHashAddress.getOTSAddress()).build();
-        return khf.PRF(secretSeed, otsHashAddress.toByteArray());
+        // The address this is the PRF of is the caller's with its chain address, hash address and
+        // key-and-mask cleared, and it was reached by building a second OTSHashAddress out of the
+        // three fields that survive that - a Builder and an address per one-time key, so 1024 of
+        // each in an h = 10 key generation - and then encoding it. The caller's own encoding
+        // differs from that one in exactly the three words being cleared, each of which is already
+        // named here, so the zeros go into it directly and the layout stays where toByteArray()
+        // keeps it. Same bytes by construction: the rebuild copied the layer address, the tree
+        // address and the OTS address across, and both addresses carry the OTS type word, so the
+        // only words the two encodings could disagree in are the three a Builder left at zero.
+        byte[] address = otsHashAddress.toByteArray();
+        Pack.intToBigEndian(0, address, OTSHashAddress.CHAIN_ADDRESS_OFFSET);
+        Pack.intToBigEndian(0, address, OTSHashAddress.HASH_ADDRESS_OFFSET);
+        Pack.intToBigEndian(0, address, XMSSAddress.KEY_AND_MASK_OFFSET);
+        return khf.PRF(secretSeed, address);
     }
 
     /**
