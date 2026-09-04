@@ -38,6 +38,7 @@ import org.bouncycastle.crypto.digests.SHA256Digest;
 import org.bouncycastle.crypto.digests.SHA512Digest;
 import org.bouncycastle.crypto.digests.SHAKEDigest;
 import org.bouncycastle.crypto.params.AsymmetricKeyParameter;
+import org.bouncycastle.crypto.params.XMSSMTParameters;
 import org.bouncycastle.internal.asn1.isara.IsaraObjectIdentifiers;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.pqc.asn1.PQCObjectIdentifiers;
@@ -48,6 +49,7 @@ import org.bouncycastle.pqc.jcajce.interfaces.StateAwareSignature;
 import org.bouncycastle.pqc.jcajce.interfaces.XMSSMTKey;
 import org.bouncycastle.pqc.jcajce.interfaces.XMSSMTPrivateKey;
 import org.bouncycastle.pqc.jcajce.provider.BouncyCastlePQCProvider;
+import org.bouncycastle.pqc.jcajce.provider.xmss.BCXMSSMTPrivateKey;
 import org.bouncycastle.pqc.jcajce.spec.XMSSMTParameterSpec;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Strings;
@@ -312,6 +314,46 @@ public class XMSSMTTest
 
         assertFalse("two key pairs are equal at the same index", atZero.equals(other));
         assertFalse("two key pairs are equal at the same index", other.equals(atZero));
+    }
+
+    /**
+     * Two private keys alike in everything the key's encoding holds except one of the two secrets.
+     * <p>
+     * equals() answers on the fields ahead of the traversal state and then on the state itself, so
+     * those field comparisons have to reach both seeds. secretKeyPRF is the one that shows it: it
+     * takes no part in the root or in the traversal state - it keys the randomizer r of RFC 8391
+     * sec. 4.2.7, which travels in the signature - so two keys differing only in it agree on
+     * everything else a key exposes while producing a different signature for every message.
+     * </p>
+     */
+    public void testXMSSMTPrivateKeysDifferingOnlyInASecretAreNotEqual()
+        throws Exception
+    {
+        XMSSMTParameters params = new XMSSMTParameters(4, 2, new SHA256Digest());
+        PrivateKey base = keyHolding(params, 1, 2);
+
+        assertEquals("the same fields twice are not equal", base, keyHolding(params, 1, 2));
+        assertFalse("keys differing only in secretKeyPRF are equal",
+            base.equals(keyHolding(params, 1, 99)));
+        assertFalse("keys differing only in secretKeySeed are equal",
+            base.equals(keyHolding(params, 99, 2)));
+    }
+
+    private static PrivateKey keyHolding(XMSSMTParameters params, int secretKeySeed, int secretKeyPRF)
+    {
+        return new BCXMSSMTPrivateKey(NISTObjectIdentifiers.id_sha256,
+            new org.bouncycastle.crypto.params.XMSSMTPrivateKeyParameters.Builder(params)
+                .withSecretKeySeed(filled(secretKeySeed)).withSecretKeyPRF(filled(secretKeyPRF))
+                .withPublicSeed(filled(3)).withRoot(filled(4)).build());
+    }
+
+    private static byte[] filled(int value)
+    {
+        byte[] out = new byte[32];
+
+        Arrays.fill(out, (byte)value);
+
+        return out;
     }
 
     public void testKeyExtraction()

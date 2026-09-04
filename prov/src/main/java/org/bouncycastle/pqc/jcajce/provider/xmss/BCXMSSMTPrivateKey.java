@@ -11,10 +11,12 @@ import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.crypto.CipherParameters;
 import org.bouncycastle.crypto.params.XMSSMTPrivateKeyParameters;
 import org.bouncycastle.crypto.params.XMSSMTPublicKeyParameters;
+import org.bouncycastle.crypto.signers.xmss.XMSSEngine;
 import org.bouncycastle.crypto.util.PrivateKeyFactory;
 import org.bouncycastle.crypto.util.PrivateKeyInfoFactory;
 import org.bouncycastle.pqc.jcajce.interfaces.XMSSMTPrivateKey;
 import org.bouncycastle.util.Arrays;
+import org.bouncycastle.util.Exceptions;
 
 public class BCXMSSMTPrivateKey
     implements PrivateKey, XMSSMTPrivateKey
@@ -105,8 +107,9 @@ public class BCXMSSMTPrivateKey
 
     /**
      * Whether these are the same key at the same position, which for a stateful key means the same
-     * traversal state too - so the tail of this is still a comparison of the two encodings, and
-     * still in constant time, since that is what reaches the secret seeds.
+     * traversal state too - so the tail of this is a constant time comparison of the two traversal
+     * states as encoded, everything else about the two keys having been compared field by field
+     * ahead of it.
      * <p>
      * What is in front of it is the part of the answer that does not need them. Producing an
      * encoding means re-encoding the whole BDS traversal state - the authentication path, the
@@ -123,7 +126,11 @@ public class BCXMSSMTPrivateKey
      * key - they are what {@code XMSSPublicKeyParameters} publishes, root then SEED, RFC 8391
      * sec. 4.1.7 - because this is a private key's equals(), where every array comparison in the
      * method being constant time is what stops the next field added to this chain from being
-     * compared the other way. At n bytes it costs nothing against the encoding it avoids.
+     * compared the other way. The two secret seeds are the next fields added to it, and they are
+     * why the tail can be the traversal state alone: the encoding it used to compare is the index,
+     * those two seeds, the public seed, the root and the state, and the first five are now all
+     * above. So the same six things decide the answer, in the same constant time, and the four
+     * n-byte comparisons that replace the encoding of a whole key cost nothing against it.
      * </p>
      */
     public boolean equals(Object o)
@@ -141,15 +148,42 @@ public class BCXMSSMTPrivateKey
                 || keyParams.getIndex() != otherKey.keyParams.getIndex()
                 || keyParams.getUsagesRemaining() != otherKey.keyParams.getUsagesRemaining()
                 || !Arrays.constantTimeAreEqual(keyParams.getPublicSeed(), otherKey.keyParams.getPublicSeed())
-                || !Arrays.constantTimeAreEqual(keyParams.getRoot(), otherKey.keyParams.getRoot()))
+                || !Arrays.constantTimeAreEqual(keyParams.getRoot(), otherKey.keyParams.getRoot())
+                || !Arrays.constantTimeAreEqual(keyParams.getSecretKeySeed(), otherKey.keyParams.getSecretKeySeed())
+                || !Arrays.constantTimeAreEqual(keyParams.getSecretKeyPRF(), otherKey.keyParams.getSecretKeyPRF()))
             {
                 return false;
             }
 
-            return Arrays.constantTimeAreEqual(keyParams.toByteArray(), otherKey.keyParams.toByteArray());
+            return Arrays.constantTimeAreEqual(encodedState(keyParams), encodedState(otherKey.keyParams));
         }
 
         return false;
+    }
+
+    /**
+     * The traversal state of a key, as an encoding of that key would carry it. This is the one
+     * part of a key's content the field comparisons in equals() cannot reach: a state carries a
+     * mark saying the one-time key at its index has already signed, and no accessor reports it.
+     * <p>
+     * Under the key's own monitor, which is what its {@code toByteArray()} took to read the same
+     * two things: a signature landing between the state and the public seed would encode a state
+     * under a seed that no longer goes with it.
+     * </p>
+     */
+    private static byte[] encodedState(XMSSMTPrivateKeyParameters keyParams)
+    {
+        synchronized (keyParams)
+        {
+            try
+            {
+                return XMSSEngine.getEncodedBDSState(keyParams.getBDSState(), keyParams.getPublicSeed());
+            }
+            catch (IOException e)
+            {
+                throw Exceptions.illegalStateException("error encoding BDS state map", e);
+            }
+        }
     }
 
     public int hashCode()
