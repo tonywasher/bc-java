@@ -235,8 +235,10 @@ The corresponding RFC 9802-style public key body (`parameter set || root || publ
 
 ## Where this is implemented
 
-- `core/src/main/java/org/bouncycastle/crypto/params/XMSSPrivateKeyParameters.java` — the
-  raw form (`getEncoded()`, and the `Builder` that reads it back).
+- `core/src/main/java/org/bouncycastle/crypto/params/XMSSPrivateKeyCodec.java` — the raw form,
+  written and read in one place for both families; `XMSSPrivateKeyParameters.java` and
+  `XMSSMTPrivateKeyParameters.java` beside it are the public surface (`getEncoded()`, and the
+  `Builder` that reads it back) and supply the width of the index field.
 - `core/src/main/java/org/bouncycastle/crypto/signers/xmss/BDSStateCodec.java` — the binary BDS
   state codec (and the XMSS^MT state-map variant).
 - `core/src/main/java/org/bouncycastle/crypto/util/PrivateKeyInfoFactory.java` /

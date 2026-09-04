@@ -7,7 +7,6 @@ import org.bouncycastle.crypto.signers.xmss.XMSSEngine;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Encodable;
 import org.bouncycastle.util.Exceptions;
-import org.bouncycastle.util.Pack;
 
 /**
  * XMSS Private Key.
@@ -52,34 +51,18 @@ public final class XMSSPrivateKeyParameters
         if (privateKey != null)
         {
             /* import */
-            int height = params.getHeight();
-            int indexSize = 4;
-            /* index || secretKeySeed || secretKeyPRF || publicSeed || root || BDS state. Only the
-             * head is fixed - the serialized BDS state that follows it is variable-length - so what
-             * can be checked here is that the head is all there. It has to be checked somewhere:
-             * the five reads below take their bytes at computed offsets, and nothing else on the
-             * way in from PrivateKeyFactory looks at the length at all. */
-            if (privateKey.length < indexSize + 4 * n)
-            {
-                throw new IllegalArgumentException("private key has wrong size");
-            }
-            int position = 0;
-            int index = Pack.bigEndianToInt(privateKey, position);
-            if (!XMSSEngine.isStoredIndexValid(height, index))
-            {
-                throw new IllegalArgumentException("index out of bounds");
-            }
-            position += indexSize;
-            secretKeySeed = Arrays.copyOfRange(privateKey, position, position + n);
-            position += n;
-            secretKeyPRF = Arrays.copyOfRange(privateKey, position, position + n);
-            position += n;
-            publicSeed = Arrays.copyOfRange(privateKey, position, position + n);
-            position += n;
-            root = Arrays.copyOfRange(privateKey, position, position + n);
-            position += n;
-            /* import BDS state */
-            byte[] bdsStateBinary = Arrays.copyOfRange(privateKey, position, privateKey.length);
+            XMSSPrivateKeyCodec codec = XMSSPrivateKeyCodec.decode(privateKey,
+                XMSSPrivateKeyCodec.XMSS_INDEX_SIZE, params.getHeight(), n);
+
+            // the codec answers in the width the XMSS^MT index needs; this family's is an int
+            // everywhere else in the class, and the index check the codec has already made bounds
+            // it by 2^30, so nothing is lost narrowing it here
+            int index = (int)codec.getIndex();
+            secretKeySeed = codec.getSecretKeySeed();
+            secretKeyPRF = codec.getSecretKeyPRF();
+            publicSeed = codec.getPublicSeed();
+            root = codec.getRoot();
+            byte[] bdsStateBinary = codec.getBDSState();
             try
             {
                 BDS bdsImport = XMSSEngine.getBDSFromEncoding(bdsStateBinary, publicSeed);
@@ -345,13 +328,6 @@ public final class XMSSPrivateKeyParameters
     {
         synchronized (this)
         {
-            /* index || secretKeySeed || secretKeyPRF || publicSeed || root || bdsState */
-            int n = params.getTreeDigestSize();
-            int indexSize = 4;
-            int totalSize = indexSize + n + n + n + n;
-            // the state is encoded first so the rest can be written straight into the array that is
-            // returned: appending it with Arrays.concatenate meant allocating the fixed part on its
-            // own and then copying both halves into a second array of the full size
             byte[] bdsStateOut;
             try
             {
@@ -362,27 +338,8 @@ public final class XMSSPrivateKeyParameters
                 throw Exceptions.illegalStateException("error encoding BDS state", e);
             }
 
-            byte[] out = new byte[totalSize + bdsStateOut.length];
-            int position = 0;
-            /* copy index */
-            Pack.intToBigEndian(bdsState.getIndex(), out, position);
-            position += indexSize;
-            /* copy secretKeySeed */
-            System.arraycopy(secretKeySeed, 0, out, position, secretKeySeed.length);
-            position += n;
-            /* copy secretKeyPRF */
-            System.arraycopy(secretKeyPRF, 0, out, position, secretKeyPRF.length);
-            position += n;
-            /* copy publicSeed */
-            System.arraycopy(publicSeed, 0, out, position, publicSeed.length);
-            position += n;
-            /* copy root */
-            System.arraycopy(root, 0, out, position, root.length);
-            position += n;
-            /* copy bdsState */
-            System.arraycopy(bdsStateOut, 0, out, position, bdsStateOut.length);
-
-            return out;
+            return XMSSPrivateKeyCodec.encode(bdsState.getIndex(), XMSSPrivateKeyCodec.XMSS_INDEX_SIZE,
+                secretKeySeed, secretKeyPRF, publicSeed, root, bdsStateOut);
         }
     }
 
