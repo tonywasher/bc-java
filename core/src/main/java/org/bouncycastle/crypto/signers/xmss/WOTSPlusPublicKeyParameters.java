@@ -7,9 +7,31 @@ final class WOTSPlusPublicKeyParameters
 {
     private final byte[][] publicKey;
 
+    /**
+     * This key's len n-byte blocks, taken over rather than copied in.
+     * <p>
+     * Both of the callers that build one - {@link WOTSPlus#getPublicKey} and
+     * {@link WOTSPlus#getPublicKeyFromSignature}, and this class being package-private and final
+     * is what makes that a list rather than a guess - allocate the array, fill it with what
+     * chain() returns and hand it straight here, so nothing outside holds the array or any block
+     * of it. That the blocks are chain()'s own arrays is the part to check rather than assume, and
+     * it is chain() that makes it so: it returns an array of its own however many steps it takes,
+     * copying its starting value out rather than handing it back when that number is zero.
+     * Generation never reaches that case, chaining a fixed w - 1 steps, but recovery from a
+     * signature does - at every digit of the message equal to w - 1 - and it chains from the
+     * signature's own blocks, so without that copy a recovered key would share storage with the
+     * signature it was recovered from.
+     * <p>
+     * Nothing escapes that did not before. {@link #toByteArray()} still copies on the way out, and
+     * {@link #toNodes()} hands the blocks to a walk that only reads them - so the copy this drops
+     * was of a len-by-n array no one else could reach. It was made per one-time key, which is per
+     * leaf of every tree built: len + 1 arrays a leaf, 68 of them at the SHA-256 parameter sets.
+     *
+     * @param publicKey the len n-byte blocks of the key, which this instance takes over.
+     */
     public WOTSPlusPublicKeyParameters(WOTSPlusParameters params, byte[][] publicKey)
     {
-        this.publicKey = params.checkedClone(publicKey, "publicKey");
+        this.publicKey = params.validateShape(publicKey, "publicKey");
     }
 
     public byte[][] toByteArray()

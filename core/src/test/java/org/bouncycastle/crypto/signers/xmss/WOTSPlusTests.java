@@ -79,6 +79,81 @@ public class WOTSPlusTests
     }
 
     /**
+     * {@link WOTSPlusPublicKeyParameters} holds the blocks its caller built rather than copies of
+     * them, and {@link WOTSPlusPublicKeyParameters#toNodes()} hands those same blocks to the
+     * L-tree walk. What makes that safe is that the walk only reads them - it overwrites the array
+     * of nodes it is given, never the value inside one - so compressing a key leaves the key as it
+     * was.
+     */
+    public void testCompressingAPublicKeyDoesNotDisturbIt()
+    {
+        byte[] secretKeySeed = new byte[N];
+        byte[] publicSeed = new byte[N];
+        Arrays.fill(secretKeySeed, (byte)0x06);
+        Arrays.fill(publicSeed, (byte)0x07);
+
+        WOTSPlus wotsPlus = newWOTSPlus();
+        wotsPlus.importKeys(secretKeySeed, publicSeed);
+
+        OTSHashAddress otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder().withOTSAddress(3).build();
+        WOTSPlusPublicKeyParameters publicKey = wotsPlus.getPublicKey(otsHashAddress);
+        byte[][] before = publicKey.toByteArray();
+
+        byte[] lTreeAddress = new LTreeAddress.Builder().withLTreeAddress(3).build().toByteArray();
+        XMSSNodeUtil.lTree(wotsPlus, publicKey, lTreeAddress, new byte[N], new byte[2 * N]);
+
+        assertTrue("compressing a public key changed the key",
+            XMSSUtil.areEqual(before, publicKey.toByteArray()));
+    }
+
+    /**
+     * {@link WOTSPlusSignature} and {@link WOTSPlusPublicKeyParameters} both hold the len blocks
+     * their caller built rather than copies, so those blocks have to be arrays of their own. That
+     * is chain()'s doing: it copies its starting value out rather than handing it back when it
+     * takes no steps at all. Signing takes none for every base-w digit of the message that is
+     * zero, chaining each from one buffer it reuses across the len chains; recovery takes none for
+     * every digit equal to w - 1, chaining those from the signature's own blocks. A digest of 0x0f
+     * bytes is every digit alternately 0 and 15, so each of the len positions is a zero-step chain
+     * on one of the two sides.
+     */
+    public void testChainedBlocksAreArraysOfTheirOwn()
+    {
+        byte[] secretKeySeed = new byte[N];
+        byte[] publicSeed = new byte[N];
+        byte[] messageDigest = new byte[N];
+        Arrays.fill(secretKeySeed, (byte)0x08);
+        Arrays.fill(publicSeed, (byte)0x09);
+        Arrays.fill(messageDigest, (byte)0x0f);
+
+        OTSHashAddress otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder().build();
+
+        WOTSPlus wotsPlus = newWOTSPlus();
+        wotsPlus.importKeys(secretKeySeed, publicSeed);
+
+        int len = wotsPlus.getParams().getLen();
+        WOTSPlusSignature signature = wotsPlus.sign(messageDigest, otsHashAddress);
+        for (int i = 0; i != len; i++)
+        {
+            for (int j = i + 1; j != len; j++)
+            {
+                assertNotSame("two blocks of one signature are the same array",
+                    signature.getBlock(i), signature.getBlock(j));
+            }
+        }
+
+        WOTSPlusPublicKeyParameters recovered =
+            wotsPlus.getPublicKeyFromSignature(messageDigest, signature, otsHashAddress);
+        byte[][] before = recovered.toByteArray();
+        for (int i = 0; i != len; i++)
+        {
+            signature.getBlock(i)[0] ^= 0x01;
+        }
+
+        assertTrue("a recovered public key shares storage with the signature it came from",
+            XMSSUtil.areEqual(before, recovered.toByteArray()));
+    }
+
+    /**
      * The one-time secret key is derived from the seed and the OTS hash address, so two leaves of
      * the same tree must not share it.
      */
@@ -110,7 +185,7 @@ public class WOTSPlusTests
      * A WOTS+ public key and signature are the same len-by-n array, and the classes carrying one
      * had a copy each of the check on that shape. They had drifted, one calling a wrong element
      * count a "format" problem where the others called it a "size" one, so the check now lives
-     * once in {@link WOTSPlusParameters#checkedClone}. Written as a pair of tables so the two
+     * once in {@link WOTSPlusParameters#validateShape}. Written as a pair of tables so the two
      * halves have to keep agreeing.
      */
     public void testWOTSPlusShapeRejectionsAgree()

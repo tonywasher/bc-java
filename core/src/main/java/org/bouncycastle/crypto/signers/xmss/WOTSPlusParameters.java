@@ -131,7 +131,7 @@ final class WOTSPlusParameters
 
     /**
      * Confirm that {@code value} is the len-by-n array a WOTS+ public key and signature both are,
-     * and return a copy of it for the caller to hold.
+     * and return it.
      * <p>
      * The classes that carry one of those arrays had a constructor each, checking the same four
      * things in the same order and differing only in the name in the message - and they had
@@ -141,8 +141,9 @@ final class WOTSPlusParameters
      *
      * @param value the array to check.
      * @param name what to call it in a message: "publicKey" or "signature".
+     * @return value.
      */
-    byte[][] checkedClone(byte[][] value, String name)
+    byte[][] validateShape(byte[][] value, String name)
     {
         if (value == null)
         {
@@ -164,6 +165,6 @@ final class WOTSPlusParameters
             }
         }
 
-        return XMSSUtil.cloneArray(value);
+        return value;
     }
 }
