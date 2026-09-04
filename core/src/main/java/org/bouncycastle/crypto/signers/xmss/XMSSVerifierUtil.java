@@ -34,13 +34,18 @@ class XMSSVerifierUtil
             .withTreeIndex(otsHashAddress.getOTSAddress()).build().toByteArray();
         /* the tree index of that encoding, kept alongside it as the climb halves it */
         int hashTreeIndex = otsHashAddress.getOTSAddress();
+        /* and one pair of working buffers for every node hashed below, L-tree and climb alike; see
+         * XMSSNodeUtil.randomizeHash for why one pair serves a whole walk */
+        int n = wotsPlus.getParams().getTreeDigestSize();
+        byte[] nodeKey = new byte[n];
+        byte[] nodeMask = new byte[2 * n];
         /*
          * calculate WOTS+ public key and compress to obtain original leaf hash
          */
         WOTSPlusPublicKeyParameters wotsPlusPK = wotsPlus.getPublicKeyFromSignature(messageDigest,
             signature.getWOTSPlusSignature(), otsHashAddress);
         XMSSNode[] node = new XMSSNode[2];
-        node[0] = XMSSNodeUtil.lTree(wotsPlus, wotsPlusPK, lTreeAddress);
+        node[0] = XMSSNodeUtil.lTree(wotsPlus, wotsPlusPK, lTreeAddress, nodeKey, nodeMask);
 
         for (int k = 0; k < height; k++)
         {
@@ -49,13 +54,15 @@ class XMSSVerifierUtil
             {
                 hashTreeIndex = hashTreeIndex / 2;
                 Pack.intToBigEndian(hashTreeIndex, hashTreeAddress, HashTreeAddress.TREE_INDEX_OFFSET);
-                node[1] = XMSSNodeUtil.randomizeHash(wotsPlus, node[0], signature.getAuthPath().get(k), hashTreeAddress);
+                node[1] = XMSSNodeUtil.randomizeHash(wotsPlus, node[0], signature.getAuthPath().get(k),
+                    hashTreeAddress, nodeKey, nodeMask);
             }
             else
             {
                 hashTreeIndex = (hashTreeIndex - 1) / 2;
                 Pack.intToBigEndian(hashTreeIndex, hashTreeAddress, HashTreeAddress.TREE_INDEX_OFFSET);
-                node[1] = XMSSNodeUtil.randomizeHash(wotsPlus, signature.getAuthPath().get(k), node[0], hashTreeAddress);
+                node[1] = XMSSNodeUtil.randomizeHash(wotsPlus, signature.getAuthPath().get(k), node[0],
+                    hashTreeAddress, nodeKey, nodeMask);
             }
             node[1] = node[1].incrementHeight();
             node[0] = node[1];

@@ -252,6 +252,11 @@ public final class BDS
         byte[] hashTreeAddress = new HashTreeAddress.Builder()
             .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
             .build().toByteArray();
+        /* and one pair of working buffers for every node hashed below, L-tree and tree alike; see
+         * XMSSNodeUtil.randomizeHash for why one pair serves a whole walk */
+        int n = wotsPlus.getParams().getTreeDigestSize();
+        byte[] nodeKey = new byte[n];
+        byte[] nodeMask = new byte[2 * n];
 
         /* iterate indexes */
         for (int indexLeaf = 0; indexLeaf < (1 << treeHeight); indexLeaf++)
@@ -265,7 +270,7 @@ public final class BDS
             wotsPlus.importKeys(wotsPlus.getWOTSPlusSecretKey(secretSeed, otsHashAddress), publicSeed);
             WOTSPlusPublicKeyParameters wotsPlusPublicKey = wotsPlus.getPublicKey(otsHashAddress);
             Pack.intToBigEndian(indexLeaf, lTreeAddress, LTreeAddress.LTREE_ADDRESS_OFFSET);
-            XMSSNode node = XMSSNodeUtil.lTree(wotsPlus, wotsPlusPublicKey, lTreeAddress);
+            XMSSNode node = XMSSNodeUtil.lTree(wotsPlus, wotsPlusPublicKey, lTreeAddress, nodeKey, nodeMask);
 
             // the two words of the hash tree encoding the climb below moves, kept beside it so
             // that stepping one is an increment rather than a read back out of the bytes. They
@@ -309,7 +314,7 @@ public final class BDS
                 }
                 hashTreeIndex = (hashTreeIndex - 1) / 2;
                 Pack.intToBigEndian(hashTreeIndex, hashTreeAddress, HashTreeAddress.TREE_INDEX_OFFSET);
-                node = XMSSNodeUtil.randomizeHash(wotsPlus, stack.pop(), node, hashTreeAddress);
+                node = XMSSNodeUtil.randomizeHash(wotsPlus, stack.pop(), node, hashTreeAddress, nodeKey, nodeMask);
                 node = node.incrementHeight();
                 Pack.intToBigEndian(++hashTreeHeight, hashTreeAddress, HashTreeAddress.TREE_HEIGHT_OFFSET);
             }
@@ -345,6 +350,11 @@ public final class BDS
         byte[] hashTreeAddress = new HashTreeAddress.Builder()
             .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
             .build().toByteArray();
+        /* and one pair of working buffers for whichever of the two branches below runs; see
+         * XMSSNodeUtil.randomizeHash */
+        int n = wotsPlus.getParams().getTreeDigestSize();
+        byte[] nodeKey = new byte[n];
+        byte[] nodeMask = new byte[2 * n];
 
         /* leaf is a left node */
         if (tau == 0)
@@ -357,7 +367,7 @@ public final class BDS
             wotsPlus.importKeys(wotsPlus.getWOTSPlusSecretKey(secretSeed, otsHashAddress), publicSeed);
             WOTSPlusPublicKeyParameters wotsPlusPublicKey = wotsPlus.getPublicKey(otsHashAddress);
             Pack.intToBigEndian(index, lTreeAddress, LTreeAddress.LTREE_ADDRESS_OFFSET);
-            XMSSNode node = XMSSNodeUtil.lTree(wotsPlus, wotsPlusPublicKey, lTreeAddress);
+            XMSSNode node = XMSSNodeUtil.lTree(wotsPlus, wotsPlusPublicKey, lTreeAddress, nodeKey, nodeMask);
             authenticationPath.set(0, node);
         }
         else
@@ -379,7 +389,8 @@ public final class BDS
             {
                 throw new IllegalStateException("missing keep node in BDS state");
             }
-            XMSSNode node = XMSSNodeUtil.randomizeHash(wotsPlus, authenticationPath.get(tau - 1), keptNode, hashTreeAddress);
+            XMSSNode node = XMSSNodeUtil.randomizeHash(wotsPlus, authenticationPath.get(tau - 1), keptNode,
+                hashTreeAddress, nodeKey, nodeMask);
             node = node.incrementHeight();
             authenticationPath.set(tau, node);
             keep.remove(tau - 1);

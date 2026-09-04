@@ -22,9 +22,14 @@ class XMSSNodeUtil
      *                  writes key-and-mask. Each of those three is written before the hash that
      *                  reads it, so what a previous leaf's walk left in them is gone before
      *                  anything is hashed.
+     * @param key       an n-byte buffer the caller owns, and tmpMask a 2n-byte one, handed on to
+     *                  randomizeHash for every node of this L-tree; see there for why one pair
+     *                  serves a whole walk.
+     * @param tmpMask   see key.
      * @return Compressed n-byte string of public key.
      */
-    static XMSSNode lTree(WOTSPlus wotsPlus, WOTSPlusPublicKeyParameters publicKey, byte[] address)
+    static XMSSNode lTree(WOTSPlus wotsPlus, WOTSPlusPublicKeyParameters publicKey, byte[] address, byte[] key,
+        byte[] tmpMask)
     {
         int len = wotsPlus.getParams().getLen();
         /* the key's blocks as the leaves of the L-tree, and the walk overwrites the array, not them */
@@ -36,7 +41,8 @@ class XMSSNodeUtil
             for (int i = 0; i < (int)Math.floor(len / 2); i++)
             {
                 Pack.intToBigEndian(i, address, LTreeAddress.TREE_INDEX_OFFSET);
-                publicKeyNodes[i] = randomizeHash(wotsPlus, publicKeyNodes[2 * i], publicKeyNodes[(2 * i) + 1], address);
+                publicKeyNodes[i] = randomizeHash(wotsPlus, publicKeyNodes[2 * i], publicKeyNodes[(2 * i) + 1],
+                    address, key, tmpMask);
             }
             if (len % 2 == 1)
             {
@@ -66,9 +72,15 @@ class XMSSNodeUtil
      * @param address the 32-byte encoding of the address of the node being computed. The caller
      *                owns it and has written the words that name that node; this method writes the
      *                key-and-mask word of it, once before each of the three hashes below.
+     * @param key     an n-byte buffer the caller owns, for the one of the three PRF results that H
+     *                reads as a key rather than as the data it hashes.
+     * @param tmpMask a 2n-byte buffer the caller owns, for the other two - the bitmasks, which are
+     *                produced straight into it and which maskInto then turns into the masked pair
+     *                H hashes.
      * @return Randomized hash of parent of left / right node.
      */
-    static XMSSNode randomizeHash(WOTSPlus wotsPlus, XMSSNode left, XMSSNode right, byte[] address)
+    static XMSSNode randomizeHash(WOTSPlus wotsPlus, XMSSNode left, XMSSNode right, byte[] address, byte[] key,
+        byte[] tmpMask)
     {
         if (left.getHeight() != right.getHeight())
         {
@@ -93,12 +105,16 @@ class XMSSNodeUtil
         // XMSSVerifierUtil a hash tree address - but the rule is now the one RFC 8391 sec. 4.1.5
         // states rather than one about subtypes.
         //
-        // The two bitmasks are produced straight into the 2n-byte buffer they are masked in, where
-        // maskInto turns each half into the masked value. Only the key needs an array of its own,
-        // being the one of the three that H reads as a key rather than as the data it hashes.
-        byte[] key = new byte[n];
-        byte[] tmpMask = new byte[2 * n];
-
+        // The two working buffers come from the caller for the same reason, one pair for a whole
+        // walk rather than a pair per node, the way WOTSPlus.chain takes its two. Nothing carries
+        // between nodes: PRF fills all n bytes of key and both n-byte halves of tmpMask before
+        // either is read, so what the previous node left in them is gone before anything is
+        // hashed.
+        //
+        // Only out has to be this call's own. It becomes the returned node's value, and a walk
+        // collects the nodes it makes - the L-tree's array, a BDS state's stack, authentication
+        // path, retain and keep - so one buffer shared across a walk would leave every one of them
+        // holding the last node computed.
         Pack.intToBigEndian(0, address, XMSSAddress.KEY_AND_MASK_OFFSET);
         khf.PRF(publicSeed, address, key);
 

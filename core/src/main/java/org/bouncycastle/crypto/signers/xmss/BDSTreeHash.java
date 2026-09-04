@@ -63,17 +63,22 @@ class BDSTreeHash
          * increment rather than a read back out of the bytes */
         int hashTreeHeight = 0;
         int hashTreeIndex = nextIndex;
+        /* and one pair of working buffers for every node hashed below; see
+         * XMSSNodeUtil.randomizeHash for why one pair serves a whole walk */
+        int n = wotsPlus.getParams().getTreeDigestSize();
+        byte[] nodeKey = new byte[n];
+        byte[] nodeMask = new byte[2 * n];
             /* calculate leaf node */
         wotsPlus.importKeys(wotsPlus.getWOTSPlusSecretKey(secretSeed, otsHashAddress), publicSeed);
         WOTSPlusPublicKeyParameters wotsPlusPublicKey = wotsPlus.getPublicKey(otsHashAddress);
-        XMSSNode node = XMSSNodeUtil.lTree(wotsPlus, wotsPlusPublicKey, lTreeAddress);
+        XMSSNode node = XMSSNodeUtil.lTree(wotsPlus, wotsPlusPublicKey, lTreeAddress, nodeKey, nodeMask);
 
         while (!stack.isEmpty() && stack.peek().getHeight() == node.getHeight()
             && stack.peek().getHeight() != initialHeight)
         {
             hashTreeIndex = (hashTreeIndex - 1) / 2;
             Pack.intToBigEndian(hashTreeIndex, hashTreeAddress, HashTreeAddress.TREE_INDEX_OFFSET);
-            node = XMSSNodeUtil.randomizeHash(wotsPlus, stack.pop(), node, hashTreeAddress);
+            node = XMSSNodeUtil.randomizeHash(wotsPlus, stack.pop(), node, hashTreeAddress, nodeKey, nodeMask);
             node = node.incrementHeight();
             Pack.intToBigEndian(++hashTreeHeight, hashTreeAddress, HashTreeAddress.TREE_HEIGHT_OFFSET);
         }
@@ -88,7 +93,7 @@ class BDSTreeHash
             {
                 hashTreeIndex = (hashTreeIndex - 1) / 2;
                 Pack.intToBigEndian(hashTreeIndex, hashTreeAddress, HashTreeAddress.TREE_INDEX_OFFSET);
-                node = XMSSNodeUtil.randomizeHash(wotsPlus, tailNode, node, hashTreeAddress);
+                node = XMSSNodeUtil.randomizeHash(wotsPlus, tailNode, node, hashTreeAddress, nodeKey, nodeMask);
                 node = node.incrementHeight();
                 tailNode = node;
                 // the last step of the same climb the loop above makes - parent, hash, then name
