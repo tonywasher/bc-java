@@ -85,9 +85,10 @@ final class WOTSPlus
      *
      * @param messageDigest  Digest to sign.
      * @param otsHashAddress OTS hash address for randomization.
-     * @return WOTS+ signature.
+     * @return the len n-byte blocks of the signature, a fresh array of fresh blocks that the
+     *         caller takes over.
      */
-    WOTSPlusSignature sign(byte[] messageDigest, OTSHashAddress otsHashAddress)
+    byte[][] sign(byte[] messageDigest, OTSHashAddress otsHashAddress)
     {
         List<Integer> baseWMessage = baseWMessageWithChecksum(messageDigest);
 
@@ -111,30 +112,32 @@ final class WOTSPlus
             expandSecretKeySeed(i, indexBuffer, startHash);
             signature[i] = chain(startHash, 0, baseWMessage.get(i), address, key, tmpMasked);
         }
-        return new WOTSPlusSignature(signature);
+        return signature;
     }
 
     /**
      * Calculates a public key based on digest and signature.
      *
      * @param messageDigest  The digest that was signed.
-     * @param signature      Signarure on digest.
+     * @param signature      the len n-byte blocks of the signature on that digest, which this
+     *                       method reads and never writes.
      * @param otsHashAddress OTS hash address for randomization.
      * @return WOTS+ public key derived from digest and signature.
      */
-    WOTSPlusPublicKeyParameters getPublicKeyFromSignature(byte[] messageDigest, WOTSPlusSignature signature,
-                                                                    OTSHashAddress otsHashAddress)
+    WOTSPlusPublicKeyParameters getPublicKeyFromSignature(byte[] messageDigest, byte[][] signature,
+                                                          OTSHashAddress otsHashAddress)
     {
         List<Integer> baseWMessage = baseWMessageWithChecksum(messageDigest);
 
         //
-        // The signature's blocks are chained from where they lie rather than out of a copy of the
-        // whole signature. toByteArray() deep-copies all len of them, and it had been called inside
-        // the loop only to index one out, which made a verification len^2 block copies where it
-        // needs none: 4489 for the SHA-256 parameter sets, 17161 for SHA-512, and that again for
-        // every layer of a hypertree on the XMSS^MT side. Reading them in place is what getBlock()
-        // is for, and nothing escapes by it: chain() only reads the starting value it is given and
-        // returns an array of its own however many steps it takes - see that method.
+        // The signature's blocks are chained from where they lie rather than out of a copy of
+        // the whole signature. The carrier this used to take deep-copied all len of them on the
+        // way out, and that copy had been made inside the loop only to index one block out, which
+        // made a verification len^2 block copies where it needs none: 4489 for the SHA-256
+        // parameter sets, 17161 for SHA-512, and that again for every layer of a hypertree on the
+        // XMSS^MT side. Nothing escapes by reading them in place: chain() only reads the starting
+        // value it is given and returns an array of its own however many steps it takes - see
+        // that method.
         //
         int n = params.getTreeDigestSize();
         byte[][] publicKey = new byte[params.getLen()][];
@@ -147,7 +150,7 @@ final class WOTSPlus
         for (int i = 0; i < params.getLen(); i++)
         {
             Pack.intToBigEndian(i, address, OTSHashAddress.CHAIN_ADDRESS_OFFSET);
-            publicKey[i] = chain(signature.getBlock(i), baseWMessage.get(i),
+            publicKey[i] = chain(signature[i], baseWMessage.get(i),
                 WOTSPlusParameters.WINTERNITZ_PARAMETER - 1 - baseWMessage.get(i), address, key, tmpMasked);
         }
         return new WOTSPlusPublicKeyParameters(publicKey);
@@ -207,8 +210,8 @@ final class WOTSPlus
         // it is masked in, where xorTo turns it into the masked value.
         //
         // out is this method's own and is what it returns, one array per call: the caller collects
-        // the len returns in a byte[][] that becomes a WOTSPlusSignature or a
-        // WOTSPlusPublicKeyParameters as it stands, so one shared across a key's chains would
+        // the len returns in a byte[][] that is handed on as a signature, or becomes a
+        // WOTSPlusPublicKeyParameters, as it stands, so one shared across a key's chains would
         // leave every entry holding the last chain's value. Within the chain it is reused - F's
         // result goes into out, which the next step reads as tmp and folds into tmpMasked before F
         // writes out again, so out's previous contents are dead by the time they are overwritten,

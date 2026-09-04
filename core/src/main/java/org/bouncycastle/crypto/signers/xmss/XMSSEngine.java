@@ -248,7 +248,7 @@ public final class XMSSEngine
 
             /* create signature for messageDigest */
             OTSHashAddress otsHashAddress = (OTSHashAddress)new OTSHashAddress.Builder().withOTSAddress(index).build();
-            WOTSPlusSignature wotsPlusSignature = wotsSign(wotsPlus, privateKey.getSecretKeySeed(),
+            byte[][] wotsPlusSignature = wotsSign(wotsPlus, privateKey.getSecretKeySeed(),
                 privateKey.getPublicSeed(), messageDigest, otsHashAddress);
 
             return new XMSSSignature.Builder(params).withIndex(index).withRandom(random)
@@ -406,7 +406,7 @@ public final class XMSSEngine
                 }
 
                 /* sign message digest */
-                WOTSPlusSignature wotsPlusSignature = wotsSign(wotsPlus, secretKeySeed,
+                byte[][] wotsPlusSignature = wotsSign(wotsPlus, secretKeySeed,
                     publicSeed, messageDigest, otsHashAddress);
 
                 XMSSReducedSignature reducedSignature = new XMSSReducedSignature.Builder(xmssParams)
@@ -738,8 +738,8 @@ public final class XMSSEngine
      * BDS state, which BDS.validate(XMSSParameters) has already pinned to non-null and exactly n
      * before the key holding it could be constructed.
      */
-    private static WOTSPlusSignature wotsSign(WOTSPlus wotsPlus, byte[] secretKeySeed,
-                                              byte[] publicSeed, byte[] messageDigest, OTSHashAddress otsHashAddress)
+    private static byte[][] wotsSign(WOTSPlus wotsPlus, byte[] secretKeySeed,
+                                     byte[] publicSeed, byte[] messageDigest, OTSHashAddress otsHashAddress)
     {
         if (messageDigest.length != wotsPlus.getParams().getTreeDigestSize())
         {

@@ -37,9 +37,9 @@ public class WOTSPlusTests
         WOTSPlus wotsPlus = newWOTSPlus();
         wotsPlus.importKeys(secretKeySeed, publicSeed);
 
-        WOTSPlusSignature signature = wotsPlus.sign(messageDigest, otsHashAddress);
+        byte[][] signature = wotsPlus.sign(messageDigest, otsHashAddress);
 
-        assertEquals(wotsPlus.getParams().getLen(), signature.toByteArray().length);
+        assertEquals(wotsPlus.getParams().getLen(), signature.length);
 
         WOTSPlusPublicKeyParameters expected = wotsPlus.getPublicKey(otsHashAddress);
         WOTSPlusPublicKeyParameters recovered =
@@ -68,7 +68,7 @@ public class WOTSPlusTests
         WOTSPlus wotsPlus = newWOTSPlus();
         wotsPlus.importKeys(secretKeySeed, publicSeed);
 
-        WOTSPlusSignature signature = wotsPlus.sign(messageDigest, otsHashAddress);
+        byte[][] signature = wotsPlus.sign(messageDigest, otsHashAddress);
 
         WOTSPlusPublicKeyParameters expected = wotsPlus.getPublicKey(otsHashAddress);
         WOTSPlusPublicKeyParameters recovered =
@@ -107,14 +107,14 @@ public class WOTSPlusTests
     }
 
     /**
-     * {@link WOTSPlusSignature} and {@link WOTSPlusPublicKeyParameters} both hold the len blocks
-     * their caller built rather than copies, so those blocks have to be arrays of their own. That
-     * is chain()'s doing: it copies its starting value out rather than handing it back when it
-     * takes no steps at all. Signing takes none for every base-w digit of the message that is
-     * zero, chaining each from one buffer it reuses across the len chains; recovery takes none for
-     * every digit equal to w - 1, chaining those from the signature's own blocks. A digest of 0x0f
-     * bytes is every digit alternately 0 and 15, so each of the len positions is a zero-step chain
-     * on one of the two sides.
+     * A WOTS+ signature is the len blocks its caller built, and
+     * {@link WOTSPlusPublicKeyParameters} likewise holds those blocks rather than copies of them,
+     * so each has to be an array of its own. That is chain()'s doing: it copies its starting value
+     * out rather than handing it back when it takes no steps at all. Signing takes none for every
+     * base-w digit of the message that is zero, chaining each from one buffer it reuses across the
+     * len chains; recovery takes none for every digit equal to w - 1, chaining those from the
+     * signature's own blocks. A digest of 0x0f bytes is every digit alternately 0 and 15, so each
+     * of the len positions is a zero-step chain on one of the two sides.
      */
     public void testChainedBlocksAreArraysOfTheirOwn()
     {
@@ -131,13 +131,13 @@ public class WOTSPlusTests
         wotsPlus.importKeys(secretKeySeed, publicSeed);
 
         int len = wotsPlus.getParams().getLen();
-        WOTSPlusSignature signature = wotsPlus.sign(messageDigest, otsHashAddress);
+        byte[][] signature = wotsPlus.sign(messageDigest, otsHashAddress);
         for (int i = 0; i != len; i++)
         {
             for (int j = i + 1; j != len; j++)
             {
                 assertNotSame("two blocks of one signature are the same array",
-                    signature.getBlock(i), signature.getBlock(j));
+                    signature[i], signature[j]);
             }
         }
 
@@ -146,7 +146,7 @@ public class WOTSPlusTests
         byte[][] before = recovered.toByteArray();
         for (int i = 0; i != len; i++)
         {
-            signature.getBlock(i)[0] ^= 0x01;
+            signature[i][0] ^= 0x01;
         }
 
         assertTrue("a recovered public key shares storage with the signature it came from",

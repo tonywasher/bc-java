@@ -12,7 +12,7 @@ import java.util.List;
 class XMSSReducedSignature
 {
     private final XMSSParameters params;
-    private final WOTSPlusSignature wotsPlusSignature;
+    private final byte[][] wotsPlusSignature;
     private final List<XMSSNode> authPath;
 
     public XMSSReducedSignature(Builder builder)
@@ -39,7 +39,7 @@ class XMSSReducedSignature
                 wotsPlusSignature[i] = Arrays.copyOfRange(reducedSignature, position, position + n);
                 position += n;
             }
-            this.wotsPlusSignature = new WOTSPlusSignature(wotsPlusSignature);
+            this.wotsPlusSignature = wotsPlusSignature;
 
             List<XMSSNode> nodeList = new ArrayList<XMSSNode>();
             for (int i = 0; i < height; i++)
@@ -52,14 +52,14 @@ class XMSSReducedSignature
         else
         {
             /* set */
-            WOTSPlusSignature tmpSignature = builder.wotsPlusSignature;
+            byte[][] tmpSignature = builder.wotsPlusSignature;
             if (tmpSignature != null)
             {
                 wotsPlusSignature = tmpSignature;
             }
             else
             {
-                wotsPlusSignature = new WOTSPlusSignature(new byte[len][n]);
+                wotsPlusSignature = new byte[len][n];
             }
             List<XMSSNode> tmpAuthPath = builder.authPath;
             if (tmpAuthPath != null)
@@ -82,7 +82,7 @@ class XMSSReducedSignature
         /* mandatory */
         private final XMSSParameters params;
         /* optional */
-        private WOTSPlusSignature wotsPlusSignature = null;
+        private byte[][] wotsPlusSignature = null;
         private List<XMSSNode> authPath = null;
         private byte[] reducedSignature = null;
 
@@ -91,7 +91,7 @@ class XMSSReducedSignature
             this.params = params;
         }
 
-        public Builder withWOTSPlusSignature(WOTSPlusSignature val)
+        public Builder withWOTSPlusSignature(byte[][] val)
         {
             wotsPlusSignature = val;
             return this;
@@ -140,8 +140,11 @@ class XMSSReducedSignature
     {
         int n = params.getTreeDigestSize();
         /* copy signature */
-        wotsPlusSignature.encodeTo(out, position);
-        position += params.getLen() * n;
+        for (int i = 0; i < wotsPlusSignature.length; i++)
+        {
+            System.arraycopy(wotsPlusSignature[i], 0, out, position, n);
+            position += n;
+        }
         /* copy authentication path */
         for (int i = 0; i < authPath.size(); i++)
         {
@@ -155,7 +158,12 @@ class XMSSReducedSignature
         return params;
     }
 
-    public WOTSPlusSignature getWOTSPlusSignature()
+    /**
+     * This signature's len n-byte WOTS+ blocks, by reference. The one caller chains from them and
+     * writes to neither the array nor a block of it, so handing them over lets nothing escape -
+     * the same terms {@link #encodeTo} reads them on.
+     */
+    public byte[][] getWOTSPlusSignature()
     {
         return wotsPlusSignature;
     }
