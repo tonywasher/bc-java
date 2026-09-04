@@ -35,7 +35,8 @@ public class OpaqueStateHandleTests
     {
         assertPublicMethods(BDSStateMap.class, new String[]
         {
-            "validate", "validateIndex", "validateRoot", "getMaxIndex", "get", "withWOTSDigest"
+            "validate", "validateIndex", "validateRoot", "getMaxIndex", "get", "withWOTSDigest",
+            "withMaxIndex"
         });
     }
 

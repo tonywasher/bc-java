@@ -71,16 +71,17 @@ public final class XMSSMTPrivateKeyParameters
             {
                 BDSStateMap bdsImport = XMSSEngine.getBDSStateMapFromEncoding(bdsStateBinary, publicSeed);
 
-                // the WOTS+ parameters are not part of what was serialized, and the copy the
-                // legacy fixup below makes of each state needs them, so put the digest back first
-                bdsImport = bdsImport.withWOTSDigest(builder.xmss.getTreeDigestOID(), builder.xmss.getTreeDigestSize());
+                // a state map written before the maximum index was recorded marks it with a value
+                // no state map can carry, having no tree height of its own to resolve it against;
+                // here the parameter set is known
+                long stateMaxIndex = (bdsImport.getMaxIndex() < 0)
+                    ? (1L << totalHeight) - 1 : bdsImport.getMaxIndex();
 
-                if (bdsImport.getMaxIndex() < 0)   // check for legacy state maps
-                {
-                    bdsImport = new BDSStateMap(bdsImport, (1L << totalHeight) - 1);
-                }
-
-                bdsState = bdsImport;
+                // the WOTS+ parameters are not part of what was serialized, so the digest goes back
+                // on - in the same copy that carries the maximum index, which used to be a second
+                // one taken afterwards because copying a state before naming its digest threw
+                bdsState = bdsImport.withMaxIndex(stateMaxIndex, builder.xmss.getTreeDigestOID(),
+                    builder.xmss.getTreeDigestSize());
                 bdsState.validate(params, index);
                 bdsState.validateRoot(params, root);
             }
@@ -229,7 +230,16 @@ public final class XMSSMTPrivateKeyParameters
             // of its own, given on its withBDSState: no layer states are installed into a single
             // BDS, but a signature still marks it.
             //
-            bdsState = new BDSStateMap(val, maxIndexFor(val));
+            // The copy names this key's tree digest, as the XMSS side's does. A state map's WOTS+
+            // parameters are not part of what it is serialized as, so one that has just been
+            // decoded carries none until a digest is named, and copying it any other way used to
+            // be a NullPointerException out of the BDS copy constructor - an ordering this class
+            // required of every caller and enforced on none. Naming it here also means a state map
+            // installed in a key is always one this key's own parameter set built the WOTS+
+            // parameters for, rather than whatever the caller had named them with.
+            //
+            bdsState = val.withMaxIndex(maxIndexFor(val), params.getTreeDigestOID(),
+                params.getTreeDigestSize());
             return this;
         }
 

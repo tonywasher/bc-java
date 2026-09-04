@@ -165,9 +165,21 @@ public final class BDS
         this.used = used;
     }
 
+    /**
+     * A plain copy of a state, its WOTS+ instance included where there is one to copy.
+     * <p>
+     * There need not be. The WOTS+ parameters are not part of what a state is serialized as, so a
+     * state that has just been decoded carries none until {@link #withWOTSDigest} names the digest
+     * and builds them, and this read them off the state being copied without asking - so copying a
+     * decoded state was a NullPointerException, and the two operations had to be performed in one
+     * order. A copy of a state that has not been given its digest yet is a state that has not been
+     * given its digest yet, and can be given one exactly as the original could.
+     * </p>
+     */
     BDS(BDS last)
     {
-        this(last, new WOTSPlus(last.wotsPlus.getParams()), last.maxIndex, last.used);
+        this(last, (last.wotsPlus != null) ? new WOTSPlus(last.wotsPlus.getParams()) : null,
+            last.maxIndex, last.used);
     }
 
     private BDS(BDS last, byte[] publicSeed, byte[] secretKeySeed, OTSHashAddress otsHashAddress)

@@ -90,6 +90,55 @@ public class BDSStateSerializationTests
         assertEquals(5L, javaDeserialize(new NothingAvailable(new ByteArrayInputStream(encoding))).getMaxIndex());
     }
 
+    /**
+     * A state map that has just been decoded carries no WOTS+ parameters - they are not part of
+     * what it is written as - and nothing about the type says a digest has to be named before the
+     * map is copied. It did have to be: the copy constructor read the WOTS+ parameters off each
+     * state it was copying, so a decoded map reached it as a NullPointerException, and the one
+     * caller in this tree happened to call withWOTSDigest() first because the comment beside it
+     * says to. Both orders work, and the builder - which copies what it is handed - names the
+     * digest of the key it is building rather than requiring the caller to have named one.
+     */
+    public void testDecodedStateMapCanBeCopiedBeforeItsDigestIsNamed()
+        throws Exception
+    {
+        XMSSMTParameters params = new XMSSMTParameters(HEIGHT, LAYERS, new SHA256Digest());
+        XMSSMTPrivateKeyParameters privKey = generateKey(params);
+
+        byte[] encoded = XMSSEngine.getEncodedBDSState(privKey.getBDSState(), privKey.getPublicSeed());
+        BDSStateMap decoded = XMSSEngine.getBDSStateMapFromEncoding(encoded, privKey.getPublicSeed());
+
+        // the copy constructor, on a map no digest has been named for
+        BDSStateMap copy = new BDSStateMap(decoded, decoded.getMaxIndex());
+
+        assertEquals(decoded.getMaxIndex(), copy.getMaxIndex());
+
+        // and the digest named afterwards, on the copy, which is the order that used to be the
+        // wrong one - the resulting map signs, so what came back is a state and not a shell
+        signsThrough(keyOn(params, privKey,
+            copy.withWOTSDigest(params.getTreeDigestOID(), params.getTreeDigestSize())));
+
+        // and straight to the builder with no digest named at all, which is what a caller who has
+        // only ever seen the public API would write. Signing past the first subtree is the half
+        // that matters here: a top layer state with no WOTS+ parameters is not read at all until
+        // the layer below it runs out of leaves, so one signature says nothing about it.
+        signsThrough(keyOn(params, privKey, decoded));
+    }
+
+    /**
+     * The key privKey's fields describe, carrying the given traversal state. Through the public
+     * builder, which is the setter a caller reaches for and the one that copies what it is given.
+     */
+    private XMSSMTPrivateKeyParameters keyOn(XMSSMTParameters params,
+        XMSSMTPrivateKeyParameters privKey, BDSStateMap state)
+    {
+        return new XMSSMTPrivateKeyParameters.Builder(params)
+            .withSecretKeySeed(privKey.getSecretKeySeed()).withSecretKeyPRF(privKey.getSecretKeyPRF())
+            .withPublicSeed(privKey.getPublicSeed()).withRoot(privKey.getRoot())
+            .withIndex(privKey.getIndex())
+            .withBDSState(state).build();
+    }
+
     private XMSSMTPrivateKeyParameters generateKey(XMSSMTParameters params)
     {
         XMSSMTKeyPairGenerator kpg = new XMSSMTKeyPairGenerator();
@@ -97,6 +146,28 @@ public class BDSStateSerializationTests
         kpg.init(new XMSSMTKeyGenerationParameters(params, new SecureRandom()));
 
         return (XMSSMTPrivateKeyParameters)kpg.generateKeyPair().getPrivate();
+    }
+
+    /**
+     * Sign with the key over more leaves than one subtree holds, so that every layer above the
+     * bottom one is advanced at least once - which is where a state a WOTS+ instance was never
+     * built for is first read, rather than at the first signature.
+     */
+    private void signsThrough(XMSSMTPrivateKeyParameters privKey)
+    {
+        XMSSMTSigner signer = new XMSSMTSigner();
+        XMSSMTPrivateKeyParameters key = privKey;
+        int leavesPerSubtree = 1 << (HEIGHT / LAYERS);
+
+        for (int i = 0; i != leavesPerSubtree + 1; i++)
+        {
+            signer.init(true, key);
+            signer.update(new byte[]{ (byte)i }, 0, 1);
+
+            assertNotNull(signer.generateSignature());
+
+            key = (XMSSMTPrivateKeyParameters)signer.getUpdatedPrivateKey();
+        }
     }
 
     private void signsOnce(XMSSMTPrivateKeyParameters privKey)

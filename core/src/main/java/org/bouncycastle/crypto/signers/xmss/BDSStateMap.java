@@ -357,7 +357,30 @@ public class BDSStateMap
 
     public BDSStateMap withWOTSDigest(ASN1ObjectIdentifier digestName, int digestSize)
     {
-        BDSStateMap newStateMap = new BDSStateMap(this.maxIndex);
+        return withMaxIndex(this.maxIndex, digestName, digestSize);
+    }
+
+    /**
+     * As {@link #withWOTSDigest(ASN1ObjectIdentifier, int)}, and with a maximum index of the
+     * caller's rather than this map's - the state map counterpart of
+     * {@link BDS#withMaxIndex(int, ASN1ObjectIdentifier, int)}, and what
+     * {@code XMSSMTPrivateKeyParameters.Builder.withBDSState} copies a state map with, so that a
+     * state installed in a key is always one whose WOTS+ parameters the key's own parameter set
+     * named. Only the map's own maximum index is the caller's: each layer keeps the one its
+     * subtree fixes, as it does through every other copy of a state map.
+     * <p>
+     * The two used to have to be done one after the other, and in one order, because copying a
+     * state that had not been given its digest yet was a NullPointerException; they can be done in
+     * either order now, and this does them in one pass rather than either.
+     * </p>
+     *
+     * @param maxIndex   the maximum index the copy is to carry.
+     * @param digestName the tree digest of the key the copy belongs to.
+     * @param digestSize its output length in bytes, where the digest does not fix one.
+     */
+    public BDSStateMap withMaxIndex(long maxIndex, ASN1ObjectIdentifier digestName, int digestSize)
+    {
+        BDSStateMap newStateMap = new BDSStateMap(maxIndex);
 
         synchronized (this)
         {
