@@ -3,7 +3,6 @@ package org.bouncycastle.crypto.signers.xmss;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Bytes;
 import org.bouncycastle.util.Pack;
 
@@ -65,11 +64,11 @@ final class WOTSPlus
         XMSSUtil.validateSize(secretKeySeed, n, "secretKeySeed");
         XMSSUtil.validateSize(publicSeed, n, "publicSeed");
 
-        // copy in rather than take the caller's arrays by reference: getSecretKeySeed() and
-        // getPublicSeed() hand out clones, so holding the originals was the one way live WOTS+ key
-        // material could still be changed from outside. The destinations are allocated once, in
-        // the constructor, and the lengths have just been checked against n, so this costs nothing
-        // on the per-leaf walk that calls this for every one-time key in a tree.
+        // copy in rather than take the caller's arrays by reference: a caller that keeps its own
+        // array could otherwise still change this instance's key material after importing it, and
+        // the seeds arrive from a key object that goes on holding them. The destinations are
+        // allocated once, in the constructor, and the lengths have just been checked against n, so
+        // this costs nothing on the per-leaf walk that calls this for every one-time key in a tree.
         System.arraycopy(secretKeySeed, 0, this.secretKeySeed, 0, this.secretKeySeed.length);
         System.arraycopy(publicSeed, 0, this.publicSeed, 0, this.publicSeed.length);
     }
@@ -87,10 +86,13 @@ final class WOTSPlus
 
         /* create signature */
         byte[][] signature = new byte[params.getLen()][];
+        // one encoding for the len chains, the loop stepping the one word they differ in; chain()
+        // writes the other two as it goes and says there why that does not carry between chains.
+        byte[] address = otsHashAddress.toByteArray();
         for (int i = 0; i < params.getLen(); i++)
         {
-            otsHashAddress = withChainAddress(otsHashAddress, i);
-            signature[i] = chain(expandSecretKeySeed(i), 0, baseWMessage.get(i), otsHashAddress);
+            Pack.intToBigEndian(i, address, OTSHashAddress.CHAIN_ADDRESS_OFFSET);
+            signature[i] = chain(expandSecretKeySeed(i), 0, baseWMessage.get(i), address);
         }
         return new WOTSPlusSignature(params, signature);
     }
@@ -118,11 +120,14 @@ final class WOTSPlus
         // settle between them - see that method.
         //
         byte[][] publicKey = new byte[params.getLen()][];
+        // one encoding for the len chains, the loop stepping the one word they differ in; chain()
+        // writes the other two as it goes and says there why that does not carry between chains.
+        byte[] address = otsHashAddress.toByteArray();
         for (int i = 0; i < params.getLen(); i++)
         {
-            otsHashAddress = withChainAddress(otsHashAddress, i);
+            Pack.intToBigEndian(i, address, OTSHashAddress.CHAIN_ADDRESS_OFFSET);
             publicKey[i] = chain(signature.getBlock(i), baseWMessage.get(i),
-                WOTSPlusParameters.WINTERNITZ_PARAMETER - 1 - baseWMessage.get(i), otsHashAddress);
+                WOTSPlusParameters.WINTERNITZ_PARAMETER - 1 - baseWMessage.get(i), address);
         }
         return new WOTSPlusPublicKeyParameters(params, publicKey);
     }
@@ -133,11 +138,13 @@ final class WOTSPlus
      * @param startHash      Starting point.
      * @param startIndex     Start index.
      * @param steps          Steps to take.
-     * @param otsHashAddress OTS hash address for randomization.
+     * @param address        the 32-byte encoding of this chain's OTS hash address. The caller owns
+     *                       it and has set the chain address word; this method writes the hash
+     *                       address and key-and-mask words of it as it steps.
      * @return Value obtained by iterating F for steps times on input startHash,
      * using the outputs of PRF.
      */
-    private byte[] chain(byte[] startHash, int startIndex, int steps, OTSHashAddress otsHashAddress)
+    private byte[] chain(byte[] startHash, int startIndex, int steps, byte[] address)
     {
         int n = params.getTreeDigestSize();
         if (startHash.length != n)
@@ -161,9 +168,12 @@ final class WOTSPlus
         // address as the 32 bytes it is, and nothing here reads the incoming values of either word -
         // withHashAddress() overwrote both at every step - so what the recursion expressed as two
         // rebuilt addresses and two fresh toByteArray() copies per step is three int writes into one
-        // encoding taken once. The encoding is this method's own: toByteArray() allocates what it
-        // returns, and the caller's address object is left alone exactly as it was when chain()
-        // reassigned only its own parameter. Chained from the front rather than unwound from the
+        // encoding. That encoding is now the caller's, taken once for the len chains of a key rather
+        // than once per chain, and this method writes into it: the caller sets the chain address
+        // before each call, and the two words below are written at the top of every step, so what a
+        // previous chain left in them is overwritten before anything is hashed. The steps == 0
+        // return above writes nothing into it at all, which is the same statement the other way
+        // round - it hashes nothing either. Chained from the front rather than unwound from the
         // back, which is the same sequence of hash addresses - startIndex, then upwards - in the
         // same order.
         //
@@ -177,7 +187,6 @@ final class WOTSPlus
         // WOTSPlusPublicKeyParameters clone afterwards, so one shared across a key's chains would
         // leave every entry holding the last chain's value.
         //
-        byte[] address = otsHashAddress.toByteArray();
         byte[] key = new byte[n];
         byte[] tmpMasked = new byte[n];
         byte[] out = new byte[n];
@@ -197,24 +206,6 @@ final class WOTSPlus
             tmp = out;
         }
         return tmp;
-    }
-
-    /**
-     * The given address with its chain address replaced and every other field carried over. An
-     * XMSS address is immutable, so setting one field means rebuilding the whole address, and the
-     * three loops that walk the len chains of a WOTS+ key all step the chain address this way.
-     *
-     * @param otsHashAddress OTS hash address to copy.
-     * @param chainAddress   Chain address to set.
-     * @return otsHashAddress with the given chain address.
-     */
-    private static OTSHashAddress withChainAddress(OTSHashAddress otsHashAddress, int chainAddress)
-    {
-        return (OTSHashAddress)new OTSHashAddress.Builder()
-            .withLayerAddress(otsHashAddress.getLayerAddress()).withTreeAddress(otsHashAddress.getTreeAddress())
-            .withOTSAddress(otsHashAddress.getOTSAddress()).withChainAddress(chainAddress)
-            .withHashAddress(otsHashAddress.getHashAddress()).withKeyAndMask(otsHashAddress.getKeyAndMask())
-            .build();
     }
 
     /**
@@ -336,13 +327,22 @@ final class WOTSPlus
     }
 
     /**
-     * Getter public seed.
+     * This instance's public seed, by reference rather than through a defensive copy.
+     * <p>
+     * The convention a clone here would be keeping is that a key or an IV is copied as it crosses
+     * the library's boundary, and importKeys() above still copies in for exactly that reason. This
+     * does not cross it: WOTSPlus is package-private, so no code outside
+     * org.bouncycastle.crypto.signers.xmss can name the type, let alone call this, and the one
+     * caller in the package - XMSSNodeUtil.randomizeHash - passes what it gets to PRF as a key and
+     * does nothing else with it. The copy this replaces was made once per interior node of every
+     * tree walked, 68607 of them in an h=10 key generation.
+     * </p>
      *
      * @return public seed.
      */
     byte[] getPublicSeed()
     {
-        return Arrays.clone(publicSeed);
+        return publicSeed;
     }
 
     /**
@@ -356,10 +356,13 @@ final class WOTSPlus
     {
         byte[][] publicKey = new byte[params.getLen()][];
         /* derive public key from secretKeySeed */
+        // one encoding for the len chains, the loop stepping the one word they differ in; chain()
+        // writes the other two as it goes and says there why that does not carry between chains.
+        byte[] address = otsHashAddress.toByteArray();
         for (int i = 0; i < params.getLen(); i++)
         {
-            otsHashAddress = withChainAddress(otsHashAddress, i);
-            publicKey[i] = chain(expandSecretKeySeed(i), 0, WOTSPlusParameters.WINTERNITZ_PARAMETER - 1, otsHashAddress);
+            Pack.intToBigEndian(i, address, OTSHashAddress.CHAIN_ADDRESS_OFFSET);
+            publicKey[i] = chain(expandSecretKeySeed(i), 0, WOTSPlusParameters.WINTERNITZ_PARAMETER - 1, address);
         }
         return new WOTSPlusPublicKeyParameters(params, publicKey);
     }

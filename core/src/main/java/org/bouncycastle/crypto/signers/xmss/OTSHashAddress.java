@@ -10,9 +10,17 @@ final class OTSHashAddress
 {
 
     /**
+     * Offset of the chain address word in the 32-byte encoding {@link #toByteArray()} produces.
+     * The len chains of a WOTS+ key differ in this word alone, so the three loops that walk them
+     * step it through one encoding rather than rebuilding an address per chain.
+     */
+    static final int CHAIN_ADDRESS_OFFSET = 20;
+
+    /**
      * Offset of the hash address word in the 32-byte encoding {@link #toByteArray()} produces.
      * See {@link XMSSAddress#KEY_AND_MASK_OFFSET}: these are the two words a WOTS+ chain step
-     * moves, and chain() writes them into an encoding it holds rather than rebuilding one.
+     * moves, and chain() writes them into the encoding its caller stepped rather than rebuilding
+     * one.
      */
     static final int HASH_ADDRESS_OFFSET = 24;
 
@@ -77,7 +85,7 @@ final class OTSHashAddress
     {
         byte[] byteRepresentation = super.toByteArray();
         Pack.intToBigEndian(otsAddress, byteRepresentation,16);
-        Pack.intToBigEndian(chainAddress, byteRepresentation, 20);
+        Pack.intToBigEndian(chainAddress, byteRepresentation, CHAIN_ADDRESS_OFFSET);
         Pack.intToBigEndian(hashAddress, byteRepresentation, HASH_ADDRESS_OFFSET);
         return byteRepresentation;
     }
