@@ -156,6 +156,17 @@ public class BCXMSSPrivateKey
      * those two seeds, the public seed, the root and the state, and the first five are now all
      * above. So the same six things decide the answer, in the same constant time, and the four
      * n-byte comparisons that replace the encoding of a whole key cost nothing against it.
+     * </p><p>
+     * The chain is joined with {@code |} rather than {@code ||}, so all of it is evaluated
+     * whatever the two keys are. Short circuited it answers a key differing in its tree digest
+     * after one comparison and a key differing only in its secretKeyPRF after seven, so how long
+     * the method takes says which of the fields the two keys first disagree on - and two of those
+     * fields are secret material, which is the thing the constant time comparisons above are there
+     * to keep out of the timing. It is why the single comparison this chain replaced was joined
+     * with {@code &} rather than {@code &&}, as every other secret bearing equals() in the
+     * provider is. Every operand is safe to evaluate unconditionally: a constructed key always
+     * carries a tree digest, and {@code Arrays.constantTimeAreEqual} answers false for a null
+     * argument rather than raising.
      * </p>
      */
     public boolean equals(Object o)
@@ -170,12 +181,12 @@ public class BCXMSSPrivateKey
             BCXMSSPrivateKey otherKey = (BCXMSSPrivateKey)o;
 
             if (!treeDigest.equals(otherKey.treeDigest)
-                || keyParams.getIndex() != otherKey.keyParams.getIndex()
-                || keyParams.getUsagesRemaining() != otherKey.keyParams.getUsagesRemaining()
-                || !Arrays.constantTimeAreEqual(keyParams.getPublicSeed(), otherKey.keyParams.getPublicSeed())
-                || !Arrays.constantTimeAreEqual(keyParams.getRoot(), otherKey.keyParams.getRoot())
-                || !Arrays.constantTimeAreEqual(keyParams.getSecretKeySeed(), otherKey.keyParams.getSecretKeySeed())
-                || !Arrays.constantTimeAreEqual(keyParams.getSecretKeyPRF(), otherKey.keyParams.getSecretKeyPRF()))
+                | keyParams.getIndex() != otherKey.keyParams.getIndex()
+                | keyParams.getUsagesRemaining() != otherKey.keyParams.getUsagesRemaining()
+                | !Arrays.constantTimeAreEqual(keyParams.getPublicSeed(), otherKey.keyParams.getPublicSeed())
+                | !Arrays.constantTimeAreEqual(keyParams.getRoot(), otherKey.keyParams.getRoot())
+                | !Arrays.constantTimeAreEqual(keyParams.getSecretKeySeed(), otherKey.keyParams.getSecretKeySeed())
+                | !Arrays.constantTimeAreEqual(keyParams.getSecretKeyPRF(), otherKey.keyParams.getSecretKeyPRF()))
             {
                 return false;
             }
