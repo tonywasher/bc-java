@@ -111,7 +111,10 @@ class XMSSUtil
      */
     public static boolean areEqual(byte[][] a, byte[][] b)
     {
-        if (hasNullPointer(a) || hasNullPointer(b))
+        // through org.bouncycastle.util.Arrays rather than a copy of it kept here: a byte[][] is an
+        // Object[], so isNullOrContainsNull is the same walk the hasNullPointer this replaces made,
+        // in the class this file already imports for the row comparison below.
+        if (Arrays.isNullOrContainsNull(a) || Arrays.isNullOrContainsNull(b))
         {
             throw new NullPointerException("a or b == null");
         }
@@ -123,28 +126,6 @@ class XMSSUtil
             }
         }
         return true;
-    }
-
-    /**
-     * Checks whether 2d byte array has null pointers.
-     *
-     * @param in 2d byte array.
-     * @return true if at least one null pointer is found false else.
-     */
-    public static boolean hasNullPointer(byte[][] in)
-    {
-        if (in == null)
-        {
-            return true;
-        }
-        for (int i = 0; i < in.length; i++)
-        {
-            if (in[i] == null)
-            {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**
