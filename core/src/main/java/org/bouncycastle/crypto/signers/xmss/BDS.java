@@ -715,6 +715,23 @@ public final class BDS
         return authenticationPath;
     }
 
+    /**
+     * Whether this state has an authentication path yet, which is what says whether the key
+     * holding it can sign: a key decoded from an encoding that carried no traversal state has
+     * none. The XMSS^MT side asks the same question of a whole BDSStateMap, which answers it with
+     * its own isEmpty().
+     * <p>
+     * Here rather than {@code getAuthenticationPath().isEmpty()} at the call sites, which built a
+     * copy of the path in order to ask its size - once per signature and once per
+     * hasTraversalState(). Handing out no path, this needs none of the copying that accessor
+     * exists for, so it is a predicate rather than a second way to reach the list.
+     * </p>
+     */
+    boolean isAuthenticationPathEmpty()
+    {
+        return authenticationPath.isEmpty();
+    }
+
     public int getIndex()
     {
         return index;

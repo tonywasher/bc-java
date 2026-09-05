@@ -169,7 +169,7 @@ public final class XMSSEngine
      */
     public static boolean hasTraversalState(XMSSPrivateKeyParameters privateKey)
     {
-        return !privateKey.getBDSState().getAuthenticationPath().isEmpty();
+        return !privateKey.getBDSState().isAuthenticationPathEmpty();
     }
 
     /**
@@ -213,7 +213,7 @@ public final class XMSSEngine
         {
             throw new ExhaustedPrivateKeyException("no usages of private key remaining");
         }
-        if (privateKey.getBDSState().getAuthenticationPath().isEmpty())
+        if (privateKey.getBDSState().isAuthenticationPathEmpty())
         {
             throw new IllegalStateException("not initialized");
         }
