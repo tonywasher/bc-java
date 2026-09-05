@@ -714,10 +714,7 @@ public final class BDS
     {
         List<XMSSNode> authenticationPath = new ArrayList<XMSSNode>();
 
-        for (XMSSNode node : this.authenticationPath)
-        {
-            authenticationPath.add(node);
-        }
+        authenticationPath.addAll(this.authenticationPath);
         return authenticationPath;
     }
 
