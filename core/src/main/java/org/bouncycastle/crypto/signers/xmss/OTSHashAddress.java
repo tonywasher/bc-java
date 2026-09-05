@@ -38,25 +38,32 @@ final class OTSHashAddress
     private static final int TYPE = 0x00;
 
     private final int otsAddress;
-    private final int chainAddress;
-    private final int hashAddress;
 
     private OTSHashAddress(Builder builder)
     {
         super(builder);
         otsAddress = builder.otsAddress;
-        chainAddress = builder.chainAddress;
-        hashAddress = builder.hashAddress;
     }
 
+    /**
+     * Builds the address a leaf's walk starts from, which is the OTS address word and the tree
+     * the three words above it name.
+     * <p>
+     * The chain address and the hash address are not set here, because nothing sets them here: a
+     * walk steps them through the encoding it already holds, at {@link #CHAIN_ADDRESS_OFFSET} and
+     * {@link #HASH_ADDRESS_OFFSET}, rather than building an address per chain and per step. Both
+     * are zero in what {@link #toByteArray()} produces, which is where a walk starts from and what
+     * {@code WOTSPlus.getWOTSPlusSecretKey} puts them back to before each one-time key. Setters
+     * for the two were kept when the walks stopped using them and were left with no caller outside
+     * this package's own address test, which now writes the words the way the walks do.
+     * </p>
+     */
     public static class Builder
         extends XMSSAddress.Builder<Builder>
     {
 
         /* optional */
         private int otsAddress = 0;
-        private int chainAddress = 0;
-        private int hashAddress = 0;
 
         public Builder()
         {
@@ -66,18 +73,6 @@ final class OTSHashAddress
         public Builder withOTSAddress(int val)
         {
             otsAddress = val;
-            return this;
-        }
-
-        public Builder withChainAddress(int val)
-        {
-            chainAddress = val;
-            return this;
-        }
-
-        public Builder withHashAddress(int val)
-        {
-            hashAddress = val;
             return this;
         }
 
@@ -96,8 +91,6 @@ final class OTSHashAddress
     {
         byte[] byteRepresentation = super.toByteArray();
         Pack.intToBigEndian(otsAddress, byteRepresentation, OTS_ADDRESS_OFFSET);
-        Pack.intToBigEndian(chainAddress, byteRepresentation, CHAIN_ADDRESS_OFFSET);
-        Pack.intToBigEndian(hashAddress, byteRepresentation, HASH_ADDRESS_OFFSET);
         return byteRepresentation;
     }
 

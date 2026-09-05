@@ -27,14 +27,23 @@ public class AddressTests
      */
     private static byte[] otsHashAddress()
     {
-        return new OTSHashAddress.Builder()
+        byte[] enc = new OTSHashAddress.Builder()
             .withOTSAddress(0x11223344)
-            .withChainAddress(0x55667788)
-            .withHashAddress(0x99aabbcc)
             .withLayerAddress(7)
             .withTreeAddress(0x0102030405060708L)
             .withKeyAndMask(2)
             .build().toByteArray();
+
+        // the chain address and the hash address are not builder fields: a walk steps them through
+        // the encoding it holds, WOTSPlus.chain writing both once per chain step, so they are
+        // written here the way the walk writes them. They have to hold something for the two tests
+        // below to say anything - what those turn on is that neither carries past the twelve bytes
+        // subtreeAddressOf copies - and writing them through the offset constants is also what
+        // asserts the constants name words 5 and 6, which is the layout production depends on.
+        Pack.intToBigEndian(0x55667788, enc, OTSHashAddress.CHAIN_ADDRESS_OFFSET);
+        Pack.intToBigEndian(0x99aabbcc, enc, OTSHashAddress.HASH_ADDRESS_OFFSET);
+
+        return enc;
     }
 
     public void testOTSHashAddressLayout()
