@@ -171,17 +171,6 @@ class XMSSUtil
     }
 
     /**
-     * Encode a BDS state, binding it to nothing. Prefer serialize(Object, byte[]): the encoded state
-     * carries a checksum, and passing the owning key's public seed ties the state to that key, so a
-     * state transplanted between two keys of the same parameters is detected (github #2414).
-     */
-    public static byte[] serialize(Object obj)
-        throws IOException
-    {
-        return serialize(obj, null);
-    }
-
-    /**
      * Encode a BDS state, binding its checksum to the public seed of the key it belongs to.
      *
      * @param obj        the BDS or BDSStateMap to encode.
