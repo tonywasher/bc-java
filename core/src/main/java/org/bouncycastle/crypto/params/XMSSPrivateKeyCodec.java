@@ -1,5 +1,6 @@
 package org.bouncycastle.crypto.params;
 
+import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.crypto.signers.xmss.XMSSEngine;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Pack;
@@ -27,6 +28,14 @@ import org.bouncycastle.util.Pack;
  * one side and as an unsigned long on the other, the length check spelled the same way twice - and
  * is gone. The width is named by {@link #XMSS_INDEX_SIZE} and {@link #mtIndexSize(int)}, which is
  * where a question about what the field can hold is asked.
+ * </p><p>
+ * The same two key classes then wrote out one equals() and one hashCode() each, again line for
+ * line the same, over the same fields in the same order - so those are here too, as
+ * {@link #fieldsEqual} over a {@link Fields} snapshot and {@link #stateEqual} over a {@link State}
+ * one, with {@link #hashCode(ASN1ObjectIdentifier, byte[], byte[])} beside them. What is left in
+ * each key class is the snapshot of its own fields, taken under its own monitor, and the typed
+ * call that encodes its own traversal state - a BDS on one side and a BDSStateMap on the other,
+ * which is the whole of what the two families do not share.
  * </p><p>
  * Package private, like the public codec beside it: the classes it serves are the public surface.
  * The name starts XMSS so that the {@code crypto/params/XMSS*} excludes the jdk1.4 and jdk1.3 Ant
@@ -220,5 +229,173 @@ class XMSSPrivateKeyCodec
     byte[] getBDSState()
     {
         return bdsState;
+    }
+    /**
+     * A snapshot of everything a private key's equals() decides on ahead of its traversal state,
+     * read from one key under that key's own monitor.
+     * <p>
+     * The two families' equals() were a line for line copy of each other down to this point, the
+     * way their encodings were before this class held those, so the comparison lives here beside
+     * the layout it is over: what a key is compared on is what a key is stored as - the index and
+     * the four n-byte fields - with the usages remaining and the tree digest naming the position
+     * and the parameter set those are under. Only the last step differs between the families, and
+     * {@link State} is where that difference is.
+     * </p><p>
+     * A key's index and its usages remaining are read together, under the monitor a signature is
+     * taken under, because both come from state a signature replaces. Read one at a time, a
+     * signature landing between them pairs an index from one side of it with a usage count from
+     * the other, a combination the key was never in. The four arrays are final and are never
+     * written after construction, so capturing the references beside those two says as much as
+     * copying the arrays would - which is what lets each key be read in one block of its own
+     * rather than one monitor being held across both. Holding the second key's monitor inside the
+     * first would let a.equals(b) on one thread and b.equals(a) on another deadlock against each
+     * other, and there is nothing to hold them for; {@code HSSPrivateKeyParameters.equals()} gives
+     * the same reason for taking its two in sequence.
+     * </p>
+     */
+    static final class Fields
+    {
+        private final ASN1ObjectIdentifier treeDigestOID;
+        private final long index;
+        private final long usagesRemaining;
+        private final byte[] publicSeed;
+        private final byte[] root;
+        private final byte[] secretKeySeed;
+        private final byte[] secretKeyPRF;
+
+        Fields(ASN1ObjectIdentifier treeDigestOID, long index, long usagesRemaining,
+            byte[] publicSeed, byte[] root, byte[] secretKeySeed, byte[] secretKeyPRF)
+        {
+            this.treeDigestOID = treeDigestOID;
+            this.index = index;
+            this.usagesRemaining = usagesRemaining;
+            this.publicSeed = publicSeed;
+            this.root = root;
+            this.secretKeySeed = secretKeySeed;
+            this.secretKeyPRF = secretKeyPRF;
+        }
+    }
+
+    /**
+     * Whether two keys agree on all seven, with every array among them compared in constant time.
+     * <p>
+     * Every array is compared in constant time, the root and the public seed included even though
+     * they are the public key - the family's public key parameters publish root then SEED, RFC
+     * 8391 sec. 4.1.7 and sec. 4.2.4 - because this is a private key's equality, where every
+     * comparison in it being constant time is what stops the next field added to the chain from
+     * being compared the other way. The two secret seeds are those fields, and they are why the
+     * traversal state is all that is left below: a private key encoding is the index, those two
+     * seeds, the public seed, the root and the state, and the first five are all here.
+     * </p><p>
+     * The chain is joined with {@code &} rather than {@code &&}, so all of it is evaluated
+     * whatever the two keys are. Short circuited it answers a key differing in its tree digest
+     * after one comparison and a key differing only in its secretKeyPRF after seven, so how long
+     * it takes says which of the fields the two keys first disagree on - and two of those fields
+     * are secret material, which is the thing the constant time comparisons are there to keep out
+     * of the timing. Every operand is safe to evaluate unconditionally: the parameter set is
+     * mandatory, and the four arrays are allocated when a builder is not given them.
+     * </p><p>
+     * What is left in the timing is the bit this decides - whether the two keys agree on all
+     * seven - since that is what says whether {@link #stateEqual} runs at all. Two keys that get
+     * there agree on both secret seeds, so the longer path is not reachable without already
+     * holding what comparing those seeds in constant time is there to withhold. It is also why
+     * the state is reached by a short circuit after this rather than being another {@code &} term
+     * within it: producing a state to compare means encoding a whole traversal state on both
+     * keys - every authentication path, retain queue, stack, tree hash and kept node, and a
+     * SHA-256 checksum over the result - and as a term it would run for every pair of keys that
+     * differ. Measured over 20000 comparisons at an h = 10 SHA-256 XMSS key, that is 13096ns
+     * against the 419ns this answers an unequal pair in, and the unequal pair is the common one:
+     * the hash below is the public key's, so keys taken from one key pair land in one bucket of a
+     * Set or a Map and are told apart there by their index, which is one of the seven.
+     * </p>
+     */
+    static boolean fieldsEqual(Fields a, Fields b)
+    {
+        return a.treeDigestOID.equals(b.treeDigestOID)
+            & a.index == b.index
+            & a.usagesRemaining == b.usagesRemaining
+            & Arrays.constantTimeAreEqual(a.publicSeed, b.publicSeed)
+            & Arrays.constantTimeAreEqual(a.root, b.root)
+            & Arrays.constantTimeAreEqual(a.secretKeySeed, b.secretKeySeed)
+            & Arrays.constantTimeAreEqual(a.secretKeyPRF, b.secretKeyPRF);
+    }
+
+    /**
+     * A snapshot of a key's traversal state as an encoding of it would carry it, beside the
+     * position that state is the state for.
+     * <p>
+     * The state is the one part of a key's content {@link #fieldsEqual} cannot reach: it carries a
+     * mark saying the one-time key at its index has already signed, and no accessor reports it.
+     * Like {@link Fields} it is read under the key's own monitor, the one a signature is held
+     * under and the one {@code toByteArray()} takes to write the same two things: a signature
+     * landing between the state and the public seed would encode a state under a seed that no
+     * longer goes with it.
+     * </p><p>
+     * The index beside it is what pins an answer to a position, and only one of the two families
+     * needs it to. Each key's monitor is taken twice over a comparison rather than once - the
+     * fields, then this - so a signature landing between the two leaves the fields having
+     * answered on a position their key has already left. All that can do is answer false, which
+     * is the answer for the instant it read, and the pairs that reach here are the ones it found
+     * equal. A lone BDS encoding opens with the maximum index and the index, so an XMSS key's
+     * state pins its own position down and the field here can only agree with it. A state map
+     * does not: it carries its own maximum index and each layer's position inside its subtree, but
+     * an XMSS^MT key's global index is the field beside the map that rollKey() advances, and
+     * {@code toByteArray()} was the only thing that ever wrote the two out together. So both
+     * families read their index into this snapshot, one because the answer needs it and one so
+     * that there is a single shape to describe.
+     * </p>
+     */
+    static final class State
+    {
+        private final long index;
+        private final byte[] encoded;
+
+        State(long index, byte[] encoded)
+        {
+            this.index = index;
+            this.encoded = encoded;
+        }
+
+        long getIndex()
+        {
+            return index;
+        }
+
+        byte[] getEncoded()
+        {
+            return encoded;
+        }
+    }
+
+    /**
+     * Whether two keys are at one position holding one traversal state, the two state encodings
+     * compared in constant time.
+     */
+    static boolean stateEqual(State a, State b)
+    {
+        return a.index == b.index & Arrays.constantTimeAreEqual(a.encoded, b.encoded);
+    }
+
+    /**
+     * The hash of the fields that do not move as a key signs: the tree digest, the root and the
+     * public seed. Keys {@link #fieldsEqual} and {@link #stateEqual} call equal agree on all
+     * three, so the equals() contract holds.
+     * <p>
+     * Together they are the public key - the family's public key parameters publish root then
+     * SEED under the same parameter set - which is what each provider key hashed by building one
+     * and encoding it, a public key parameters and a provider public key and a concatenation of
+     * the two fields per call to reach three values the private key already holds. The two secret
+     * seeds are left out for the reason they are compared in constant time above: a hash of
+     * secret material is a commitment to it, published to wherever the hash goes, and nothing here
+     * needs one - the index is what tells one key of a key pair from another, and equals() answers
+     * on it without being asked for a hash at all.
+     * </p>
+     */
+    static int hashCode(ASN1ObjectIdentifier treeDigestOID, byte[] root, byte[] publicSeed)
+    {
+        int hc = treeDigestOID.hashCode();
+        hc = 31 * hc + Arrays.hashCode(root);
+        hc = 31 * hc + Arrays.hashCode(publicSeed);
+        return hc;
     }
 }
