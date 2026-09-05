@@ -306,9 +306,15 @@ public final class XMSSEngine
         /* reinitialize WOTS+ object */
         wotsPlus.importKeys(new byte[params.getTreeDigestSize()], publicKey.getPublicSeed());
 
+        // read once. A verification wants the root twice - as the middle of the H_msg key, and as
+        // what the root climbed out of the signature is compared against - and getRoot() hands out
+        // a clone each time, so the second call was a second n-byte copy of a field written at
+        // construction and never after. Reading it once is also what makes the two uses provably
+        // the same bytes rather than two reads that happen not to be able to differ.
+        byte[] root = publicKey.getRoot();
+
         /* create message digest */
-        byte[] concatenated = hMsgKey(sig.getRandom(), publicKey.getRoot(), index,
-            params.getTreeDigestSize());
+        byte[] concatenated = hMsgKey(sig.getRandom(), root, index, params.getTreeDigestSize());
         byte[] messageDigest = khf.HMsg(concatenated, message);
 
         int xmssHeight = params.getHeight();
@@ -319,7 +325,7 @@ public final class XMSSEngine
         XMSSNode rootNodeFromSignature = XMSSVerifierUtil.getRootNodeFromSignature(wotsPlus, xmssHeight, messageDigest,
             sig, otsAddress, indexLeaf);
 
-        return Arrays.constantTimeAreEqual(rootNodeFromSignature.getValue(), publicKey.getRoot());
+        return Arrays.constantTimeAreEqual(rootNodeFromSignature.getValue(), root);
     }
 
     /**
@@ -506,7 +512,10 @@ public final class XMSSEngine
             return false;
         }
 
-        byte[] concatenated = hMsgKey(sig.getRandom(), publicKey.getRoot(), sig.getIndex(),
+        // read once, as in verifySignature above and for the same reason
+        byte[] root = publicKey.getRoot();
+
+        byte[] concatenated = hMsgKey(sig.getRandom(), root, sig.getIndex(),
             params.getTreeDigestSize());
         byte[] messageDigest = wotsPlus.getKhf().HMsg(concatenated, message);
 
@@ -542,7 +551,7 @@ public final class XMSSEngine
         }
 
         /* compare roots */
-        return Arrays.constantTimeAreEqual(rootNode.getValue(), publicKey.getRoot());
+        return Arrays.constantTimeAreEqual(rootNode.getValue(), root);
     }
 
     /**
