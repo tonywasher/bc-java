@@ -31,8 +31,29 @@ public class BCXMSSMTPrivateKey
         ASN1ObjectIdentifier treeDigest,
         XMSSMTPrivateKeyParameters keyParams)
     {
+        this(treeDigest, keyParams, null);
+    }
+
+    /**
+     * As above, carrying the PKCS#8 attributes of the key this one was derived from.
+     * <p>
+     * The two-argument form is for a key that has no such origin - key pair generation - and the
+     * attributes it leaves null are what {@link #getEncoded()} writes. Every other caller is
+     * re-wrapping a key that already exists, and had been reaching this class through that form:
+     * {@code extractKeyShard} below and the {@code getUpdatedPrivateKey()} of the signature SPI,
+     * which is the StateAwareSignature contract's own way of taking the key back after signing.
+     * So a key loaded from a PKCS#8 carrying attributes lost them on being signed with once, or
+     * on being sharded once, with nothing to say so.
+     * </p>
+     */
+    BCXMSSMTPrivateKey(
+        ASN1ObjectIdentifier treeDigest,
+        XMSSMTPrivateKeyParameters keyParams,
+        ASN1Set attributes)
+    {
         this.treeDigest = treeDigest;
         this.keyParams = keyParams;
+        this.attributes = attributes;
     }
 
     public BCXMSSMTPrivateKey(PrivateKeyInfo keyInfo)
@@ -73,7 +94,7 @@ public class BCXMSSMTPrivateKey
 
     public XMSSMTPrivateKey extractKeyShard(int usageCount)
     {
-        return new BCXMSSMTPrivateKey(this.treeDigest, keyParams.extractKeyShard(usageCount));
+        return new BCXMSSMTPrivateKey(this.treeDigest, keyParams.extractKeyShard(usageCount), this.attributes);
     }
 
     public String getAlgorithm()
@@ -84,6 +105,15 @@ public class BCXMSSMTPrivateKey
     public String getFormat()
     {
         return "PKCS#8";
+    }
+
+    /**
+     * The PKCS#8 attributes this key carries, for the signature SPI to put on the key it hands
+     * back from getUpdatedPrivateKey().
+     */
+    ASN1Set getAttributes()
+    {
+        return attributes;
     }
 
     public byte[] getEncoded()

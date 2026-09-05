@@ -9,6 +9,7 @@ import java.security.SignatureException;
 import java.security.spec.AlgorithmParameterSpec;
 
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
+import org.bouncycastle.asn1.ASN1Set;
 import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
 import org.bouncycastle.crypto.CipherParameters;
 import org.bouncycastle.crypto.Digest;
@@ -34,6 +35,9 @@ public class XMSSMTSignatureSpi
     private Digest digest;
     private XMSSMTSigner signer;
     private ASN1ObjectIdentifier treeDigest;
+    // the attributes of the key engineInitSign was given, so the key getUpdatedPrivateKey()
+    // hands back is the same key rather than one stripped of them
+    private ASN1Set attributes;
     private ASN1ObjectIdentifier[] treeDigests;
     private SecureRandom random;
 
@@ -111,6 +115,7 @@ public class XMSSMTSignatureSpi
             CipherParameters param = ((BCXMSSMTPrivateKey)privateKey).getKeyParams();
 
             treeDigest = ((BCXMSSMTPrivateKey)privateKey).getTreeDigestOID();
+            attributes = ((BCXMSSMTPrivateKey)privateKey).getAttributes();
             if (random != null)
             {
                 param = new ParametersWithRandom(param, random);
@@ -214,9 +219,10 @@ public class XMSSMTSignatureSpi
         {
             throw new IllegalStateException("signature object not in a signing state");
         }
-        PrivateKey rKey = new BCXMSSMTPrivateKey(treeDigest, (XMSSMTPrivateKeyParameters)signer.getUpdatedPrivateKey());
+        PrivateKey rKey = new BCXMSSMTPrivateKey(treeDigest, (XMSSMTPrivateKeyParameters)signer.getUpdatedPrivateKey(), attributes);
 
         treeDigest = null;
+        attributes = null;
 
         return rKey;
     }

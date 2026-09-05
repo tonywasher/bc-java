@@ -26,11 +26,16 @@ import junit.framework.TestCase;
 import org.bouncycastle.asn1.ASN1Encodable;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.ASN1Sequence;
+import org.bouncycastle.asn1.ASN1Set;
+import org.bouncycastle.asn1.DERBMPString;
 import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.DERSequence;
+import org.bouncycastle.asn1.DERSet;
 import org.bouncycastle.asn1.bc.BCObjectIdentifiers;
 import org.bouncycastle.asn1.iana.IANAObjectIdentifiers;
 import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
+import org.bouncycastle.asn1.pkcs.Attribute;
+import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
@@ -1397,5 +1402,66 @@ public class XMSSTest
         {
             digest.reset();
         }
+    }
+
+    /**
+     * A key loaded from a PKCS#8 that carried attributes keeps them across the two operations that
+     * hand back a new key object for the same key: getUpdatedPrivateKey(), which is how
+     * StateAwareSignature says to take the advanced key after signing, and extractKeyShard().
+     * <p>
+     * Both re-wrapped the advanced key parameters through the two-argument BCXMSSPrivateKey
+     * constructor, which sets no attributes, so the attributes were dropped - silently, since
+     * everything else about the key survives and the encoding is still well formed. Taking the key
+     * back after every signature is the whole of how a stateful scheme is used, so this is the
+     * path a key with attributes travels every time it signs.
+     * </p>
+     */
+    public void testAttributesSurviveSigningAndSharding()
+        throws Exception
+    {
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("XMSS", "BCPQC");
+
+        kpg.initialize(new XMSSParameterSpec(4, XMSSParameterSpec.SHA256), new SecureRandom());
+
+        KeyPair kp = kpg.generateKeyPair();
+        KeyFactory kf = KeyFactory.getInstance("XMSS", "BCPQC");
+
+        PrivateKey withAttributes = kf.generatePrivate(
+            new PKCS8EncodedKeySpec(withAttributes(kp.getPrivate().getEncoded())));
+
+        assertEquals("the loaded key did not carry the attributes",
+            ATTRIBUTES, attributesOf(withAttributes.getEncoded()));
+
+        StateAwareSignature sig = (StateAwareSignature)Signature.getInstance("SHA256withXMSS", "BCPQC");
+
+        sig.initSign(withAttributes);
+        sig.update(msg, 0, msg.length);
+        sig.sign();
+
+        assertEquals("getUpdatedPrivateKey() dropped the attributes",
+            ATTRIBUTES, attributesOf(sig.getUpdatedPrivateKey().getEncoded()));
+
+        assertEquals("extractKeyShard() dropped the attributes", ATTRIBUTES,
+            attributesOf(((XMSSPrivateKey)withAttributes).extractKeyShard(1).getEncoded()));
+
+        // a generated key has no origin to take attributes from, and must still encode without any
+        assertNull("a generated key invented attributes", attributesOf(kp.getPrivate().getEncoded()));
+    }
+
+    private static final ASN1Set ATTRIBUTES = new DERSet(new Attribute(
+        PKCSObjectIdentifiers.pkcs_9_at_friendlyName, new DERSet(new DERBMPString("a stateful key"))));
+
+    private static byte[] withAttributes(byte[] pkcs8)
+        throws Exception
+    {
+        PrivateKeyInfo info = PrivateKeyInfo.getInstance(pkcs8);
+
+        return new PrivateKeyInfo(info.getPrivateKeyAlgorithm(), info.parsePrivateKey(), ATTRIBUTES)
+            .getEncoded();
+    }
+
+    private static ASN1Set attributesOf(byte[] pkcs8)
+    {
+        return PrivateKeyInfo.getInstance(pkcs8).getAttributes();
     }
 }
