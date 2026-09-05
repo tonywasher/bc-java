@@ -704,6 +704,12 @@ public final class BDS
         return root;
     }
 
+    /**
+     * The authentication path, as a copy: the one accessor here that still makes one, because
+     * what XMSSEngine does with it is put it in a signature that outlives the call. The five
+     * below hand out the state's own collections, and say there why that is enough for the one
+     * caller they have.
+     */
     List<XMSSNode> getAuthenticationPath()
     {
         List<XMSSNode> authenticationPath = new ArrayList<XMSSNode>();
@@ -747,45 +753,58 @@ public final class BDS
         return k;
     }
 
-    /**
-     * The retain queues, as a copy - through the same cloneRetain() the constructors take a state
-     * apart with, so the copy reaches the queues and not just the map holding them.
-     * <p>
-     * putAll() was what it did, which copies the map and leaves every value pointing at the queue
-     * the live state reads from: the queues nextAuthenticationPath() calls remove(0) on as it
-     * descends, one node at a time, each of them the only copy of that node the state has. A
-     * caller that emptied one - or took a node out of one to look at it - would leave the key
-     * either refused at the next signature that reaches that height, "missing retain node in BDS
-     * state", or building an authentication path from the wrong node, which is a signature a
-     * verifier rejects and nothing on this side reports.
-     * </p>
-     */
-    Map<Integer, List<XMSSNode>> getRetain()
-    {
-        return cloneRetain(retain);
-    }
-
     /*
-     * These three hand out a copy, as getAuthenticationPath() and getRetain() above them do and
-     * as the constructors do when they take a state apart: what they are copying is the live
-     * traversal state of a one-time key, and a caller that changed it would corrupt the signing
-     * position with nothing to catch it. They copy to the same depth the constructors do - the
-     * collection, and each tree hash instance, but not the nodes, which are read-only in practice.
+     * The state's own five collections, by reference rather than as a copy of each.
+     * BDSStateCodec.writeBDS is the caller - it asks each one its size and iterates it, writing
+     * every one of them to a stream and none of them to itself, the terms XMSSReducedSignature
+     * hands out its WOTS+ blocks on.
+     *
+     * What a copy would guard against is a caller that writes, not the state writing to itself.
+     * These five are filled inside constructors and never after: advancing means building the
+     * successor (getNextState, and BDSStateMap.getNextState over it), and initialize() and
+     * nextAuthenticationPath() are both private and reached only from a constructor, over
+     * collections it has already copied. The one thing a published state does change in place is
+     * its used mark, which markUsed() sets and writeBDS reads through isUsed() rather than through
+     * any of these.
+     *
+     * So a reader that writes nothing has nothing to be protected from, and the copies these
+     * replace cost an h = 10 SHA-256 XMSS key 896 of the 5664 bytes it allocated per getEncoded(),
+     * and an h = 20 d = 2 XMSS^MT key 857 of 5825 - most of it the eight tree hash instances
+     * cloneTreeHashInstances() walks, at 368 bytes, and the 184 a stack and a keep map that are
+     * both empty at index 0 were costing to copy.
+     *
+     * getAuthenticationPath() above is the copying accessor that stays, because the path it hands
+     * XMSSEngine goes into a signature that outlives the call, where these are read and dropped
+     * inside writeBDS. The other four had no caller left but the tests and are gone; anything that
+     * needs one of them to hold still wants the copy the constructors make rather than one of its
+     * own, because the depth is not obvious - cloneRetain() reaches the queues
+     * nextAuthenticationPath() calls remove(0) on, and cloneTreeHashInstances() each instance it
+     * updates, where copying the map or the list alone would leave both shared.
      */
 
-    Stack<XMSSNode> getStack()
+    List<XMSSNode> getLiveAuthenticationPath()
     {
-        return cloneStack(stack);
+        return authenticationPath;
     }
 
-    List<BDSTreeHash> getTreeHashInstances()
+    Map<Integer, List<XMSSNode>> getLiveRetain()
     {
-        return cloneTreeHashInstances(treeHashInstances);
+        return retain;
     }
 
-    Map<Integer, XMSSNode> getKeep()
+    Stack<XMSSNode> getLiveStack()
     {
-        return new TreeMap<Integer, XMSSNode>(keep);
+        return stack;
+    }
+
+    List<BDSTreeHash> getLiveTreeHashInstances()
+    {
+        return treeHashInstances;
+    }
+
+    Map<Integer, XMSSNode> getLiveKeep()
+    {
+        return keep;
     }
 
     public BDS withWOTSDigest(ASN1ObjectIdentifier digestName)

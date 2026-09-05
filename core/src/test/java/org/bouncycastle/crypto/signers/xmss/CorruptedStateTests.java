@@ -33,20 +33,29 @@ public class CorruptedStateTests
 
     /**
      * The harness itself: taking a key apart and putting it back together unchanged has to leave a
-     * key that still signs, or the corruption tests below would pass for the wrong reason.
+     * key that still signs, or the corruption tests below would pass for the wrong reason. At both
+     * of the indices they use, since what each of them removes is read at one of the two.
      */
     public void testUntouchedStateStillSigns()
         throws Exception
     {
-        XMSSPrivateKeyParameters privKey = importRebuilt(1, null);
+        int[] indices = new int[]{1, 7};
 
-        assertEquals(1, privKey.getIndex());
+        for (int i = 0; i != indices.length; i++)
+        {
+            XMSSPrivateKeyParameters privKey = importRebuilt(indices[i], null);
 
-        XMSSSigner signer = new XMSSSigner();
+            assertEquals(indices[i], privKey.getIndex());
 
-        signer.init(true, privKey);
-        signer.update((byte)9);
-        signer.generateSignature();
+            XMSSSigner signer = new XMSSSigner();
+
+            signer.init(true, privKey);
+            signer.update((byte)9);
+            signer.generateSignature();
+
+            assertEquals(indices[i] + 1,
+                ((XMSSPrivateKeyParameters)signer.getUpdatedPrivateKey()).getIndex());
+        }
     }
 
     /**
@@ -101,50 +110,6 @@ public class CorruptedStateTests
     }
 
     /**
-     * The harness's other assumption, and the one the three tests above lean on without saying so:
-     * the state hands out its collections as copies, so corrupting what came back corrupts the
-     * rebuilt state and not the state it was read from.
-     * <p>
-     * The retain queues are the case worth pinning, because the map holding them is one level
-     * above the thing that gets mutated. A queue reached through the returned map used to be the
-     * queue the live state reads from, so a caller taking a node out to look at it took it out of
-     * the key - and the key then either refuses the next signature that reaches that height or
-     * builds its authentication path from the wrong node. The tests above never saw it because
-     * each of them replaces a collection rather than changing one in place.
-     * </p>
-     */
-    public void testRetainQueuesHandedOutAreCopies()
-        throws Exception
-    {
-        // index 7, as testMissingRetainQueueReported: the first index whose next authentication
-        // path reads the retain queue
-        XMSSPrivateKeyParameters privKey = importRebuilt(7, null);
-        BDS state = privKey.getBDSState();
-        Map<Integer, List<XMSSNode>> retain = state.getRetain();
-
-        assertFalse("nothing retained at index 7", retain.isEmpty());
-
-        Integer height = (Integer)retain.keySet().iterator().next();
-        int size = retain.get(height).size();
-
-        assertTrue("retain queue at height " + height + " is empty", size > 0);
-
-        retain.get(height).remove(0);
-
-        assertEquals("BDS.getRetain() handed out the live retain queue", size,
-            state.getRetain().get(height).size());
-
-        // and the key that queue belongs to still signs its way past the index that reads it
-        XMSSSigner signer = new XMSSSigner();
-
-        signer.init(true, privKey);
-        signer.update((byte)9);
-        signer.generateSignature();
-
-        assertEquals(8, ((XMSSPrivateKeyParameters)signer.getUpdatedPrivateKey()).getIndex());
-    }
-
-    /**
      * A private key advanced to {@code atIndex}, re-encoded with the named part of its BDS state
      * removed, and imported again through the ordinary encoded-key path.
      */
@@ -177,15 +142,16 @@ public class CorruptedStateTests
 
         assertEquals(atIndex, state.getIndex());
 
-        // getKeep(), getRetain() and getTreeHashInstances() below all hand out copies, so the
-        // corruption applied here does not reach the state it was decoded from
-        Map<Integer, XMSSNode> keep = state.getKeep();
-        Map<Integer, List<XMSSNode>> retain = state.getRetain();
+        // these are the state's own collections rather than copies of them, so each corruption
+        // replaces one and none of them changes one in place; the BDS constructor below copies
+        // what it is given, so the rebuilt state shares nothing with the state it was read from
+        Map<Integer, XMSSNode> keep = state.getLiveKeep();
+        Map<Integer, List<XMSSNode>> retain = state.getLiveRetain();
 
         if ("keep".equals(drop))
         {
             assertFalse("nothing kept at index " + atIndex, keep.isEmpty());
-            keep.clear();
+            keep = new TreeMap<Integer, XMSSNode>();
         }
         else if ("retain".equals(drop))
         {
@@ -210,8 +176,8 @@ public class CorruptedStateTests
         }
 
         BDS rebuilt = new BDS(state.getTreeHeight(), state.getK(), state.getMaxIndex(), state.getIndex(),
-            state.isUsed(), state.getRoot(), state.getAuthenticationPath(), retain, state.getStack(),
-            state.getTreeHashInstances(), keep);
+            state.isUsed(), state.getRoot(), state.getLiveAuthenticationPath(), retain,
+            state.getLiveStack(), state.getLiveTreeHashInstances(), keep);
 
         return new XMSSPrivateKeyParameters.Builder(params)
             .withPrivateKey(Arrays.concatenate(head, BDSStateCodec.encode(rebuilt, publicSeed))).build();

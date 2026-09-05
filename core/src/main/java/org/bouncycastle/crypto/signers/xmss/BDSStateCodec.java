@@ -161,14 +161,14 @@ final class BDSStateCodec
         writeBoolean(dataOut, state.isUsed());
         writeOptionalNode(dataOut, state.getRoot(), treeHeight);
 
-        List<XMSSNode> authenticationPath = state.getAuthenticationPath();
+        List<XMSSNode> authenticationPath = state.getLiveAuthenticationPath();
         dataOut.writeInt(authenticationPath.size());
         for (int i = 0; i < authenticationPath.size(); i++)
         {
             writeNode(dataOut, authenticationPath.get(i), treeHeight);
         }
 
-        Map<Integer, List<XMSSNode>> retain = state.getRetain();
+        Map<Integer, List<XMSSNode>> retain = state.getLiveRetain();
         dataOut.writeInt(retain.size());
         for (Iterator<Integer> it = retain.keySet().iterator(); it.hasNext();)
         {
@@ -179,11 +179,11 @@ final class BDSStateCodec
             writeNodes(dataOut, nodes, treeHeight);
         }
 
-        Stack<XMSSNode> stack = state.getStack();
+        Stack<XMSSNode> stack = state.getLiveStack();
         dataOut.writeInt(stack.size());
         writeNodes(dataOut, stack, treeHeight);
 
-        List<BDSTreeHash> treeHashes = state.getTreeHashInstances();
+        List<BDSTreeHash> treeHashes = state.getLiveTreeHashInstances();
         dataOut.writeInt(treeHashes.size());
         for (Iterator<BDSTreeHash> it = treeHashes.iterator(); it.hasNext();)
         {
@@ -196,7 +196,7 @@ final class BDSStateCodec
             writeOptionalNode(dataOut, treeHash.getTailNode(), treeHeight);
         }
 
-        Map<Integer, XMSSNode> keep = state.getKeep();
+        Map<Integer, XMSSNode> keep = state.getLiveKeep();
         dataOut.writeInt(keep.size());
         for (Iterator<Integer> it = keep.keySet().iterator(); it.hasNext();)
         {
