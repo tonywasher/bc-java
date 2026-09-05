@@ -1,10 +1,13 @@
 package org.bouncycastle.crypto.signers.xmss;
 
 import java.io.IOException;
+import java.math.BigInteger;
 
 import junit.framework.TestCase;
+import org.bouncycastle.asn1.ASN1Encodable;
 import org.bouncycastle.asn1.ASN1Integer;
 import org.bouncycastle.asn1.DEROctetString;
+import org.bouncycastle.asn1.DERSequence;
 import org.bouncycastle.asn1.iana.IANAObjectIdentifiers;
 import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
@@ -237,6 +240,97 @@ public class MalformedKeyInfoTests
         catch (IOException e)
         {
             assertTrue(e.getMessage(), e.getMessage().startsWith("unknown XMSS^MT private key OID: "));
+        }
+    }
+
+    /**
+     * A height or layer count too large for the int it is read into. Both key-parameter structures
+     * take those fields with {@link ASN1Integer#intValueExact()}, which reports a value that will
+     * not fit as an {@code ArithmeticException} - a sibling of IllegalArgumentException, not a
+     * subclass of it - so it went straight through the blocks below the decode and out of a method
+     * whose signature says a key that will not decode is reported. Five content octets is enough;
+     * nothing about the value matters beyond its width. The layer count is XMSS^MT's own second
+     * such field and is taken separately.
+     */
+    public void testKeyWithAnOversizedIntegerField()
+        throws Exception
+    {
+        ASN1Integer wide = new ASN1Integer(BigInteger.ONE.shiftLeft(40));
+
+        AlgorithmIdentifier xmssWideHeight = new AlgorithmIdentifier(PQCObjectIdentifiers.xmss,
+            new DERSequence(new ASN1Encodable[]{ ASN1Integer.ZERO, wide, TREE_DIGEST }));
+        AlgorithmIdentifier xmssMtWideHeight = new AlgorithmIdentifier(PQCObjectIdentifiers.xmss_mt,
+            new DERSequence(new ASN1Encodable[]{ ASN1Integer.ZERO, wide, new ASN1Integer(2), TREE_DIGEST }));
+        AlgorithmIdentifier xmssMtWideLayers = new AlgorithmIdentifier(PQCObjectIdentifiers.xmss_mt,
+            new DERSequence(new ASN1Encodable[]{ ASN1Integer.ZERO, new ASN1Integer(4), wide, TREE_DIGEST }));
+
+        try
+        {
+            PublicKeyFactory.createKey(new SubjectPublicKeyInfo(xmssWideHeight,
+                new XMSSPublicKey(new byte[32], new byte[32])));
+            fail("XMSS public key with an oversized height accepted");
+        }
+        catch (IOException e)
+        {
+            assertTrue(e.getMessage(), e.getMessage().startsWith("malformed XMSS public key: "));
+            assertNotNull(e.getCause());
+        }
+
+        try
+        {
+            PrivateKeyFactory.createKey(new PrivateKeyInfo(xmssWideHeight, privateKeyBody()));
+            fail("XMSS private key with an oversized height accepted");
+        }
+        catch (IOException e)
+        {
+            assertTrue(e.getMessage(), e.getMessage().startsWith("malformed XMSS private key: "));
+            assertNotNull(e.getCause());
+        }
+
+        try
+        {
+            PublicKeyFactory.createKey(new SubjectPublicKeyInfo(xmssMtWideHeight,
+                new XMSSPublicKey(new byte[32], new byte[32])));
+            fail("XMSS^MT public key with an oversized height accepted");
+        }
+        catch (IOException e)
+        {
+            assertTrue(e.getMessage(), e.getMessage().startsWith("malformed XMSS^MT public key: "));
+            assertNotNull(e.getCause());
+        }
+
+        try
+        {
+            PrivateKeyFactory.createKey(new PrivateKeyInfo(xmssMtWideHeight, privateKeyBody()));
+            fail("XMSS^MT private key with an oversized height accepted");
+        }
+        catch (IOException e)
+        {
+            assertTrue(e.getMessage(), e.getMessage().startsWith("malformed XMSS^MT private key: "));
+            assertNotNull(e.getCause());
+        }
+
+        try
+        {
+            PublicKeyFactory.createKey(new SubjectPublicKeyInfo(xmssMtWideLayers,
+                new XMSSPublicKey(new byte[32], new byte[32])));
+            fail("XMSS^MT public key with an oversized layer count accepted");
+        }
+        catch (IOException e)
+        {
+            assertTrue(e.getMessage(), e.getMessage().startsWith("malformed XMSS^MT public key: "));
+            assertNotNull(e.getCause());
+        }
+
+        try
+        {
+            PrivateKeyFactory.createKey(new PrivateKeyInfo(xmssMtWideLayers, privateKeyBody()));
+            fail("XMSS^MT private key with an oversized layer count accepted");
+        }
+        catch (IOException e)
+        {
+            assertTrue(e.getMessage(), e.getMessage().startsWith("malformed XMSS^MT private key: "));
+            assertNotNull(e.getCause());
         }
     }
 }

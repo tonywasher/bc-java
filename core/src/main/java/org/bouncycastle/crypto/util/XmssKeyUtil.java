@@ -214,6 +214,14 @@ class XmssKeyUtil
                 // the height and layer count are whatever the key's parameters said they were
                 throw Exceptions.ioException("malformed XMSS^MT public key: " + e.getMessage(), e);
             }
+            catch (ArithmeticException e)
+            {
+                // a height or layer count too wide for the int it is read into: the key
+                // parameters take both with ASN1Integer.intValueExact(), whose
+                // ArithmeticException is a sibling of IllegalArgumentException rather than
+                // a subclass, so it does not reach the block above
+                throw Exceptions.ioException("malformed XMSS^MT public key: " + e.getMessage(), e);
+            }
         }
 
         if (algOID.equals(PQCObjectIdentifiers.xmss)
@@ -257,6 +265,14 @@ class XmssKeyUtil
             catch (IllegalArgumentException e)
             {
                 // the height is whatever the key's parameters said it was
+                throw Exceptions.ioException("malformed XMSS public key: " + e.getMessage(), e);
+            }
+            catch (ArithmeticException e)
+            {
+                // a height or layer count too wide for the int it is read into: the key
+                // parameters take both with ASN1Integer.intValueExact(), whose
+                // ArithmeticException is a sibling of IllegalArgumentException rather than
+                // a subclass, so it does not reach the block above
                 throw Exceptions.ioException("malformed XMSS public key: " + e.getMessage(), e);
             }
         }
@@ -326,6 +342,14 @@ class XmssKeyUtil
                 // does not match its own tree, and build() rejects a key missing a seed
                 throw Exceptions.ioException("malformed XMSS private key: " + e.getMessage(), e);
             }
+            catch (ArithmeticException e)
+            {
+                // a height or layer count too wide for the int it is read into: the key
+                // parameters take both with ASN1Integer.intValueExact(), whose
+                // ArithmeticException is a sibling of IllegalArgumentException rather than
+                // a subclass, so it does not reach the block above
+                throw Exceptions.ioException("malformed XMSS private key: " + e.getMessage(), e);
+            }
         }
         if (algOID.equals(PQCObjectIdentifiers.xmss_mt)
             || algOID.equals(IsaraObjectIdentifiers.id_alg_xmssmt))
@@ -375,6 +399,14 @@ class XmssKeyUtil
             catch (IllegalStateException e)
             {
                 // as in the XMSS branch: the stored per-layer BDS states are the key's own
+                throw Exceptions.ioException("malformed XMSS^MT private key: " + e.getMessage(), e);
+            }
+            catch (ArithmeticException e)
+            {
+                // a height or layer count too wide for the int it is read into: the key
+                // parameters take both with ASN1Integer.intValueExact(), whose
+                // ArithmeticException is a sibling of IllegalArgumentException rather than
+                // a subclass, so it does not reach the block above
                 throw Exceptions.ioException("malformed XMSS^MT private key: " + e.getMessage(), e);
             }
         }
