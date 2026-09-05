@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.bouncycastle.util.Arrays;
+import org.bouncycastle.util.Integers;
 import org.bouncycastle.util.Pack;
 
 /**
@@ -21,19 +22,21 @@ class XMSSUtil
 {
 
     /**
-     * Calculates the logarithm base 2 for a given Integer.
+     * The floor of the logarithm base 2 of {@code n} - RFC 8391 sec. 3.1.1's lg() at both places
+     * WOTS+ asks for it. lg(w) is exact for a Winternitz parameter that is a power of two; lg(len1
+     * * (w - 1)) is not, but the RFC divides that one by lg(w) and floors the result, and flooring
+     * before an integer division by a positive number is the same as flooring after it.
+     * <p>
+     * Defined for {@code n} of 1 or more, which is all WOTS+ passes: w is the constant 16 or has
+     * been checked against 4 and 16 before it arrives, and len1 is twice a security parameter
+     * XMSSParameters resolved to a digest's own output size when it was handed nothing positive.
      *
-     * @param n Number.
-     * @return Logarithm to base 2 of {@code n}.
+     * @param n Number, 1 or more.
+     * @return Logarithm to base 2 of {@code n}, rounded down.
      */
     public static int log2(int n)
     {
-        int log = 0;
-        while ((n >>= 1) != 0)
-        {
-            log++;
-        }
-        return log;
+        return Integers.bitLength(n) - 1;
     }
 
     /**
