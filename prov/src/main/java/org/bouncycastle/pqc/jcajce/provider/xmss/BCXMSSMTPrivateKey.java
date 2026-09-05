@@ -173,6 +173,16 @@ public class BCXMSSMTPrivateKey
      * carries a tree digest, and {@code Arrays.constantTimeAreEqual} answers false for a null
      * argument rather than raising.
      * </p><p>
+     * What is left in the timing is the bit the chain decides - whether the two keys agree on all
+     * seven - since that is what says whether the state encoding below runs at all. Two keys that
+     * get there agree on both secret seeds, so the longer path is not reachable without already
+     * holding what comparing those seeds in constant time is there to withhold. It is also why
+     * that encoding stays below the chain rather than being joined onto it with {@code &}, the way
+     * the single comparison this chain replaced was joined to the tree digest: that comparison
+     * encoded both keys whatever they were and so had nothing left for a short circuit to skip,
+     * where joining this one would encode two whole traversal states for every pair of keys that
+     * differ - the Set and Map lookups above among them.
+     * </p><p>
      * A key's index and its usages remaining are read together under that key's own monitor, the
      * one XMSSEngine holds for the whole of a signature and the one {@code encodedState()} below
      * takes. Read one at a time, as they were - getUsagesRemaining() taking that monitor and
