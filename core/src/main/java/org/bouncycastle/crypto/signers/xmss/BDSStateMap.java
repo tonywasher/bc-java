@@ -194,11 +194,21 @@ public class BDSStateMap
      */
     public void validateRoot(XMSSMTParameters params, byte[] expectedRoot)
     {
-        BDS top = bdsState.get(Integers.valueOf(params.getLayers() - 1));
-
-        if (top != null)
+        // on this map's own monitor, as every other read of bdsState here is. A signature descends
+        // the layers putting the ones built lazily into this map, and an insertion rebalances the
+        // TreeMap under it, so a lookup taken outside the monitor walks a tree mid-restructure:
+        // what it hands back is the top layer's state, or a null, or another layer's state, and
+        // this is the check that decides whether a key is built around the map at all. The
+        // comparison is kept inside as validate(XMSSMTParameters) keeps its own, so the state
+        // compared is the state found.
+        synchronized (this)
         {
-            top.validateRoot(expectedRoot);
+            BDS top = bdsState.get(Integers.valueOf(params.getLayers() - 1));
+
+            if (top != null)
+            {
+                top.validateRoot(expectedRoot);
+            }
         }
     }
 

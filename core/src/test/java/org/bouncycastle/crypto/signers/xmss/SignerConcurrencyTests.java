@@ -2,6 +2,7 @@ package org.bouncycastle.crypto.signers.xmss;
 
 import java.security.SecureRandom;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import junit.framework.TestCase;
 import org.bouncycastle.crypto.AsymmetricCipherKeyPair;
@@ -258,6 +259,107 @@ public class SignerConcurrencyTests
         if (failure[0] != null)
         {
             fail("copying the state map of a signing key: " + failure[0]);
+        }
+    }
+
+    /**
+     * validateRoot() was the one accessor on BDSStateMap that read the map without taking the
+     * monitor the rest of them take. It is reached while a key is being built around a state map a
+     * live key still holds - the constructor and the builder both call it - and the signer of that
+     * key puts each lazily built layer into the same map as it descends, an insertion that
+     * rebalances the TreeMap. A lookup racing one walks a tree that is part way through being
+     * rearranged, and comes back with the top layer's state, a null, or a state belonging to
+     * another layer: the first is right by luck, the second silently skips the check the method
+     * exists to make, and the third fails a key whose root is exactly what it should be.
+     * <p>
+     * Asserted as the lock discipline rather than as an outcome, the way the provider keys'
+     * testEqualsTakesTheTwoKeyMonitorsOneAtATime is: hold the map's monitor and the call must wait
+     * for it. Without the synchronized block it returns in microseconds, so the second it is given
+     * here is not a timing margin being trusted - it is the difference between waiting and not.
+     * </p>
+     */
+    public void testValidatingTheRootWaitsForTheStateMapItReads()
+        throws Exception
+    {
+        final XMSSMTParameters params = new XMSSMTParameters(HEIGHT, LAYERS, new SHA256Digest());
+        XMSSMTKeyPairGenerator kpg = new XMSSMTKeyPairGenerator();
+
+        kpg.init(new XMSSMTKeyGenerationParameters(params, new SecureRandom()));
+
+        XMSSMTPrivateKeyParameters key =
+            (XMSSMTPrivateKeyParameters)kpg.generateKeyPair().getPrivate();
+
+        final BDSStateMap stateMap = key.getBDSState();
+        final byte[] root = key.getRoot();
+
+        // the top layer is the one validateRoot looks at, and it is there from key generation - so
+        // the call has real work to do inside the monitor rather than falling out of a null check
+        assertNotNull("the top layer's state", stateMap.get(LAYERS - 1));
+
+        final CountDownLatch held = new CountDownLatch(1);
+        final CountDownLatch release = new CountDownLatch(1);
+        final CountDownLatch validated = new CountDownLatch(1);
+        final Throwable[] failure = {null};
+
+        Thread holder = new Thread()
+        {
+            public void run()
+            {
+                synchronized (stateMap)
+                {
+                    held.countDown();
+
+                    try
+                    {
+                        release.await();
+                    }
+                    catch (InterruptedException e)
+                    {
+                        failure[0] = e;
+                    }
+                }
+            }
+        };
+
+        Thread validating = new Thread()
+        {
+            public void run()
+            {
+                try
+                {
+                    stateMap.validateRoot(params, root);
+                }
+                catch (Throwable t)
+                {
+                    failure[0] = t;
+                }
+
+                validated.countDown();
+            }
+        };
+
+        holder.start();
+        held.await();
+        validating.start();
+
+        try
+        {
+            assertFalse("validateRoot must take the monitor every other read of the map takes",
+                validated.await(1, TimeUnit.SECONDS));
+        }
+        finally
+        {
+            release.countDown();
+        }
+
+        assertTrue("and complete once it is released", validated.await(10, TimeUnit.SECONDS));
+
+        holder.join();
+        validating.join();
+
+        if (failure[0] != null)
+        {
+            fail("validating the root of a held state map: " + failure[0]);
         }
     }
 
