@@ -166,6 +166,14 @@ public final class XMSSEngine
     /**
      * Whether the key's BDS traversal state has been initialised, i.e. whether it can sign. A key
      * decoded from an encoding that carried no traversal state has none.
+     * <p>
+     * This and the XMSS^MT overload below are the only place the question is asked. What counts as
+     * no state differs between the two families - a lone BDS with no authentication path, a state
+     * map with no layers in it - and the signature methods below had a copy of the answer for
+     * their own family inlined beside the copy the signers were already calling, so widening what
+     * counts would have had to be applied to a public helper and to two private call sites that
+     * did not go through it.
+     * </p>
      */
     public static boolean hasTraversalState(XMSSPrivateKeyParameters privateKey)
     {
@@ -213,7 +221,7 @@ public final class XMSSEngine
         {
             throw new ExhaustedPrivateKeyException("no usages of private key remaining");
         }
-        if (privateKey.getBDSState().isAuthenticationPathEmpty())
+        if (!hasTraversalState(privateKey))
         {
             throw new IllegalStateException("not initialized");
         }
@@ -337,7 +345,7 @@ public final class XMSSEngine
         {
             throw new ExhaustedPrivateKeyException("no usages of private key remaining");
         }
-        if (privateKey.getBDSState().isEmpty())
+        if (!hasTraversalState(privateKey))
         {
             throw new IllegalStateException("not initialized");
         }
