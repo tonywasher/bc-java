@@ -128,6 +128,95 @@ public class SignerStateHandoverTests
     }
 
     /**
+     * A signature the engine refuses must leave the signer where it was, because what
+     * getUpdatedPrivateKey() does next turns on whether one was made. hasGenerated used to be set
+     * before the engine was called rather than from what the call did to the key, and the engine
+     * has a guard the signer does not repeat - a traversal state that has already signed at the
+     * index it is sitting on - which throws ahead of the try whose finally rolls the key. So a
+     * refused signature left the signer reporting a key it had never spent: the collection that
+     * follows hands the key back and then empties the signer, and the caller that asks a second
+     * time is told there is nothing left, of a key that is still at index 0 with every one of its
+     * usages unspent.
+     * <p>
+     * The state that provokes it is the one OneTimeKeyReuseTests builds: a traversal state taken
+     * off a live key before it signs is the object that signature marks, so a key rebuilt around it
+     * sits on an index it has already used. Asserted against the never-signed path beside it -
+     * after the refusal the signer must hand its key over and still hold one, exactly as
+     * testInitialisedButUnusedSignerHandsBackTheKeyItWasGiven has it.
+     * </p>
+     */
+    public void testRefusedSignatureLeavesTheSignerHoldingItsKey()
+    {
+        XMSSParameters params = new XMSSParameters(HEIGHT, new SHA256Digest());
+        XMSSPrivateKeyParameters spender =
+            (XMSSPrivateKeyParameters)xmssKeyPair(params).getPrivate();
+        BDS spent = spender.getBDSState();
+
+        XMSSEngine.generateSignature(spender, new byte[]{0x01});
+
+        XMSSPrivateKeyParameters privKey = new XMSSPrivateKeyParameters.Builder(params)
+            .withSecretKeySeed(spender.getSecretKeySeed()).withSecretKeyPRF(spender.getSecretKeyPRF())
+            .withPublicSeed(spender.getPublicSeed()).withRoot(spender.getRoot())
+            .withBDSState(spent).build();
+
+        XMSSSigner signer = new XMSSSigner();
+
+        signer.init(true, privKey);
+        signer.update(new byte[]{0x02}, 0, 1);
+
+        try
+        {
+            signer.generateSignature();
+            fail("a state that has already signed must not sign again");
+        }
+        catch (IllegalStateException e)
+        {
+            assertEquals("one time key at index 0 has already signed", e.getMessage());
+        }
+
+        assertEquals("the refused signature must not have moved the key", 0, privKey.getIndex());
+        assertSame(privKey, signer.getUpdatedPrivateKey());
+        assertNotNull("the signer spent nothing, so it still holds a key",
+            signer.getUpdatedPrivateKey());
+
+        XMSSMTParameters mtParams = new XMSSMTParameters(HEIGHT, LAYERS, new SHA256Digest());
+        XMSSMTPrivateKeyParameters mtSpender =
+            (XMSSMTPrivateKeyParameters)xmssMTKeyPair(mtParams).getPrivate();
+
+        // twice, so layer zero exists and sits off the subtree boundary the check allows for
+        XMSSEngine.generateMTSignature(mtSpender, new byte[]{0x01});
+
+        BDSStateMap mtSpent = mtSpender.getBDSState();
+
+        XMSSEngine.generateMTSignature(mtSpender, new byte[]{0x02});
+
+        XMSSMTPrivateKeyParameters mtPrivKey = new XMSSMTPrivateKeyParameters.Builder(mtParams)
+            .withSecretKeySeed(mtSpender.getSecretKeySeed()).withSecretKeyPRF(mtSpender.getSecretKeyPRF())
+            .withPublicSeed(mtSpender.getPublicSeed()).withRoot(mtSpender.getRoot())
+            .withIndex(1L).withBDSState(mtSpent).build();
+
+        XMSSMTSigner mtSigner = new XMSSMTSigner();
+
+        mtSigner.init(true, mtPrivKey);
+        mtSigner.update(new byte[]{0x03}, 0, 1);
+
+        try
+        {
+            mtSigner.generateSignature();
+            fail("a layer zero state that has already signed must not sign again");
+        }
+        catch (IllegalStateException e)
+        {
+            assertEquals("one time key at index 1 has already signed", e.getMessage());
+        }
+
+        assertEquals("the refused signature must not have moved the key", 1L, mtPrivKey.getIndex());
+        assertSame(mtPrivKey, mtSigner.getUpdatedPrivateKey());
+        assertNotNull("the signer spent nothing, so it still holds a key",
+            mtSigner.getUpdatedPrivateKey());
+    }
+
+    /**
      * A signer given a key with nothing left to spend still has state its caller has to store, and
      * asking for it used to report the shard API's own "usageCount exceeds usages remaining" to a
      * caller that never asked for a shard. There is no next usage to leave behind, so the spent key

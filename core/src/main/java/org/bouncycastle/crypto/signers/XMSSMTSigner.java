@@ -117,12 +117,31 @@ public class XMSSMTSigner
                     throw new IllegalStateException("not initialized");
                 }
 
-                // set once the guards above have passed, as the key is rolled from here on whatever
-                // happens: getUpdatedPrivateKey() has to hand back this key rather than advance
-                // again
-                hasGenerated = true;
+                // set from whether the key was rolled, because that is what getUpdatedPrivateKey()
+                // has to know: a rolled key is handed straight back, an unrolled one is advanced
+                // first. Neither side of the call answers it. The engine refuses a signature before
+                // it touches the key - its own "has already signed" check sits ahead of the try
+                // whose finally rolls - so set ahead of the call this reports a key spent by a
+                // signature that never happened, and the collection that follows empties this
+                // signer for nothing; set after it, a signature that failed part way through leaves
+                // a rolled key looking unrolled, and the collection advances it a second time. The
+                // key answers instead: rollKey() moves the index by exactly one, and this thread
+                // holds the key's monitor across the call, so an index that has moved is one this
+                // signer moved. Once true it stays true until init() clears it - a later refusal
+                // cannot unsay an earlier signature.
+                long indexBefore = privKey.getIndex();
 
-                return XMSSEngine.generateMTSignature(privKey, message);
+                try
+                {
+                    return XMSSEngine.generateMTSignature(privKey, message);
+                }
+                finally
+                {
+                    if (privKey.getIndex() != indexBefore)
+                    {
+                        hasGenerated = true;
+                    }
+                }
             }
         }
     }
