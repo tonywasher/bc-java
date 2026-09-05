@@ -601,9 +601,15 @@ public final class XMSSEngine
 
     /**
      * The BDS traversal state as it is carried in an XMSS private key encoding, with its checksum
-     * bound to the owning key's public seed (github #2414). This is the legacy Java-serialized
-     * form; nothing generates it any more, but keys written by earlier releases carry it and
-     * {@link #getBDSFromEncoding(byte[], byte[])} still reads it.
+     * bound to the owning key's public seed (github #2414). The form is the versioned one
+     * {@code BDSStateCodec} defines, and this is where every one written comes from: the key
+     * parameters class reaches it for toByteArray() and for the state half of equals(), and
+     * XmssKeyUtil for the PKCS#8 encoding.
+     * <p>
+     * The legacy Java-serialized form is a decode-side concern only. A key written before that
+     * codec existed carries one and {@link #getBDSFromEncoding(byte[], byte[])} still reads it,
+     * but nothing has written one since.
+     * </p>
      */
     public static byte[] getEncodedBDSState(BDS bdsState, byte[] publicSeed)
         throws IOException
