@@ -130,6 +130,45 @@ public class PositionRecordCrossCheckTests
     }
 
     /**
+     * The same pair again, refused where it would be spent. Encoding and rolling are where a
+     * desynchronised key is written down or moved on; signing is where it consumes a one-time key,
+     * and that is the step RFC 8391 sec. 1.1 is about.
+     * <p>
+     * Refusing it here rather than leaving the roll to catch it is not just an earlier message. The
+     * roll runs from the finally the signature is built inside, so the one-time key is spent and
+     * the key advanced before the exception the caller sees is raised: what that caller then knows
+     * is that something went wrong, not that its key has moved. The assertion on the index is
+     * therefore the one that matters - measured against the engine without the check, the key
+     * comes back one position further on than it went in.
+     * </p>
+     */
+    public void testSigningRefusesAStateThatLagsTheIndex()
+        throws Exception
+    {
+        XMSSMTPrivateKeyParameters privKey = desynchronised();
+
+        long index = privKey.getIndex();
+
+        XMSSMTSigner signer = new XMSSMTSigner();
+
+        signer.init(true, privKey);
+        signer.update(new byte[]{0x01}, 0, 1);
+
+        try
+        {
+            signer.generateSignature();
+            fail("a key whose two records of its position disagree signed");
+        }
+        catch (IllegalStateException e)
+        {
+            assertTrue("wrong message: " + e.getMessage(),
+                e.getMessage().startsWith("BDS state has wrong index for layer 0"));
+        }
+
+        assertEquals("a refused signature must not move the key", index, privKey.getIndex());
+    }
+
+    /**
      * A key sitting at an index its own layer zero state does not agree with, built the way the
      * failure actually arises: the state map handed out by getBDSState() is the live one, so a
      * layer zero state kept from before a roll can be put back into it afterwards, which is what

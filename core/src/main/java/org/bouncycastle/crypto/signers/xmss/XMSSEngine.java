@@ -354,6 +354,21 @@ public final class XMSSEngine
             throw new IllegalStateException(
                 "one time key at index " + privateKey.getIndex() + " has already signed");
         }
+        //
+        // and the other half of the same question. The check above asks whether the layer zero
+        // state has signed where it stands; this asks whether it is standing where the key says it
+        // is. XMSS^MT records its position twice - the index field, and the per-layer states - and
+        // they are advanced by separate statements, so a key can be holding two answers; the
+        // constructor, rollKey() and both encoders all compare them, and this, the one place that
+        // spends a one-time key, did not. What reaches here with them apart is a state map put back
+        // into a live key through getBDSState(), or a key half restored: the signature it makes is
+        // built for the leaf the index names and carries the authentication path of the leaf the
+        // state is on, so it consumes a one-time key and does not verify. github #2414 and the
+        // position-stored-twice rule it left behind; the single tree needs no counterpart, its
+        // index being the BDS state's own. Ahead of the try below, as the checks above are: a
+        // refused signature must not reach the roll.
+        //
+        privateKey.getBDSState().validateIndex(params, privateKey.getIndex());
 
         //
         // the map's own monitor, held for the whole descent below and the roll that follows it. The
