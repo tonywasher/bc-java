@@ -147,10 +147,10 @@ public class BCXMSSMTPrivateKey
      * the result - and every call did that twice, on both keys, whatever the two keys were. The
      * fields tested first are all written into that encoding, so two keys differing in any of them
      * cannot have equal encodings and the answer is the same one for none of the work: the tree
-     * digest, the index, the usages remaining - which is the maximum index, the two indices being
-     * equal by the time it is read - and the two public n-byte fields. hashCode() is the public
-     * key's, so keys taken from one key pair all land in the same bucket of a Set or a Map and are
-     * told apart there by their index, which is the first of these to be looked at.
+     * digest, the index, the usages remaining - which alongside an equal index says the maximum
+     * index is equal too - and the two public n-byte fields. hashCode() is the public key's, so
+     * keys taken from one key pair all land in the same bucket of a Set or a Map and are told
+     * apart there by their index, which this answers on without reaching the state.
      * </p><p>
      * The root and the public seed are compared in constant time even though they are the public
      * key - they are what {@code XMSSPublicKeyParameters} publishes, root then SEED, RFC 8391
@@ -172,6 +172,16 @@ public class BCXMSSMTPrivateKey
      * provider is. Every operand is safe to evaluate unconditionally: a constructed key always
      * carries a tree digest, and {@code Arrays.constantTimeAreEqual} answers false for a null
      * argument rather than raising.
+     * </p><p>
+     * A key's index and its usages remaining are read together under that key's own monitor, the
+     * one XMSSEngine holds for the whole of a signature and the one {@code encodedState()} below
+     * takes. Read one at a time, as they were - getUsagesRemaining() taking that monitor and
+     * getIndex() not taking it at all - a signature landing between them pairs an index from one
+     * side of it with a usage count from the other, a combination the key was never in. One key
+     * at a time and never both at once: holding the second key's monitor inside the first would
+     * let a.equals(b) on one thread and b.equals(a) on another deadlock against each other, and
+     * there is nothing to hold them for. Neither key can be compared against a moving target
+     * whatever this does, so what it gives is that each key answers as it was at one instant.
      * </p>
      */
     public boolean equals(Object o)
@@ -185,9 +195,27 @@ public class BCXMSSMTPrivateKey
         {
             BCXMSSMTPrivateKey otherKey = (BCXMSSMTPrivateKey)o;
 
+            long index;
+            long usagesRemaining;
+
+            synchronized (keyParams)
+            {
+                index = keyParams.getIndex();
+                usagesRemaining = keyParams.getUsagesRemaining();
+            }
+
+            long otherIndex;
+            long otherUsagesRemaining;
+
+            synchronized (otherKey.keyParams)
+            {
+                otherIndex = otherKey.keyParams.getIndex();
+                otherUsagesRemaining = otherKey.keyParams.getUsagesRemaining();
+            }
+
             if (!treeDigest.equals(otherKey.treeDigest)
-                | keyParams.getIndex() != otherKey.keyParams.getIndex()
-                | keyParams.getUsagesRemaining() != otherKey.keyParams.getUsagesRemaining()
+                | index != otherIndex
+                | usagesRemaining != otherUsagesRemaining
                 | !Arrays.constantTimeAreEqual(keyParams.getPublicSeed(), otherKey.keyParams.getPublicSeed())
                 | !Arrays.constantTimeAreEqual(keyParams.getRoot(), otherKey.keyParams.getRoot())
                 | !Arrays.constantTimeAreEqual(keyParams.getSecretKeySeed(), otherKey.keyParams.getSecretKeySeed())

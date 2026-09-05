@@ -1464,4 +1464,70 @@ public class XMSSTest
     {
         return PrivateKeyInfo.getInstance(pkcs8).getAttributes();
     }
+
+    /**
+     * Two threads comparing the same pair of keys in opposite orders both finish. equals() reads a
+     * key's index and usages remaining under that key's own monitor - the monitor a signature holds
+     * for the whole of its length - and it takes the two keys' monitors one after the other rather
+     * than one inside the other, so an a.equals(b) and a b.equals(a) running at the same time can
+     * never each be holding the one the other is waiting on. Nested, they deadlock here in a few
+     * rounds, and the two threads are still alive when the joins time out.
+     * <p>
+     * The two keys are equal, so every round runs the whole of the method: both position reads and,
+     * behind them, both traversal state encodings, each taking a monitor of its own.
+     * </p>
+     */
+    public void testEqualsTakesTheTwoKeyMonitorsOneAtATime()
+        throws Exception
+    {
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("XMSS", "BCPQC");
+
+        kpg.initialize(new XMSSParameterSpec(4, XMSSParameterSpec.SHA256), new SecureRandom());
+
+        KeyFactory kf = KeyFactory.getInstance("XMSS", "BCPQC");
+        byte[] encoding = kpg.generateKeyPair().getPrivate().getEncoded();
+
+        PrivateKey one = kf.generatePrivate(new PKCS8EncodedKeySpec(encoding));
+        PrivateKey two = kf.generatePrivate(new PKCS8EncodedKeySpec(encoding));
+
+        assertEquals("the two keys are not equal to begin with", one, two);
+
+        boolean[] agreed = new boolean[2];
+        Thread forwards = comparing(one, two, agreed, 0);
+        Thread backwards = comparing(two, one, agreed, 1);
+
+        forwards.start();
+        backwards.start();
+
+        forwards.join(60000);
+        backwards.join(60000);
+
+        assertFalse("comparing the two keys in both orders at once did not finish",
+            forwards.isAlive() || backwards.isAlive());
+        assertTrue("equals() answered false for two keys that are equal", agreed[0] && agreed[1]);
+    }
+
+    private static Thread comparing(final PrivateKey one, final PrivateKey two, final boolean[] agreed,
+        final int slot)
+    {
+        Thread thread = new Thread(new Runnable()
+        {
+            public void run()
+            {
+                for (int i = 0; i != 2000; i++)
+                {
+                    if (!one.equals(two))
+                    {
+                        return;
+                    }
+                }
+
+                agreed[slot] = true;
+            }
+        });
+
+        thread.setDaemon(true);
+
+        return thread;
+    }
 }
