@@ -668,19 +668,12 @@ public final class XMSSEngine
     }
 
     /**
-     * Whether {@code index} is in range for a tree of this height, i.e. 0 &lt;= index &lt; 2^height.
-     */
-    public static boolean isIndexValid(int height, long index)
-    {
-        return XMSSUtil.isIndexValid(height, index);
-    }
-
-    /**
      * Whether {@code index} is in range for the index field of a stored private key over a tree of
      * this height, i.e. 0 &lt;= index &lt;= 2^height.
      * <p>
-     * The bound is one leaf wider than {@link #isIndexValid(int, long)} because a key that has been
-     * used up carries the index one past its last leaf: that is the placeholder traversal state
+     * The bound is one leaf wider than the 0 &lt;= index &lt; 2^height an index a signature can
+     * be made at satisfies, because a key that has been used up carries the index one past its
+     * last leaf: that is the placeholder traversal state
      * {@link BDS} installs when the final one-time key is consumed, it is what makes the key report
      * no usages remaining, and both {@code BDS.validate()} and the BDS serialization admit it. A
      * key's final state is the one state that most needs to survive being written out and read
