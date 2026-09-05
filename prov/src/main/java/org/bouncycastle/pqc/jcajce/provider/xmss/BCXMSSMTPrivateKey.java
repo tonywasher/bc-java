@@ -190,8 +190,22 @@ public class BCXMSSMTPrivateKey
      * side of it with a usage count from the other, a combination the key was never in. One key
      * at a time and never both at once: holding the second key's monitor inside the first would
      * let a.equals(b) on one thread and b.equals(a) on another deadlock against each other, and
-     * there is nothing to hold them for. Neither key can be compared against a moving target
-     * whatever this does, so what it gives is that each key answers as it was at one instant.
+     * there is nothing to hold them for.
+     * </p><p>
+     * That is still each key's monitor taken twice rather than once - the scalars above, then the
+     * state below - so a signature landing between the two leaves the chain answering on a
+     * position its key has already left. All it can do from there is answer false, which is the
+     * answer for the instant it read; the pairs that reach the state are the ones it found equal,
+     * and the state is compared as a snapshot of its own. What that snapshot has to pin down is
+     * the position the answer is about, and a state map does not: it carries its own maximum
+     * index and each layer's position inside its subtree, but the key's global index is the field
+     * beside it that rollKey() advances, and {@code toByteArray()} was the only thing that ever
+     * wrote the two out together. So the index is read again inside the block that encodes the
+     * state, and the answer is made from that pair. The XMSS key needs no second read: the
+     * encoding {@code BDSStateCodec} writes for a lone BDS opens with the maximum index and the
+     * index, so its state pins its own position down. Neither key can be compared against a
+     * moving target whatever this does; what this gives is that the values an answer is made from
+     * are values that key held at one instant.
      * </p>
      */
     public boolean equals(Object o)
@@ -234,7 +248,25 @@ public class BCXMSSMTPrivateKey
                 return false;
             }
 
-            return Arrays.constantTimeAreEqual(encodedState(keyParams), encodedState(otherKey.keyParams));
+            long stateIndex;
+            byte[] state;
+
+            synchronized (keyParams)
+            {
+                stateIndex = keyParams.getIndex();
+                state = encodedState(keyParams);
+            }
+
+            long otherStateIndex;
+            byte[] otherState;
+
+            synchronized (otherKey.keyParams)
+            {
+                otherStateIndex = otherKey.keyParams.getIndex();
+                otherState = encodedState(otherKey.keyParams);
+            }
+
+            return stateIndex == otherStateIndex & Arrays.constantTimeAreEqual(state, otherState);
         }
 
         return false;
