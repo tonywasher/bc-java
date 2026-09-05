@@ -99,17 +99,7 @@ public final class XMSSMTPrivateKeyParameters
             }
             else
             {
-                long globalIndex = builder.index;
-                int totalHeight = params.getHeight();
-
-                if (XMSSEngine.isIndexValid(totalHeight, globalIndex) && tmpPublicSeed != null && tmpSecretKeySeed != null)
-                {
-                    bdsState = new BDSStateMap(params, builder.index, tmpPublicSeed, tmpSecretKeySeed);
-                }
-                else
-                {
-                    bdsState = new BDSStateMap(builder.maxIndex + 1);
-                }
+                bdsState = XMSSEngine.createBDSStateMap(params, tmpPublicSeed, tmpSecretKeySeed, builder.index);
             }
             if (builder.maxIndex >= 0 && builder.maxIndex != bdsState.getMaxIndex())
             {

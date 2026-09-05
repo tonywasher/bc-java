@@ -395,6 +395,79 @@ public class KeyParametersBuilderTests
         }
     }
 
+    /**
+     * The XMSS^MT half of {@link #testRecoveryIndexCheckedBeforeTheTreeIsWalked()}, which this
+     * family had no equivalent of at all. An index the hypertree cannot hold fell through to a
+     * placeholder state map instead of being refused, and nothing downstream could tell: XMSS^MT
+     * builds each layer's traversal state lazily, so a map with no layers in it is a legitimate
+     * map, and both the structural check and the per-layer index check pass over one. The key came
+     * out carrying an index past its last leaf, and reporting its usages remaining off a maximum
+     * index of 0.
+     */
+    public void testMTRecoveryIndexCheckedBeforeTheTreeIsWalked()
+    {
+        XMSSMTParameters params = xmssMTParams();
+        byte[] seed = new byte[params.getTreeDigestSize()];
+        long[] outOfRange = new long[]{ -1L, (1L << HEIGHT) + 1, Long.MAX_VALUE };
+
+        for (int i = 0; i != outOfRange.length; i++)
+        {
+            long started = System.currentTimeMillis();
+
+            try
+            {
+                recoverXMSSMTAt(params, seed, outOfRange[i]);
+                fail("index " + outOfRange[i] + " accepted");
+            }
+            catch (IllegalArgumentException e)
+            {
+                assertEquals("index out of bounds", e.getMessage());
+            }
+
+            assertTrue("index " + outOfRange[i] + " was walked, not checked",
+                System.currentTimeMillis() - started < 5000);
+        }
+    }
+
+    /**
+     * The XMSS^MT half of {@link #testRecoveryAtTheExhaustedIndex()}. 2^h is in range and is the
+     * position rollKey() stops at, so it has to rebuild to the state rollKey() leaves behind - an
+     * empty map whose maximum index is the last leaf - rather than to one whose maximum index is
+     * wherever the placeholder happened to put it.
+     */
+    public void testMTRecoveryAtTheExhaustedIndex()
+    {
+        XMSSMTParameters params = xmssMTParams();
+        byte[] seed = new byte[params.getTreeDigestSize()];
+
+        XMSSMTPrivateKeyParameters spent = recoverXMSSMTAt(params, seed, 1L << HEIGHT);
+
+        assertEquals(1L << HEIGHT, spent.getIndex());
+        assertEquals(0, spent.getUsagesRemaining());
+
+        XMSSMTSigner signer = new XMSSMTSigner();
+
+        signer.init(true, spent);
+        signer.update(new byte[]{ 1, 2, 3 }, 0, 3);
+
+        try
+        {
+            signer.generateSignature();
+            fail("spent key signed");
+        }
+        catch (ExhaustedPrivateKeyException e)
+        {
+            assertEquals("no usages of private key remaining", e.getMessage());
+        }
+    }
+
+    private XMSSMTPrivateKeyParameters recoverXMSSMTAt(XMSSMTParameters params, byte[] seed, long index)
+    {
+        return new XMSSMTPrivateKeyParameters.Builder(params)
+            .withSecretKeySeed(seed).withSecretKeyPRF(seed).withPublicSeed(seed).withRoot(seed)
+            .withIndex(index).build();
+    }
+
     private XMSSPrivateKeyParameters recoverXMSSAt(XMSSParameters params, byte[] seed, int index)
     {
         return new XMSSPrivateKeyParameters.Builder(params)

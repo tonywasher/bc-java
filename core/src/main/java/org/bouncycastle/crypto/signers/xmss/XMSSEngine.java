@@ -556,6 +556,42 @@ public final class XMSSEngine
     }
 
     /**
+     * A fresh BDS traversal state map for an XMSS^MT key at {@code globalIndex}, the multi-tree
+     * counterpart of {@link #createBDS(XMSSParameters, byte[], byte[], int)}.
+     * <p>
+     * The map a key at index 0 gets is empty, and stays that way until a signature needs a layer:
+     * XMSS^MT builds each layer's state lazily. So an empty map is not a missing one, and nothing
+     * downstream can tell an out-of-range index by looking at what this returns - the structural
+     * check in {@code BDSStateMap.validate()} passes over a map with no layers in it, and the
+     * index check walks the layers it does have. That is what makes the bound here the only place
+     * the index is answered, rather than one of two.
+     * </p>
+     *
+     * @throws IllegalArgumentException if {@code globalIndex} is out of range for the parameter set.
+     */
+    public static BDSStateMap createBDSStateMap(XMSSMTParameters params, byte[] publicSeed, byte[] secretKeySeed,
+        long globalIndex)
+    {
+        int totalHeight = params.getHeight();
+
+        if (!isStoredIndexValid(totalHeight, globalIndex))
+        {
+            throw new IllegalArgumentException("index out of bounds");
+        }
+
+        long maxIndex = (1L << totalHeight) - 1;
+
+        if (globalIndex > maxIndex)
+        {
+            // every leaf of the hypertree is spent, and this is the state rollKey() leaves behind
+            // at the same point - as on the single-tree side, where createBDS says the same.
+            return new BDSStateMap(maxIndex);
+        }
+
+        return new BDSStateMap(params, globalIndex, publicSeed, secretKeySeed);
+    }
+
+    /**
      * The traversal state for the next index, i.e. with the authentication path advanced one leaf.
      */
     public static BDS getNextBDSState(BDS bdsState, byte[] publicSeed, byte[] secretKeySeed)
