@@ -284,6 +284,14 @@ public class XMSSMTTest
      * different one. So: the same key twice is equal, a key round-tripped through its encoding is
      * equal to what it came from, a key that has signed and moved on is not equal to the key it
      * was, and two key pairs are not equal to each other at the same index.
+     * <p>
+     * hashCode() is asserted beside it, because the two are one contract and because both are now
+     * the key parameters' - this class delegates each in a line, the way BCLMSPrivateKey does to
+     * HSSPrivateKeyParameters. Equal keys hash the same, and a key that has signed keeps the hash
+     * it had: hashCode() is over the fields that do not move, so keys from one key pair share a
+     * bucket and equals() tells them apart inside it. A key lost from a Set by signing is what the
+     * other way round would cost.
+     * </p>
      */
     public void testXMSSMTPrivateKeyEquality()
         throws Exception
@@ -301,6 +309,8 @@ public class XMSSMTTest
         assertEquals(atZero, atZero);
         assertEquals(kp.getPrivate(), atZero);
         assertEquals(atZero, kf.generatePrivate(new PKCS8EncodedKeySpec(atZero.getEncoded())));
+        assertEquals("equal keys hash differently",
+            kp.getPrivate().hashCode(), atZero.hashCode());
 
         StateAwareSignature sig =
             (StateAwareSignature)Signature.getInstance("SHA256withXMSSMT", "BCPQC");
@@ -313,6 +323,7 @@ public class XMSSMTTest
 
         assertFalse("a key that has signed equals the key it was", atZero.equals(atOne));
         assertFalse("a key that has signed equals the key it was", atOne.equals(atZero));
+        assertEquals("a key that has signed changed bucket", atZero.hashCode(), atOne.hashCode());
 
         PrivateKey other = kf.generatePrivate(
             new PKCS8EncodedKeySpec(kpg.generateKeyPair().getPrivate().getEncoded()));
