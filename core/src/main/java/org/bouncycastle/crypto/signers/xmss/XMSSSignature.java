@@ -12,9 +12,22 @@ final class XMSSSignature
     extends XMSSReducedSignature
     implements Encodable
 {
+    private static final int INDEX_SIZE = 4;
 
     private final int index;
     private final byte[] random;
+
+    /**
+     * The size of the encoding {@link #getEncoded()} produces for a parameter set: a four byte
+     * index and the n-byte randomizer in front of what XMSSReducedSignature writes. Read as well
+     * as written through here, so {@link Builder#withSignature} takes an encoding apart on the
+     * layout toByteArray() lays down rather than on a second copy of it. Named for the encoding
+     * rather than called sizeOf, which would hide the superclass method it is built on.
+     */
+    static int encodedSizeOf(XMSSParameters params)
+    {
+        return INDEX_SIZE + params.getTreeDigestSize() + XMSSReducedSignature.sizeOf(params);
+    }
 
     private XMSSSignature(Builder builder)
     {
@@ -59,13 +72,7 @@ final class XMSSSignature
         public Builder withSignature(byte[] val)
         {
             int n = params.getTreeDigestSize();
-            int len = params.getLen();
-            int height = params.getHeight();
-            int indexSize = 4;
-            int signatureSize = len * n;
-            int authPathSize = height * n;
-            int totalSize = indexSize + n + signatureSize + authPathSize;
-            if (val.length != totalSize)
+            if (val.length != encodedSizeOf(params))
             {
                 /* an XMSS signature is a fixed-size encoding - anything longer or shorter, in
                  * particular a valid signature carrying trailing data, is not a signature for
@@ -75,11 +82,11 @@ final class XMSSSignature
             int position = 0;
             /* extract index */
             index = Pack.bigEndianToInt(val, position);
-            position += indexSize;
+            position += INDEX_SIZE;
             /* extract random */
             random = Arrays.copyOfRange(val, position, position + n);
             position += n;
-            withReducedSignature(Arrays.copyOfRange(val, position, position + signatureSize + authPathSize));
+            withReducedSignature(Arrays.copyOfRange(val, position, position + XMSSReducedSignature.sizeOf(params)));
             return this;
         }
 
@@ -96,15 +103,11 @@ final class XMSSSignature
     {
         /* index || random || signature || authentication path */
         int n = getParams().getTreeDigestSize();
-        int indexSize = 4;
-        int signatureSize = getParams().getLen() * n;
-        int authPathSize = getParams().getHeight() * n;
-        int totalSize = indexSize + n + signatureSize + authPathSize;
-        byte[] out = new byte[totalSize];
+        byte[] out = new byte[encodedSizeOf(getParams())];
         int position = 0;
         /* copy index */
         Pack.intToBigEndian(index, out, position);
-        position += indexSize;
+        position += INDEX_SIZE;
         /* copy random */
         System.arraycopy(random, 0, out, position, random.length);
         position += n;

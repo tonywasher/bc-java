@@ -15,6 +15,19 @@ class XMSSReducedSignature
     private final byte[][] wotsPlusSignature;
     private final List<XMSSNode> authPath;
 
+    /**
+     * The size of the encoding {@link #toByteArray()} produces for a parameter set: the len n-byte
+     * WOTS+ blocks followed by the h authentication path nodes. Read as well as written through
+     * here, so the layout the constructor takes an encoding apart on is the one toByteArray() and
+     * {@link #encodeTo} lay down, rather than the same product written out a second time beside
+     * it. XMSSSignature puts its own head in front of this size and XMSSMTSignature takes it once
+     * per layer, both from here.
+     */
+    static int sizeOf(XMSSParameters params)
+    {
+        return (params.getLen() + params.getHeight()) * params.getTreeDigestSize();
+    }
+
     public XMSSReducedSignature(Builder builder)
     {
         params = builder.params;
@@ -25,10 +38,7 @@ class XMSSReducedSignature
         if (reducedSignature != null)
         {
             /* import */
-            int signatureSize = len * n;
-            int authPathSize = height * n;
-            int totalSize = signatureSize + authPathSize;
-            if (reducedSignature.length != totalSize)
+            if (reducedSignature.length != sizeOf(params))
             {
                 throw new IllegalArgumentException("signature has wrong size");
             }
@@ -118,10 +128,7 @@ class XMSSReducedSignature
     public byte[] toByteArray()
     {
         /* signature || authentication path */
-        int n = params.getTreeDigestSize();
-        int signatureSize = params.getLen() * n;
-        int authPathSize = params.getHeight() * n;
-        byte[] out = new byte[signatureSize + authPathSize];
+        byte[] out = new byte[sizeOf(params)];
         encodeTo(out, 0);
         return out;
     }

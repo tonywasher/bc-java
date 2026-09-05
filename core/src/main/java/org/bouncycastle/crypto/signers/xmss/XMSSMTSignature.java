@@ -20,6 +20,30 @@ final class XMSSMTSignature
     private final byte[] random;
     private final List<XMSSReducedSignature> reducedSignatures;
 
+    /**
+     * The width of the index field: the fewest whole bytes that hold a leaf index of a hypertree
+     * of this height. The private key encoding measures its own index field the same way, in
+     * XMSSPrivateKeyCodec, which is in another package and so cannot share this one.
+     */
+    static int indexSizeOf(XMSSMTParameters params)
+    {
+        return (int)Math.ceil(params.getHeight() / 8.0);
+    }
+
+    /**
+     * The size of the encoding {@link #toByteArray()} produces for a parameter set: the index and
+     * the n-byte randomizer in front of one reduced signature per layer. Read as well as written
+     * through here, so the constructor takes an encoding apart on the layout toByteArray() lays
+     * down rather than on a second copy of it, and the per-layer size both of them step by is the
+     * one XMSSReducedSignature itself measures - of the parameters of a single layer's tree, which
+     * is what {@code getXMSSParameters()} carries.
+     */
+    static int encodedSizeOf(XMSSMTParameters params)
+    {
+        return indexSizeOf(params) + params.getTreeDigestSize()
+            + XMSSReducedSignature.sizeOf(params.getXMSSParameters()) * params.getLayers();
+    }
+
     private XMSSMTSignature(Builder builder)
     {
         params = builder.params;
@@ -28,12 +52,9 @@ final class XMSSMTSignature
         if (signature != null)
         {
             /* import */
-            int len = params.getLen();
-            int indexSize = (int)Math.ceil(params.getHeight() / 8.0);
-            int reducedSignatureSizeSingle = ((params.getHeight() / params.getLayers()) + len) * n;
-            int reducedSignaturesSizeTotal = reducedSignatureSizeSingle * params.getLayers();
-            int totalSize = indexSize + n + reducedSignaturesSizeTotal;
-            if (signature.length != totalSize)
+            int indexSize = indexSizeOf(params);
+            int reducedSignatureSizeSingle = XMSSReducedSignature.sizeOf(params.getXMSSParameters());
+            if (signature.length != encodedSizeOf(params))
             {
                 throw new IllegalArgumentException("signature has wrong size");
             }
@@ -115,12 +136,9 @@ final class XMSSMTSignature
     {
         /* index || random || reduced signatures */
         int n = params.getTreeDigestSize();
-        int len = params.getLen();
-        int indexSize = (int)Math.ceil(params.getHeight() / 8.0);
-        int reducedSignatureSizeSingle = ((params.getHeight() / params.getLayers()) + len) * n;
-        int reducedSignaturesSizeTotal = reducedSignatureSizeSingle * params.getLayers();
-        int totalSize = indexSize + n + reducedSignaturesSizeTotal;
-        byte[] out = new byte[totalSize];
+        int indexSize = indexSizeOf(params);
+        int reducedSignatureSizeSingle = XMSSReducedSignature.sizeOf(params.getXMSSParameters());
+        byte[] out = new byte[encodedSizeOf(params)];
         int position = 0;
         /* copy index - indexSize is 1..8 for every height the parameters admit (2..62) */
         Pack.longToBigEndian_Low(index, out, position, indexSize);
