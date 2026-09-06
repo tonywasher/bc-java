@@ -39,7 +39,6 @@ public class XMSSMTSignatureSpi
     // hands back is the same key rather than one stripped of them
     private ASN1Set attributes;
     private ASN1ObjectIdentifier[] treeDigests;
-    private SecureRandom random;
 
     protected XMSSMTSignatureSpi(String sigName, Digest digest, XMSSMTSigner signer)
     {
@@ -101,11 +100,19 @@ public class XMSSMTSignatureSpi
     protected void engineInitSign(PrivateKey privateKey, SecureRandom random)
         throws InvalidKeyException
     {
-        this.random = random;
-        engineInitSign(privateKey);
+        initSigning(privateKey, random);
     }
 
     protected void engineInitSign(PrivateKey privateKey)
+        throws InvalidKeyException
+    {
+        initSigning(privateKey, null);
+    }
+
+    // the random travels as an argument rather than in a field: held in one, a random supplied to
+    // an earlier initSign(key, random) on this object would still be wrapping the key on a later
+    // initSign(key) that named none
+    private void initSigning(PrivateKey privateKey, SecureRandom random)
         throws InvalidKeyException
     {
         if (privateKey instanceof BCXMSSMTPrivateKey)
