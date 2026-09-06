@@ -111,6 +111,15 @@ public class BDSStateMap
      * Advance this state map in place. Package-private, and for a map that is not yet anyone's: the
      * constructor building a state up to an index, and the copy {@link #getNextState} has just
      * taken. The state a key holds is advanced by being replaced, never through here.
+     * <p>
+     * That both callers hand it a map nobody else can see is what makes the monitor unnecessary
+     * here, not a reason to reach past it: the layers are read and written through this object's
+     * own accessors, the way layer zero below already was and every other method here is, so the
+     * one thing that would have to change for this to matter - a third caller, or one of these two
+     * publishing its map earlier - does not also have to be noticed here. The layer loop used to
+     * name the field directly, three lines under a layer zero that did not, which read as a
+     * distinction being drawn rather than as the accident it was.
+     * </p>
      */
     void updateState(XMSSMTParameters params, long globalIndex, byte[] publicSeed, byte[] secretKeySeed)
     {
@@ -146,9 +155,9 @@ public class BDSStateMap
             otsAddress = XMSSAddress.otsHashAddress(layer, indexTree, indexLeaf);
 
                 /* prepare authentication path for next leaf */
-            if (bdsState.get(layer) == null || XMSSUtil.isNewBDSInitNeeded(globalIndex, xmssHeight, layer))
+            if (this.get(layer) == null || XMSSUtil.isNewBDSInitNeeded(globalIndex, xmssHeight, layer))
             {
-                bdsState.put(layer, new BDS(xmssParams, publicSeed, secretKeySeed, otsAddress));
+                this.put(layer, new BDS(xmssParams, publicSeed, secretKeySeed, otsAddress));
             }
 
             if (indexLeaf < ((1 << xmssHeight) - 1)
