@@ -52,10 +52,6 @@ final class WOTSPlusParameters
      */
     public WOTSPlusParameters(ASN1ObjectIdentifier treeDigest, int digestSize)
     {
-        if (treeDigest == null)
-        {
-            throw new NullPointerException("treeDigest == null");
-        }
         this.treeDigest = treeDigest;
         this.digestSize = digestSize;
         len1 = (int)Math.ceil((double)(8 * digestSize) / XMSSUtil.log2(WINTERNITZ_PARAMETER));
