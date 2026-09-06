@@ -10,9 +10,7 @@ import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
 import org.bouncycastle.crypto.AsymmetricCipherKeyPair;
 import org.bouncycastle.crypto.CryptoServicesRegistrar;
-import org.bouncycastle.crypto.digests.SHA256Digest;
 import org.bouncycastle.crypto.digests.SHA512Digest;
-import org.bouncycastle.crypto.digests.SHAKEDigest;
 import org.bouncycastle.crypto.generators.XMSSKeyPairGenerator;
 import org.bouncycastle.crypto.params.XMSSKeyGenerationParameters;
 import org.bouncycastle.crypto.params.XMSSParameters;
@@ -55,45 +53,14 @@ public class XMSSKeyPairGeneratorSpi
 
         XMSSParameterSpec xmssParams = (XMSSParameterSpec)params;
 
-        if (xmssParams.getTreeDigest().equals(XMSSParameterSpec.SHA256))
-        {
-            treeDigest = NISTObjectIdentifiers.id_sha256;
-            param = new XMSSKeyGenerationParameters(new XMSSParameters(xmssParams.getHeight(), new SHA256Digest()), random);
-        }
-        else if (xmssParams.getTreeDigest().equals(XMSSParameterSpec.SHA512))
-        {
-            treeDigest = NISTObjectIdentifiers.id_sha512;
-            param = new XMSSKeyGenerationParameters(new XMSSParameters(xmssParams.getHeight(), new SHA512Digest()), random);
-        }
-        else if (xmssParams.getTreeDigest().equals(XMSSParameterSpec.SHAKE128))
-        {
-            treeDigest = NISTObjectIdentifiers.id_shake128;
-            param = new XMSSKeyGenerationParameters(new XMSSParameters(xmssParams.getHeight(), new SHAKEDigest(128)), random);
-        }
-        else if (xmssParams.getTreeDigest().equals(XMSSParameterSpec.SHAKE256))
-        {
-            treeDigest = NISTObjectIdentifiers.id_shake256;
-            param = new XMSSKeyGenerationParameters(new XMSSParameters(xmssParams.getHeight(), new SHAKEDigest(256)), random);
-        }
-        else if (xmssParams.getTreeDigest().equals(XMSSParameterSpec.SHA256_192))
-        {
-            treeDigest = NISTObjectIdentifiers.id_sha256;
-            param = new XMSSKeyGenerationParameters(new XMSSParameters(xmssParams.getHeight(), NISTObjectIdentifiers.id_sha256, 24), random);
-        }
-        else if (xmssParams.getTreeDigest().equals(XMSSParameterSpec.SHAKE256_256))
-        {
-            treeDigest = NISTObjectIdentifiers.id_shake256_len;
-            param = new XMSSKeyGenerationParameters(new XMSSParameters(xmssParams.getHeight(), NISTObjectIdentifiers.id_shake256_len, 32), random);
-        }
-        else if (xmssParams.getTreeDigest().equals(XMSSParameterSpec.SHAKE256_192))
-        {
-            treeDigest = NISTObjectIdentifiers.id_shake256_len;
-            param = new XMSSKeyGenerationParameters(new XMSSParameters(xmssParams.getHeight(), NISTObjectIdentifiers.id_shake256_len, 24), random);
-        }
-        else
-        {
-            throw new InvalidAlgorithmParameterException("unknown tree digest: " + xmssParams.getTreeDigest());
-        }
+        // the name to OID and n table is DigestUtil's, shared with XMSSMTKeyPairGeneratorSpi,
+        // which had a copy of these seven branches differing only in the parameter set class built
+        // below
+        DigestUtil.TreeDigest digest = DigestUtil.getTreeDigest(xmssParams.getTreeDigest());
+
+        treeDigest = digest.getOID();
+        param = new XMSSKeyGenerationParameters(
+            new XMSSParameters(xmssParams.getHeight(), digest.getOID(), digest.getN()), random);
 
         engine.init(param);
         initialised = true;

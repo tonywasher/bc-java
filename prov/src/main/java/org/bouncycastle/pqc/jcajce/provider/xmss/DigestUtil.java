@@ -1,5 +1,9 @@
 package org.bouncycastle.pqc.jcajce.provider.xmss;
 
+import java.security.InvalidAlgorithmParameterException;
+import java.util.HashMap;
+import java.util.Map;
+
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
 import org.bouncycastle.crypto.Digest;
@@ -9,6 +13,88 @@ import org.bouncycastle.pqc.jcajce.spec.XMSSParameterSpec;
 
 class DigestUtil
 {
+    /**
+     * What an {@link XMSSParameterSpec} tree-digest name names: the OID a key records for it, and
+     * the security parameter n the parameter set uses it at - or -1 where that is the digest's own
+     * output size, which is how the lightweight parameters read it.
+     * <p>
+     * The two are not separable. Neither says on its own which parameter set was asked for: the
+     * SP 800-208 SHA-256/192 set shares id-sha256 with RFC 8391's SHA-256, and SHAKE256/256 and
+     * SHAKE256/192 share id-shake256-len with each other, which is the same overlap
+     * {@link #getXMSSDigestName(ASN1ObjectIdentifier, int)} below has to take both of to go the
+     * other way.
+     * </p>
+     */
+    static class TreeDigest
+    {
+        private final ASN1ObjectIdentifier oid;
+        private final int n;
+
+        TreeDigest(ASN1ObjectIdentifier oid, int n)
+        {
+            this.oid = oid;
+            this.n = n;
+        }
+
+        ASN1ObjectIdentifier getOID()
+        {
+            return oid;
+        }
+
+        int getN()
+        {
+            return n;
+        }
+    }
+
+    private static final Map<String, TreeDigest> treeDigests = new HashMap<String, TreeDigest>();
+
+    static
+    {
+        treeDigests.put(XMSSParameterSpec.SHA256,
+            new TreeDigest(NISTObjectIdentifiers.id_sha256, -1));
+        treeDigests.put(XMSSParameterSpec.SHA512,
+            new TreeDigest(NISTObjectIdentifiers.id_sha512, -1));
+        treeDigests.put(XMSSParameterSpec.SHAKE128,
+            new TreeDigest(NISTObjectIdentifiers.id_shake128, -1));
+        treeDigests.put(XMSSParameterSpec.SHAKE256,
+            new TreeDigest(NISTObjectIdentifiers.id_shake256, -1));
+        treeDigests.put(XMSSParameterSpec.SHA256_192,
+            new TreeDigest(NISTObjectIdentifiers.id_sha256, 24));
+        treeDigests.put(XMSSParameterSpec.SHAKE256_256,
+            new TreeDigest(NISTObjectIdentifiers.id_shake256_len, 32));
+        treeDigests.put(XMSSParameterSpec.SHAKE256_192,
+            new TreeDigest(NISTObjectIdentifiers.id_shake256_len, 24));
+    }
+
+    /**
+     * The tree digest an {@link XMSSParameterSpec} names, for the two key pair generator SPIs.
+     * <p>
+     * They had this table each, seven branches in the same order saying the same thing, and the
+     * only difference between the two copies was which parameter set class they went on to build -
+     * so a digest added to one and not the other leaves the two families disagreeing about which
+     * names exist. Building it as an OID and an n rather than as a Digest instance is what lets
+     * the one table serve both: XMSSParameters and XMSSMTParameters take that pair, and the
+     * instance the copies built for four of the seven was constructed only for the constructor to
+     * read its algorithm name back off and look the OID up again.
+     * </p>
+     *
+     * @param treeDigestName the name from the spec.
+     * @throws InvalidAlgorithmParameterException if it is not one this provider knows.
+     */
+    static TreeDigest getTreeDigest(String treeDigestName)
+        throws InvalidAlgorithmParameterException
+    {
+        TreeDigest treeDigest = treeDigests.get(treeDigestName);
+
+        if (treeDigest == null)
+        {
+            throw new InvalidAlgorithmParameterException("unknown tree digest: " + treeDigestName);
+        }
+
+        return treeDigest;
+    }
+
     /**
      * The tree-digest OID for a lightweight tree-digest name, including the SHAKE256-LEN of the
      * SP 800-208 SHAKE256/256 and SHAKE256/192 sets.
