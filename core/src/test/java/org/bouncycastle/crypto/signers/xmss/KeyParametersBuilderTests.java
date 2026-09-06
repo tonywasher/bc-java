@@ -21,6 +21,7 @@ import org.bouncycastle.crypto.signers.XMSSSigner;
 import org.bouncycastle.crypto.util.PrivateKeyFactory;
 import org.bouncycastle.crypto.util.PrivateKeyInfoFactory;
 import org.bouncycastle.util.Arrays;
+import org.bouncycastle.util.Pack;
 
 /**
  * The four XMSS / XMSS^MT key parameter builders. XMSS and XMSS^MT are separate class families
@@ -87,6 +88,63 @@ public class KeyParametersBuilderTests
         catch (NullPointerException e)
         {
             assertEquals("params == null", e.getMessage());
+        }
+    }
+
+    /**
+     * The two signature builders read an index out of the encoding and it can name a leaf the tree
+     * does not have - the XMSS one reads four bytes as a signed int, so it can be negative too.
+     * XMSS^MT refused that and XMSS did not, which had one scheme's two halves disagreeing about
+     * whether an index outside the tree is a signature that will not decode or one that does not
+     * verify.
+     * <p>
+     * A verifier saw the same answer either way, and still does - XMSSEngine.verifySignature
+     * catches a RuntimeException from the decode and reports false - so this is asserted at the
+     * builder, which is where the two differed and what a caller assembling a signature by hand
+     * reaches. The false is asserted beside it, because that is the answer that must not change.
+     * </p>
+     */
+    public void testSignatureIndexOutsideTheTreeRejectedByBuilder()
+    {
+        XMSSParameters params = xmssParams();
+        // index(4) || random(n) || reduced signature, as XMSSSignature lays it down
+        int size = 4 + params.getTreeDigestSize() + XMSSReducedSignature.sizeOf(params);
+        int[] outside = new int[]{ 1 << HEIGHT, (1 << HEIGHT) + 1, Integer.MAX_VALUE, -1,
+            Integer.MIN_VALUE };
+
+        for (int i = 0; i != outside.length; i++)
+        {
+            byte[] encoded = new byte[size];
+
+            Pack.intToBigEndian(outside[i], encoded, 0);
+
+            try
+            {
+                new XMSSSignature.Builder(params).withSignature(encoded).build();
+                fail("index " + outside[i] + " accepted");
+            }
+            catch (IllegalArgumentException e)
+            {
+                assertEquals("index out of bounds", e.getMessage());
+            }
+            catch (IllegalStateException e)
+            {
+                // isIndexValid raises rather than returns for a negative index, and that is inside
+                // the same catch the verifier reads the refusal through
+                assertEquals("index must not be negative", e.getMessage());
+                assertTrue("only the negative cases arrive this way", outside[i] < 0);
+            }
+        }
+
+        // every index the tree does have still decodes, so the bound is where the tree ends
+        for (int index = 0; index != (1 << HEIGHT); index++)
+        {
+            byte[] encoded = new byte[size];
+
+            Pack.intToBigEndian(index, encoded, 0);
+
+            assertEquals(index,
+                new XMSSSignature.Builder(params).withSignature(encoded).build().getIndex());
         }
     }
 

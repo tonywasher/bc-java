@@ -82,6 +82,20 @@ final class XMSSSignature
             int position = 0;
             /* extract index */
             index = Pack.bigEndianToInt(val, position);
+
+            /* the four index bytes are read as a signed int, so an encoding that arrived from
+             * somewhere else can name a leaf this tree does not have, or a negative one. Refused
+             * here as XMSSMTSignature refuses it, rather than left to fail further in: the two
+             * halves of one scheme disagreed about whether an index outside the tree is a signature
+             * that will not decode or one that does not verify. Both answers reach a verifier as
+             * false - XMSSEngine.verifySignature catches RuntimeException around this decode - so
+             * what changes is where it is decided and what a caller building a signature by hand is
+             * told. isIndexValid raises rather than returns for the negative case; that is inside
+             * the same catch. */
+            if (!XMSSUtil.isIndexValid(params.getHeight(), index))
+            {
+                throw new IllegalArgumentException("index out of bounds");
+            }
             position += INDEX_SIZE;
             /* extract random */
             random = Arrays.copyOfRange(val, position, position + n);
