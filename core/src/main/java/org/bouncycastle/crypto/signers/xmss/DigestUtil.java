@@ -30,25 +30,40 @@ class DigestUtil
         oidToName.put(NISTObjectIdentifiers.id_shake256_len, "SHAKE256-LEN");
     }
 
+    /**
+     * The digest an XMSS parameter set names, by OID.
+     * <p>
+     * Each comparison has the constant on the left, which is what lets a null OID reach the refusal
+     * at the bottom rather than raising a NullPointerException on the first one - the answer
+     * {@link #getDigestName} already gives the same mistake, from a map lookup that takes a null
+     * key. The two are the pair a caller reaches this class through and they answered an absent OID
+     * two different ways, which the removal of WOTSPlusParameters' own null check turned from a
+     * detail into the whole of what an absent OID gets.
+     * </p>
+     *
+     * @param oid the tree digest OID.
+     * @return a fresh digest for it.
+     * @throws IllegalArgumentException if the OID is not one of the five, or is null.
+     */
     public static Digest getDigest(ASN1ObjectIdentifier oid)
     {
-        if (oid.equals(NISTObjectIdentifiers.id_sha256))
+        if (NISTObjectIdentifiers.id_sha256.equals(oid))
         {
             return new SHA256Digest();
         }
-        if (oid.equals(NISTObjectIdentifiers.id_sha512))
+        if (NISTObjectIdentifiers.id_sha512.equals(oid))
         {
             return new SHA512Digest();
         }
-        if (oid.equals(NISTObjectIdentifiers.id_shake128))
+        if (NISTObjectIdentifiers.id_shake128.equals(oid))
         {
             return new SHAKEDigest(128);
         }
-        if (oid.equals(NISTObjectIdentifiers.id_shake256))
+        if (NISTObjectIdentifiers.id_shake256.equals(oid))
         {
             return new SHAKEDigest(256);
         }
-        if (oid.equals(NISTObjectIdentifiers.id_shake256_len))
+        if (NISTObjectIdentifiers.id_shake256_len.equals(oid))
         {
             return new SHAKEDigest(256);
         }

@@ -28,6 +28,38 @@ import org.bouncycastle.pqc.asn1.XMSSPublicKey;
 public class ParameterBoundsTests
     extends TestCase
 {
+    /**
+     * DigestUtil's two lookups are how a tree digest OID is turned into something usable, and they
+     * are the pair this package refuses an unknown OID through. An absent one is the same mistake
+     * and they answered it differently: getDigestName looks the OID up in a map, which takes a null
+     * key and reports it by name, while getDigest compared the argument against each constant in
+     * turn and so raised a NullPointerException on the first comparison. Since the removal of the
+     * null check WOTSPlusParameters used to carry, this pair is the whole of what an absent OID
+     * meets.
+     */
+    public void testAnAbsentTreeDigestOidIsRefusedByName()
+    {
+        try
+        {
+            DigestUtil.getDigest(null);
+            fail("a null tree digest OID produced a digest");
+        }
+        catch (IllegalArgumentException e)
+        {
+            assertEquals("unrecognized digest OID: null", e.getMessage());
+        }
+
+        try
+        {
+            DigestUtil.getDigestName(null);
+            fail("a null tree digest OID produced a name");
+        }
+        catch (IllegalArgumentException e)
+        {
+            assertEquals("unrecognized digest oid: null", e.getMessage());
+        }
+    }
+
     public void testHeightAboveMaximumRefused()
     {
         // 31 above a multiple of 32 wraps (1 << height) to a negative, which left key generation
