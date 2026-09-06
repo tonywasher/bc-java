@@ -433,6 +433,12 @@ public class XMSSMTTest
 
         StateAwareSignature sig = (StateAwareSignature)Signature.getInstance("XMSSMT-SHA256", "BCPQC");
 
+        // taken before the signature, because the object kp.getPrivate() hands back wraps the
+        // traversal state the signature advances in place - so it reports the advanced position
+        // afterwards, and the assertEquals below is two views of one mutated key rather than a
+        // statement about which key came back. These bytes are the only record of where it started.
+        byte[] before = kp.getPrivate().getEncoded();
+
         sig.initSign(kp.getPrivate());
 
         sig.update(msg, 0, msg.length);
@@ -450,6 +456,8 @@ public class XMSSMTTest
         PrivateKey collected = sig.getUpdatedPrivateKey();
 
         assertNotNull("the advanced key was not handed back after a verification init", collected);
+        assertFalse("the key handed back sits where it did before the signature",
+            Arrays.areEqual(before, collected.getEncoded()));
         assertEquals("the key handed back is not the one the signature advanced",
             kp.getPrivate(), collected);
     }
