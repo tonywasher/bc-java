@@ -122,31 +122,11 @@ public class XMSSMTTest
     public void testPromotedFactoryReadsLegacyBdsState()
         throws Exception
     {
-        assertTrue("fixture is not a pre-promotion key", hasLegacyBdsMarker(testPrivKey));
+        assertTrue("fixture is not a pre-promotion key", XMSSTestUtils.hasLegacyBdsMarker(testPrivKey));
 
         AsymmetricKeyParameter key = org.bouncycastle.crypto.util.PrivateKeyFactory.createKey(testPrivKey);
 
         assertTrue(key instanceof org.bouncycastle.crypto.params.XMSSMTPrivateKeyParameters);
-    }
-
-    private static boolean hasLegacyBdsMarker(byte[] encoding)
-    {
-        byte[] marker = Strings.toByteArray("org.bouncycastle.pqc.crypto.xmss.BDS");
-
-        for (int i = 0; i <= encoding.length - marker.length; i++)
-        {
-            int j = 0;
-            while (j != marker.length && encoding[i + j] == marker[j])
-            {
-                j++;
-            }
-            if (j == marker.length)
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**
