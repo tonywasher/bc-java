@@ -16,6 +16,7 @@ import org.bouncycastle.crypto.params.XMSSKeyGenerationParameters;
 import org.bouncycastle.crypto.params.XMSSParameters;
 import org.bouncycastle.crypto.params.XMSSPrivateKeyParameters;
 import org.bouncycastle.crypto.params.XMSSPublicKeyParameters;
+import org.bouncycastle.jcajce.provider.util.SecurityExceptions;
 import org.bouncycastle.pqc.jcajce.spec.XMSSParameterSpec;
 
 public class XMSSKeyPairGeneratorSpi
@@ -58,9 +59,28 @@ public class XMSSKeyPairGeneratorSpi
         // below
         DigestUtil.TreeDigest digest = DigestUtil.getTreeDigest(xmssParams.getTreeDigest());
 
+        // built before either field is written. XMSSParameters refuses a height outside
+        // [2, MAX_HEIGHT] with an unchecked IllegalArgumentException, and an assignment ahead of
+        // that left this generator naming the tree digest of the parameter set it had just failed
+        // to build while the engine went on holding the one an earlier initialize succeeded with -
+        // so the next generateKeyPair(), legal because of that earlier call, labelled its key with
+        // a digest nothing had generated it under. The refusal is reported as the
+        // InvalidAlgorithmParameterException this method declares, which is what getTreeDigest one
+        // line above already throws for a tree digest name it does not know.
+        XMSSKeyGenerationParameters generationParams;
+
+        try
+        {
+            generationParams = new XMSSKeyGenerationParameters(
+                new XMSSParameters(xmssParams.getHeight(), digest.getOID(), digest.getN()), random);
+        }
+        catch (IllegalArgumentException e)
+        {
+            throw SecurityExceptions.invalidAlgorithmParameterException(e.getMessage(), e);
+        }
+
         treeDigest = digest.getOID();
-        param = new XMSSKeyGenerationParameters(
-            new XMSSParameters(xmssParams.getHeight(), digest.getOID(), digest.getN()), random);
+        param = generationParams;
 
         engine.init(param);
         initialised = true;

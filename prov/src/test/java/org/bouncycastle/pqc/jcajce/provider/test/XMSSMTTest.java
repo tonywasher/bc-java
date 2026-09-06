@@ -5,6 +5,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.security.GeneralSecurityException;
+import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.InvalidParameterException;
 import java.security.KeyFactory;
@@ -500,6 +501,38 @@ public class XMSSMTTest
         verifier.update(msg, 0, msg.length);
 
         assertTrue("the retained shard did not produce a verifiable signature", verifier.verify(s));
+    }
+
+    /**
+     * An initialize() that cannot be satisfied leaves the generator where it was. The tree digest
+     * was written into the field before the parameter set was built, so a height the parameter set
+     * refuses left this generator naming a digest the engine it hands keys to knows nothing about,
+     * and the next generateKeyPair() - which the earlier, successful initialize had made legal -
+     * produced a key labelled with it. The refusal itself is reported as the
+     * InvalidAlgorithmParameterException the method declares rather than as the unchecked
+     * IllegalArgumentException the parameter set raises.
+     */
+    public void testAFailedInitialiseLeavesTheGeneratorAsItWas()
+        throws Exception
+    {
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("XMSSMT", "BCPQC");
+
+        kpg.initialize(new XMSSMTParameterSpec(4, 2, XMSSMTParameterSpec.SHA256), new SecureRandom());
+
+        String treeDigest = ((XMSSMTKey)kpg.generateKeyPair().getPublic()).getTreeDigest();
+
+        try
+        {
+            kpg.initialize(new XMSSMTParameterSpec(4, 3, XMSSMTParameterSpec.SHAKE256), new SecureRandom());
+            fail("no exception");
+        }
+        catch (InvalidAlgorithmParameterException e)
+        {
+            assertEquals("layers must divide totalHeight without remainder", e.getMessage());
+        }
+
+        assertEquals("the refused initialize left its tree digest behind",
+            treeDigest, ((XMSSMTKey)kpg.generateKeyPair().getPublic()).getTreeDigest());
     }
 
     public void testXMSSMTSha256SignatureMultiple()

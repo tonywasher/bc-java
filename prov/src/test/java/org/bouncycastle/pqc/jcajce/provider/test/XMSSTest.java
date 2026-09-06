@@ -5,6 +5,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.security.GeneralSecurityException;
+import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.InvalidParameterException;
 import java.security.KeyFactory;
@@ -1043,6 +1044,38 @@ public class XMSSTest
         verifier.update(msg, 0, msg.length);
 
         assertTrue("the retained shard did not produce a verifiable signature", verifier.verify(s));
+    }
+
+    /**
+     * An initialize() that cannot be satisfied leaves the generator where it was. The tree digest
+     * was written into the field before the parameter set was built, so a height the parameter set
+     * refuses left this generator naming a digest the engine it hands keys to knows nothing about,
+     * and the next generateKeyPair() - which the earlier, successful initialize had made legal -
+     * produced a key labelled with it. The refusal itself is reported as the
+     * InvalidAlgorithmParameterException the method declares rather than as the unchecked
+     * IllegalArgumentException the parameter set raises.
+     */
+    public void testAFailedInitialiseLeavesTheGeneratorAsItWas()
+        throws Exception
+    {
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("XMSS", "BCPQC");
+
+        kpg.initialize(new XMSSParameterSpec(4, XMSSParameterSpec.SHA256), new SecureRandom());
+
+        String treeDigest = ((XMSSKey)kpg.generateKeyPair().getPublic()).getTreeDigest();
+
+        try
+        {
+            kpg.initialize(new XMSSParameterSpec(1, XMSSParameterSpec.SHAKE256), new SecureRandom());
+            fail("no exception");
+        }
+        catch (InvalidAlgorithmParameterException e)
+        {
+            assertEquals("height must be >= 2", e.getMessage());
+        }
+
+        assertEquals("the refused initialize left its tree digest behind",
+            treeDigest, ((XMSSKey)kpg.generateKeyPair().getPublic()).getTreeDigest());
     }
 
     public void testKeyRebuild()

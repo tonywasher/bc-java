@@ -16,6 +16,7 @@ import org.bouncycastle.crypto.params.XMSSMTKeyGenerationParameters;
 import org.bouncycastle.crypto.params.XMSSMTParameters;
 import org.bouncycastle.crypto.params.XMSSMTPrivateKeyParameters;
 import org.bouncycastle.crypto.params.XMSSMTPublicKeyParameters;
+import org.bouncycastle.jcajce.provider.util.SecurityExceptions;
 import org.bouncycastle.pqc.jcajce.spec.XMSSMTParameterSpec;
 
 public class XMSSMTKeyPairGeneratorSpi
@@ -57,10 +58,25 @@ public class XMSSMTKeyPairGeneratorSpi
         // from it is the only thing that differed between the two copies
         DigestUtil.TreeDigest digest = DigestUtil.getTreeDigest(xmssParams.getTreeDigest());
 
+        // as XMSSKeyPairGeneratorSpi: built before either field is written, and the parameter
+        // set's unchecked refusals - a total height outside [2, MAX_HEIGHT], a layer count that
+        // does not divide it, a single-leaf subtree - reported as the
+        // InvalidAlgorithmParameterException this method declares.
+        XMSSMTKeyGenerationParameters generationParams;
+
+        try
+        {
+            generationParams = new XMSSMTKeyGenerationParameters(
+                new XMSSMTParameters(xmssParams.getHeight(), xmssParams.getLayers(), digest.getOID(),
+                    digest.getN()), random);
+        }
+        catch (IllegalArgumentException e)
+        {
+            throw SecurityExceptions.invalidAlgorithmParameterException(e.getMessage(), e);
+        }
+
         treeDigest = digest.getOID();
-        param = new XMSSMTKeyGenerationParameters(
-            new XMSSMTParameters(xmssParams.getHeight(), xmssParams.getLayers(), digest.getOID(),
-                digest.getN()), random);
+        param = generationParams;
 
         engine.init(param);
         initialised = true;
