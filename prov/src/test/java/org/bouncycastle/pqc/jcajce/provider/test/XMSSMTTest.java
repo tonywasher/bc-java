@@ -1368,8 +1368,8 @@ public class XMSSMTTest
         assertEquals("the two keys are not equal to begin with", one, two);
 
         boolean[] agreed = new boolean[2];
-        Thread forwards = comparing(one, two, agreed, 0);
-        Thread backwards = comparing(two, one, agreed, 1);
+        Thread forwards = XMSSTestUtils.comparing(one, two, agreed, 0);
+        Thread backwards = XMSSTestUtils.comparing(two, one, agreed, 1);
 
         forwards.start();
         backwards.start();
@@ -1380,29 +1380,5 @@ public class XMSSMTTest
         assertFalse("comparing the two keys in both orders at once did not finish",
             forwards.isAlive() || backwards.isAlive());
         assertTrue("equals() answered false for two keys that are equal", agreed[0] && agreed[1]);
-    }
-
-    private static Thread comparing(final PrivateKey one, final PrivateKey two, final boolean[] agreed,
-        final int slot)
-    {
-        Thread thread = new Thread(new Runnable()
-        {
-            public void run()
-            {
-                for (int i = 0; i != 2000; i++)
-                {
-                    if (!one.equals(two))
-                    {
-                        return;
-                    }
-                }
-
-                agreed[slot] = true;
-            }
-        });
-
-        thread.setDaemon(true);
-
-        return thread;
     }
 }
