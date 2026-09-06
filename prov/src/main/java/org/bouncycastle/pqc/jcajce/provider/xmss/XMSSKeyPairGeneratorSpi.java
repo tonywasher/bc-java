@@ -91,9 +91,16 @@ public class XMSSKeyPairGeneratorSpi
         if (!initialised)
         {
             // the tree digest has to be set here as well, otherwise the key returned carries none
-            // and its equals()/hashCode()/getTreeDigest() fail on it.
+            // and its equals()/hashCode()/getTreeDigest() fail on it. Built before either field is
+            // written, as initialize() builds it: the parameter set here is a constant and cannot
+            // be refused, so this changes nothing today, and that is exactly what makes the order
+            // worth having - the two initialisation paths hold the same invariant by construction
+            // rather than one of them holding it by arithmetic a later edit could change.
+            XMSSKeyGenerationParameters generationParams = new XMSSKeyGenerationParameters(
+                new XMSSParameters(10, new SHA512Digest()), random);
+
             treeDigest = NISTObjectIdentifiers.id_sha512;
-            param = new XMSSKeyGenerationParameters(new XMSSParameters(10, new SHA512Digest()), random);
+            param = generationParams;
 
             engine.init(param);
             initialised = true;
