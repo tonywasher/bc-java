@@ -33,10 +33,6 @@ public final class XMSSMTPrivateKeyParameters
         byte[] privateKey = builder.privateKey;
         if (privateKey != null)
         {
-            if (builder.xmss == null)
-            {
-                throw new NullPointerException("xmss == null");
-            }
             /* import */
             int totalHeight = params.getHeight();
             XMSSPrivateKeyCodec codec = XMSSPrivateKeyCodec.decode(privateKey,
@@ -62,8 +58,15 @@ public final class XMSSMTPrivateKeyParameters
                 // the WOTS+ parameters are not part of what was serialized, so the digest goes back
                 // on - in the same copy that carries the maximum index, which used to be a second
                 // one taken afterwards because copying a state before naming its digest threw
-                bdsState = bdsImport.withMaxIndex(stateMaxIndex, builder.xmss.getTreeDigestOID(),
-                    builder.xmss.getTreeDigestSize());
+                // the single-tree parameters off this key's own parameter set. The builder used
+                // to carry them in a field of its own, assigned by withPrivateKey from exactly this
+                // expression and guarded above by a null check that nothing could reach - the field
+                // is written where the branch is chosen, so being inside the branch is already the
+                // proof it was written.
+                XMSSParameters xmss = params.getXMSSParameters();
+
+                bdsState = bdsImport.withMaxIndex(stateMaxIndex, xmss.getTreeDigestOID(),
+                    xmss.getTreeDigestSize());
                 bdsState.validate(params, index);
                 bdsState.validateRoot(params, root);
             }
@@ -144,7 +147,6 @@ public final class XMSSMTPrivateKeyParameters
         private byte[] root = null;
         private BDSStateMap bdsState = null;
         private byte[] privateKey = null;
-        private XMSSParameters xmss = null;
 
         public Builder(XMSSMTParameters params)
         {
@@ -252,7 +254,6 @@ public final class XMSSMTPrivateKeyParameters
         public Builder withPrivateKey(byte[] privateKeyVal)
         {
             privateKey = Arrays.clone(privateKeyVal);
-            xmss = params.getXMSSParameters();
             return this;
         }
 
