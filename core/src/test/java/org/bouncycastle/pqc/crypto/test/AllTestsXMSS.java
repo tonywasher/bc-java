@@ -1,6 +1,5 @@
 package org.bouncycastle.pqc.crypto.test;
 
-import junit.extensions.TestSetup;
 import junit.framework.Test;
 import junit.framework.TestCase;
 import junit.framework.TestSuite;
@@ -31,25 +30,6 @@ public class AllTestsXMSS
         suite.addTestSuite(XMSSStateEncodingTest.class);
         suite.addTestSuite(XMSSPromotionCompatibilityTest.class);
 
-        return new BCTestSetup(suite);
-    }
-
-    static class BCTestSetup
-        extends TestSetup
-    {
-        public BCTestSetup(Test test)
-        {
-            super(test);
-        }
-
-        protected void setUp()
-        {
-
-        }
-
-        protected void tearDown()
-        {
-
-        }
+        return new AllTests.BCTestSetup(suite);
     }
 }
