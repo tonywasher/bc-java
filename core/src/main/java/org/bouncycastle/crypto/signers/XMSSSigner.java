@@ -163,28 +163,37 @@ public class XMSSSigner
         }
     }
 
+    /**
+     * Verify the buffered message against the passed in signature.
+     * <p>
+     * No monitor is taken here, the way the legacy signer and {@code LMSSigner} take none. This
+     * reads the public key and the mode flag, spends no one-time key and advances no traversal
+     * state, so there is nothing for a lock to serialize; and it could not serialize the message
+     * in any case, since {@link #update(byte)} and {@link #reset()} write the buffer without one,
+     * so a monitor held over the read alone excludes nothing a caller sharing one signer across
+     * threads is doing. What the signing side takes this monitor for is the private key field,
+     * which {@link #getUpdatedPrivateKey()} reassigns; nothing reassigns the public key but
+     * {@link #init(boolean, CipherParameters)}, and re-initialising a signer under a running
+     * operation is the caller error it is in every other signer here.
+     * </p>
+     */
     public boolean verifySignature(byte[] signature)
     {
-        // as generateSignature(): the fields read here are the ones init() writes, so this reads
-        // them under the monitor init() now holds while it writes them
-        synchronized (this)
+        byte[] message = buffer.toByteArray();
+
+        // consumed whatever the outcome, so a failed verification cannot poison the next one
+        reset();
+
+        // covers both a signer initialised for signing and one never initialised at all: the
+        // latter used to fall through and report the absent public key as "signature did not
+        // verify", because the NullPointerException it caused was swallowed by the
+        // malformed-signature catch
+        if (initSign || publicKey == null)
         {
-            byte[] message = buffer.toByteArray();
-
-            // consumed whatever the outcome, so a failed verification cannot poison the next one
-            reset();
-
-            // covers both a signer initialised for signing and one never initialised at all: the
-            // latter used to fall through and report the absent public key as "signature did not
-            // verify", because the NullPointerException it caused was swallowed by the
-            // malformed-signature catch
-            if (initSign || publicKey == null)
-            {
-                throw new IllegalStateException("signer not initialized for verification");
-            }
-
-            return XMSSEngine.verifySignature(publicKey, message, signature);
+            throw new IllegalStateException("signer not initialized for verification");
         }
+
+        return XMSSEngine.verifySignature(publicKey, message, signature);
     }
 
     /**
