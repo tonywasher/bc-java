@@ -301,7 +301,7 @@ public final class BDS
              * the walk's own copy of it the way the two encodings above are stepped. What the
              * previous leaf's chains left in the three words below it is cleared by
              * getWOTSPlusSecretKey, which says so. */
-            Pack.intToBigEndian(indexLeaf, leafAddress, OTSHashAddress.OTS_ADDRESS_OFFSET);
+            Pack.intToBigEndian(indexLeaf, leafAddress, XMSSAddress.OTS_ADDRESS_OFFSET);
             /*
              * import WOTSPlusSecretKey as its needed to calculate the public
              * key on the fly
@@ -408,7 +408,7 @@ public final class BDS
         /* leaf is a left node */
         if (tau == 0)
         {
-            Pack.intToBigEndian(index, leafAddress, OTSHashAddress.OTS_ADDRESS_OFFSET);
+            Pack.intToBigEndian(index, leafAddress, XMSSAddress.OTS_ADDRESS_OFFSET);
             /*
              * import WOTSPlusSecretKey as its needed to calculate the public
              * key on the fly

@@ -62,7 +62,7 @@ class BDSTreeHash
             throw new IllegalStateException("finished or not initialized");
         }
             /* prepare addresses */
-        Pack.intToBigEndian(nextIndex, otsAddress, OTSHashAddress.OTS_ADDRESS_OFFSET);
+        Pack.intToBigEndian(nextIndex, otsAddress, XMSSAddress.OTS_ADDRESS_OFFSET);
         /* the leaf's own two addresses, taken from the tree its encoding names and then named for
          * the same leaf a second and a third time */
         byte[] lTreeAddress = XMSSAddress.subtreeAddressOf(otsAddress, XMSSAddress.LTREE_TYPE);

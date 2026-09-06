@@ -12,8 +12,8 @@ import org.bouncycastle.util.Pack;
 final class WOTSPlus
 {
     /**
-     * The length RFC 8391 sec. 4.1.2 fixes PRF's second argument at - the 32 bytes an
-     * {@link XMSSAddress} encodes to, and the width {@link #expandSecretKeySeed} writes an index
+     * The length RFC 8391 sec. 4.1.2 fixes PRF's second argument at - the 32 bytes of an
+     * {@link XMSSAddress} encoding, and the width {@link #expandSecretKeySeed} writes an index
      * in.
      */
     private static final int PRF_INDEX_SIZE = 32;
@@ -110,7 +110,7 @@ final class WOTSPlus
         byte[] tmpMasked = new byte[n];
         for (int i = 0; i < params.getLen(); i++)
         {
-            Pack.intToBigEndian(i, address, OTSHashAddress.CHAIN_ADDRESS_OFFSET);
+            Pack.intToBigEndian(i, address, XMSSAddress.CHAIN_ADDRESS_OFFSET);
             expandSecretKeySeed(i, indexBuffer, startHash);
             signature[i] = chain(startHash, 0, baseWMessage.get(i), address, key, tmpMasked);
         }
@@ -151,7 +151,7 @@ final class WOTSPlus
         byte[] tmpMasked = new byte[n];
         for (int i = 0; i < params.getLen(); i++)
         {
-            Pack.intToBigEndian(i, address, OTSHashAddress.CHAIN_ADDRESS_OFFSET);
+            Pack.intToBigEndian(i, address, XMSSAddress.CHAIN_ADDRESS_OFFSET);
             publicKey[i] = chain(signature[i], baseWMessage.get(i),
                 WOTSPlusParameters.WINTERNITZ_PARAMETER - 1 - baseWMessage.get(i), address, key, tmpMasked);
         }
@@ -236,7 +236,7 @@ final class WOTSPlus
         byte[] tmp = startHash;
         for (int i = 0; i != steps; i++)
         {
-            Pack.intToBigEndian(startIndex + i, address, OTSHashAddress.HASH_ADDRESS_OFFSET);
+            Pack.intToBigEndian(startIndex + i, address, XMSSAddress.HASH_ADDRESS_OFFSET);
 
             Pack.intToBigEndian(0, address, XMSSAddress.KEY_AND_MASK_OFFSET);
             khf.PRF(publicSeed, address, key);
@@ -337,8 +337,8 @@ final class WOTSPlus
         // is what lets one encoding serve a whole leaf walk: getPublicKey() and sign() below leave
         // the last chain's chain address, hash address and key-and-mask in the encoding they are
         // handed, and the next leaf's one-time key is derived from that same encoding.
-        Pack.intToBigEndian(0, address, OTSHashAddress.CHAIN_ADDRESS_OFFSET);
-        Pack.intToBigEndian(0, address, OTSHashAddress.HASH_ADDRESS_OFFSET);
+        Pack.intToBigEndian(0, address, XMSSAddress.CHAIN_ADDRESS_OFFSET);
+        Pack.intToBigEndian(0, address, XMSSAddress.HASH_ADDRESS_OFFSET);
         Pack.intToBigEndian(0, address, XMSSAddress.KEY_AND_MASK_OFFSET);
         return khf.PRF(secretSeed, address);
     }
@@ -433,7 +433,7 @@ final class WOTSPlus
         byte[] tmpMasked = new byte[n];
         for (int i = 0; i < params.getLen(); i++)
         {
-            Pack.intToBigEndian(i, address, OTSHashAddress.CHAIN_ADDRESS_OFFSET);
+            Pack.intToBigEndian(i, address, XMSSAddress.CHAIN_ADDRESS_OFFSET);
             expandSecretKeySeed(i, indexBuffer, startHash);
             publicKey[i] = chain(startHash, 0, WOTSPlusParameters.WINTERNITZ_PARAMETER - 1, address, key, tmpMasked);
         }

@@ -18,7 +18,7 @@ import org.bouncycastle.crypto.Xof;
  * key's parameters - so the set of callers is closed: every key argument is a return value of one of
  * these functions, a {@code new byte[n]} field of WOTSPlus, or key material one of the key parameter
  * classes has already pinned to n; every in is freshly allocated at the size wanted; every PRF
- * address is an {@link XMSSAddress#toByteArray()} or a toBytesBigEndian(x, 32), both always 32
+ * address is an {@link XMSSAddress} encoding or a toBytesBigEndian(x, 32), both always 32
  * bytes. A new call site has to keep that true: a wrong length is not rejected here, it silently
  * hashes to something else.
  * <p>

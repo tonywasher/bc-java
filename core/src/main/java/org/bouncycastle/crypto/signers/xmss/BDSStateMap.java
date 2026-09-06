@@ -98,7 +98,7 @@ public class BDSStateMap
         long indexTree = XMSSUtil.getTreeIndex(globalIndex, xmssHeight);
         int indexLeaf = XMSSUtil.getLeafIndex(globalIndex, xmssHeight);
 
-        byte[] otsAddress = new OTSHashAddress(0, indexTree, indexLeaf).toByteArray();
+        byte[] otsAddress = XMSSAddress.otsHashAddress(0, indexTree, indexLeaf);
 
         /* prepare authentication path for next leaf */
         if (indexLeaf < ((1 << xmssHeight) - 1))
@@ -118,7 +118,7 @@ public class BDSStateMap
             indexLeaf = XMSSUtil.getLeafIndex(indexTree, xmssHeight);
             indexTree = XMSSUtil.getTreeIndex(indexTree, xmssHeight);
                 /* adjust addresses */
-            otsAddress = new OTSHashAddress(layer, indexTree, indexLeaf).toByteArray();
+            otsAddress = XMSSAddress.otsHashAddress(layer, indexTree, indexLeaf);
 
                 /* prepare authentication path for next leaf */
             if (bdsState.get(layer) == null || XMSSUtil.isNewBDSInitNeeded(globalIndex, xmssHeight, layer))

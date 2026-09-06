@@ -27,9 +27,9 @@ public class AddressTests
      */
     private static byte[] otsHashAddress()
     {
-        byte[] enc = new OTSHashAddress(7, 0x0102030405060708L, 0x11223344).toByteArray();
+        byte[] enc = XMSSAddress.otsHashAddress(7, 0x0102030405060708L, 0x11223344);
 
-        // the chain address, the hash address and the key-and-mask are not constructor parameters:
+        // the chain address, the hash address and the key-and-mask are not factory parameters:
         // each is stepped through the encoding a walk already holds rather than set on an address
         // - the chain address once per chain by the loops over them, the hash address and the
         // key-and-mask within WOTSPlus.chain - so they are written here the way those write them.
@@ -37,8 +37,8 @@ public class AddressTests
         // turn on is that none of them carries past the twelve bytes subtreeAddressOf copies; and
         // writing them through the offset constants is also what asserts the constants name words
         // 5 and 6 and the last word of all, which is the layout production depends on.
-        Pack.intToBigEndian(0x55667788, enc, OTSHashAddress.CHAIN_ADDRESS_OFFSET);
-        Pack.intToBigEndian(0x99aabbcc, enc, OTSHashAddress.HASH_ADDRESS_OFFSET);
+        Pack.intToBigEndian(0x55667788, enc, XMSSAddress.CHAIN_ADDRESS_OFFSET);
+        Pack.intToBigEndian(0x99aabbcc, enc, XMSSAddress.HASH_ADDRESS_OFFSET);
         Pack.intToBigEndian(2, enc, XMSSAddress.KEY_AND_MASK_OFFSET);
 
         return enc;
@@ -46,11 +46,11 @@ public class AddressTests
 
     public void testOTSHashAddressLayout()
     {
-        // the three words the constructor does not take are zero in what it produces, which is
-        // what OTSHashAddress says of them and what the walks that write them start from. Nothing
-        // writes them to say so - toByteArray() lays down the four words it holds and leaves the
-        // rest of a fresh array alone - so assert it against an address nothing has stepped.
-        byte[] fresh = new OTSHashAddress(7, 0x0102030405060708L, 0x11223344).toByteArray();
+        // the three words the factory does not take are zero in what it produces, which is what
+        // XMSSAddress says of them and what the walks that write them start from. Nothing writes
+        // them to say so - it lays down the four words it is given and leaves the rest of a fresh
+        // array alone - so assert it against an address nothing has stepped.
+        byte[] fresh = XMSSAddress.otsHashAddress(7, 0x0102030405060708L, 0x11223344);
 
         assertEquals(0, Pack.bigEndianToInt(fresh, WORD_5));
         assertEquals(0, Pack.bigEndianToInt(fresh, WORD_6));
@@ -131,7 +131,7 @@ public class AddressTests
      */
     public void testAddressTypesAreDistinct()
     {
-        byte[] ots = new OTSHashAddress(0, 0L, 1).toByteArray();
+        byte[] ots = XMSSAddress.otsHashAddress(0, 0L, 1);
 
         byte[] lTree = XMSSAddress.subtreeAddressOf(ots, XMSSAddress.LTREE_TYPE);
         Pack.intToBigEndian(1, lTree, XMSSAddress.LTREE_ADDRESS_OFFSET);

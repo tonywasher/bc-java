@@ -29,7 +29,7 @@ class XMSSVerifierUtil
         }
 
         /* prepare adresses */
-        int otsIndex = OTSHashAddress.otsAddressOf(otsAddress);
+        int otsIndex = XMSSAddress.otsAddressOf(otsAddress);
         byte[] lTreeAddress = XMSSAddress.subtreeAddressOf(otsAddress, XMSSAddress.LTREE_TYPE);
         Pack.intToBigEndian(otsIndex, lTreeAddress, XMSSAddress.LTREE_ADDRESS_OFFSET);
         byte[] hashTreeAddress = XMSSAddress.subtreeAddressOf(otsAddress, XMSSAddress.HASH_TREE_TYPE);
