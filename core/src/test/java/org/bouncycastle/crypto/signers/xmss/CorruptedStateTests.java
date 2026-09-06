@@ -143,8 +143,10 @@ public class CorruptedStateTests
         assertEquals(atIndex, state.getIndex());
 
         // these are the state's own collections rather than copies of them, so each corruption
-        // replaces one and none of them changes one in place; the BDS constructor below copies
-        // what it is given, so the rebuilt state shares nothing with the state it was read from
+        // replaces one and none of them changes one in place. The BDS constructor below adopts
+        // what it is handed, so the rebuilt state shares the uncorrupted four with the state read
+        // from the encoding - which is why that state is not touched again: it is encoded through
+        // the rebuilt one on the next line and then dropped.
         Map<Integer, XMSSNode> keep = state.getLiveKeep();
         Map<Integer, List<XMSSNode>> retain = state.getLiveRetain();
 

@@ -118,6 +118,20 @@ public final class BDS
         this.used = false;
     }
 
+    /**
+     * A state assembled field by field, for a decoder that has just read one.
+     * <p>
+     * The five collections are adopted rather than copied, so the caller hands them over and must
+     * not go on using them. That is what a decoder is holding: {@code BDSStateCodec.readBDS} makes
+     * each of them a node at a time out of the stream and has the only reference to it, so a copy
+     * taken here allocated a second whole traversal state - the five containers, the queues inside
+     * retain and a clone of every tree hash instance - on the path every private key decode takes,
+     * to protect a caller that had nothing left to protect.
+     * </p><p>
+     * The constructors that carry a state on from another one still copy, because there the other
+     * one goes on being used; see {@link #BDS(BDS)} and the block above the getLive accessors.
+     * </p>
+     */
     BDS(int treeHeight, int k, int maxIndex, int index, boolean used, XMSSNode root,
         List<XMSSNode> authenticationPath, Map<Integer, List<XMSSNode>> retain,
         Stack<XMSSNode> stack, List<BDSTreeHash> treeHashInstances, Map<Integer, XMSSNode> keep)
@@ -129,11 +143,11 @@ public final class BDS
         this.index = index;
         this.used = used;
         this.root = root;
-        this.authenticationPath = cloneAuthenticationPath(authenticationPath);
-        this.retain = cloneRetain(retain);
-        this.stack = cloneStack(stack);
-        this.treeHashInstances = cloneTreeHashInstances(treeHashInstances);
-        this.keep = new TreeMap<Integer, XMSSNode>(keep);
+        this.authenticationPath = authenticationPath;
+        this.retain = retain;
+        this.stack = stack;
+        this.treeHashInstances = treeHashInstances;
+        this.keep = keep;
         this.validate();
     }
 
@@ -778,10 +792,11 @@ public final class BDS
      * getAuthenticationPath() above is the copying accessor that stays, because the path it hands
      * XMSSEngine goes into a signature that outlives the call, where these are read and dropped
      * inside writeBDS. The other four had no caller left but the tests and are gone; anything that
-     * needs one of them to hold still wants the copy the constructors make rather than one of its
-     * own, because the depth is not obvious - cloneRetain() reaches the queues
-     * nextAuthenticationPath() calls remove(0) on, and cloneTreeHashInstances() each instance it
-     * updates, where copying the map or the list alone would leave both shared.
+     * needs one of them to hold still wants the copy BDS(BDS) makes rather than one of its own,
+     * because the depth is not obvious - cloneRetain() reaches the queues nextAuthenticationPath()
+     * calls remove(0) on, and cloneTreeHashInstances() each instance it updates, where copying the
+     * map or the list alone would leave both shared. The field by field constructor is not that
+     * copy: it adopts what it is handed, for the decoder that built it.
      */
 
     List<XMSSNode> getLiveAuthenticationPath()
