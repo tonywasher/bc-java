@@ -384,12 +384,12 @@ public final class XMSSEngine
         privateKey.getBDSState().validateIndex(params, privateKey.getIndex());
 
         //
-        // the map's own monitor, held for the whole descent below and the roll that follows it. The
-        // key is locked already, but a caller copying the state does not lock the key - it calls
-        // getBDSState(), which hands out the live map, and copies what it is given. The layer
-        // states below are installed into that same map with put(), so without this the copy walked
-        // a TreeMap the signer was restructuring. Lock order is always key then map; nothing takes
-        // them the other way round, a state map holding no reference to a key.
+        // the map's own monitor, held for the whole descent below and the roll that follows it.
+        // This is the writer BDSStateMap's own javadoc is about: the layer states built below are
+        // installed into the live map with put(), and a caller copying that map does not hold the
+        // key's monitor, having reached the map through getBDSState(). Lock order is always key
+        // then map; nothing takes them the other way round, a state map holding no reference to a
+        // key.
         //
         BDSStateMap bdsState = privateKey.getBDSState();
 

@@ -14,6 +14,23 @@ import org.bouncycastle.crypto.params.XMSSParameters;
 import org.bouncycastle.util.Integers;
 import org.bouncycastle.util.Pack;
 
+/**
+ * The per-layer BDS traversal states of one XMSS^MT key, keyed by layer.
+ * <p>
+ * Every read and every write of the map below is taken on this object's own monitor, and one fact
+ * is behind all of them: {@code XMSSMTPrivateKeyParameters.getBDSState()} hands this object out
+ * live, and a signature descends the layers installing the states it builds lazily into the map it
+ * is signing with. An insertion rebalances the {@code TreeMap} underneath, so anything walking or
+ * looking up outside the monitor reads a tree part way through being restructured - a
+ * {@code ConcurrentModificationException} at best, and at worst a lookup that answers with a null
+ * or with another layer's state. Holding the monitor for the whole of an operation, rather than
+ * once per lookup, is also what makes an answer coherent rather than merely intact: the signer
+ * holds this same monitor for its whole descent, so what an operation here sees is every layer
+ * from before that signature or every layer from after it, never a mixture.
+ * </p><p>
+ * What each method does with that is on the method. None of them repeats this.
+ * </p>
+ */
 public class BDSStateMap
     implements Serializable
 {
@@ -29,14 +46,8 @@ public class BDSStateMap
     }
 
     /**
-     * Copy the states of another map. On that map's own monitor, which is what makes this safe to
-     * run against a map a key is signing with: {@code XMSSMTPrivateKeyParameters.getBDSState()}
-     * hands the live map out, and the signer installs subtree states into it as it descends the
-     * layers, so walking it unlocked raced a TreeMap being restructured - a
-     * ConcurrentModificationException at best, a torn read of the tree itself at worst. Holding
-     * the monitor for the whole walk also makes the copy coherent rather than merely intact: the
-     * signer takes the same monitor for its whole descent, so what comes out is every layer from
-     * before that signature or every layer from after it, never a mixture.
+     * Copy the states of another map, on that map's own monitor for the whole walk - which is what
+     * makes this safe to run against a map a key is signing with, for the reason on the class.
      */
     public BDSStateMap(BDSStateMap stateMap, long maxIndex)
     {
@@ -192,13 +203,11 @@ public class BDSStateMap
      */
     public void validateRoot(XMSSMTParameters params, byte[] expectedRoot)
     {
-        // on this map's own monitor, as every other read of bdsState here is. A signature descends
-        // the layers putting the ones built lazily into this map, and an insertion rebalances the
-        // TreeMap under it, so a lookup taken outside the monitor walks a tree mid-restructure:
-        // what it hands back is the top layer's state, or a null, or another layer's state, and
-        // this is the check that decides whether a key is built around the map at all. The
-        // comparison is kept inside as validate(XMSSMTParameters) keeps its own, so the state
-        // compared is the state found.
+        // on this map's own monitor, as every other read of bdsState here is: this is the check
+        // that decides whether a key is built around the map at all, so a lookup answering with a
+        // null or with another layer's state is what would decide it. The comparison is kept
+        // inside, as validate(XMSSMTParameters) keeps its own, so the state compared is the state
+        // found.
         synchronized (this)
         {
             BDS top = bdsState.get(Integers.valueOf(params.getLayers() - 1));
@@ -248,14 +257,13 @@ public class BDSStateMap
     public void validateIndex(XMSSMTParameters params, long globalIndex)
     {
         // On this map's own monitor, for the whole walk, as validate(XMSSMTParameters) and
-        // getStateMap() beside it are. Taking it once per layer instead - which is what a bare
-        // get(layer) does - is a lock held across each read and released between them, so a
-        // signature landing in the middle would leave the walk comparing some layers from before
-        // it against others from after it, and what it reports of a state map in that shape is a
-        // state map no instant produced. Every caller in this tree arrives already holding the
-        // enclosing key's monitor, which the signer holds for a whole descent, so none of them can
-        // reach it; that is a fact about today's callers rather than about this method, which is
-        // public and hands its answer to whoever asks.
+        // getStateMap() beside it are - taking it once per layer instead, which is what a bare
+        // get(layer) does, would let a signature land in the middle and leave this comparing some
+        // layers from before it against others from after it, reporting on a state map no instant
+        // produced. Every caller in this tree arrives already holding the enclosing key's monitor,
+        // which the signer holds for a whole descent, so none of them can reach that; it is a fact
+        // about today's callers rather than about this method, which is public and hands its answer
+        // to whoever asks.
         synchronized (this)
         {
             int xmssHeight = params.getXMSSParameters().getHeight();
