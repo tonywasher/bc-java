@@ -17,6 +17,7 @@ import org.bouncycastle.crypto.params.XMSSParameters;
 import org.bouncycastle.crypto.params.XMSSPrivateKeyParameters;
 import org.bouncycastle.crypto.signers.XMSSMTSigner;
 import org.bouncycastle.crypto.signers.XMSSSigner;
+import org.bouncycastle.util.Pack;
 
 /**
  * A signer's private key field is not the monitor to lock on, because the signer itself replaces
@@ -73,7 +74,9 @@ public class SignerConcurrencyTests
                     try
                     {
                         go.await();
-                        signed[0] = indexOf(signer.generateSignature(), 4);
+                        // a signature and a key encoding both open with the index, 4 bytes
+                        // big-endian for XMSS (RFC 8391 sec. 4.1.8)
+                        signed[0] = Pack.bigEndianToLong_Low(signer.generateSignature(), 0, 4);
                     }
                     catch (Exception e)
                     {
@@ -97,7 +100,7 @@ public class SignerConcurrencyTests
                         {
                             // as a caller persisting it does. The encode takes the key's own
                             // monitor, so it lands either side of a signature but never inside one
-                            stored[0] = indexOf(key.getEncoded(), 4);
+                            stored[0] = Pack.bigEndianToLong_Low(key.getEncoded(), 0, 4);
                         }
                     }
                     catch (Exception e)
@@ -146,7 +149,9 @@ public class SignerConcurrencyTests
                     try
                     {
                         go.await();
-                        signed[0] = indexOf(signer.generateSignature(), indexSize);
+                        // the same index, in the ceil(h / 8) bytes XMSS^MT gives it
+                        // (RFC 8391 sec. 4.2.5)
+                        signed[0] = Pack.bigEndianToLong_Low(signer.generateSignature(), 0, indexSize);
                     }
                     catch (Exception e)
                     {
@@ -167,7 +172,7 @@ public class SignerConcurrencyTests
 
                         if (key != null)
                         {
-                            stored[0] = indexOf(key.getEncoded(), indexSize);
+                            stored[0] = Pack.bigEndianToLong_Low(key.getEncoded(), 0, indexSize);
                         }
                     }
                     catch (Exception e)
@@ -371,21 +376,5 @@ public class SignerConcurrencyTests
         go.countDown();
         signing.join();
         collecting.join();
-    }
-
-    /**
-     * The index both encodings open with, big-endian in the width the parameter set fixes: four
-     * bytes for XMSS, ceil(h / 8) for XMSS^MT.
-     */
-    private static long indexOf(byte[] encoding, int indexSize)
-    {
-        long index = 0;
-
-        for (int i = 0; i != indexSize; i++)
-        {
-            index = (index << 8) | (encoding[i] & 0xffL);
-        }
-
-        return index;
     }
 }
