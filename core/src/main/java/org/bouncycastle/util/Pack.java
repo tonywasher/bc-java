@@ -164,10 +164,11 @@ public abstract class Pack
      * so a <code>len</code> of 0 reads one byte anyway and returns it rather than returning zero,
      * and a <code>len</code> above 8 goes on shifting and so yields the last eight bytes read
      * rather than the first. The callers here are the XMSS ones reading back RFC 8391's
-     * toByte(x, y) - the index field of an XMSS^MT signature and of an XMSS^MT private key, and
-     * the two index reads in {@code XmssKeyUtil} - each of which passes either the constant 4 or
-     * ceil(h/8) for a height its parameter class holds to 2..62, so all of them are inside the
-     * bound already.
+     * toByte(x, y): the index field of a stored private key, in {@code XMSSPrivateKeyCodec}, which
+     * is the one codec both families' keys are decoded through, and the index field of an XMSS^MT
+     * signature in {@code XMSSMTSignature}. Each passes the constant 4 or ceil(h/8) for a height
+     * its parameter class holds to 2..62, so both are inside the bound already, as are the reads
+     * the package's own tests make with the same two lengths.
      */
     public static long bigEndianToLong_Low(byte[] bs, int off, int len)
     {
@@ -266,10 +267,14 @@ public abstract class Pack
      * {@link #bigEndianToLong_Low(byte[], int, int)}, and it carries the same unenforced 1..8
      * bound for the same reason. It is the low-end counterpart of the _High pair the Ascon v1.2
      * classes use; its callers here are the XMSS ones building RFC 8391's toByte(x, y), which pads
-     * left of the eight bytes rather than absorbing into the top of a word, so it wants the low end
-     * - {@code XMSSUtil.toBytesBigEndian}, whose size is a caller's argument and so takes a min() to
-     * stay inside the bound, and the index fields of {@code XMSSMTPrivateKeyParameters} and
-     * {@code XMSSMTSignature}, whose sizes are inside it already.
+     * left of the eight bytes rather than absorbing into the top of a word, so it wants the low
+     * end. Two of the five pass a length that is not a constant, and both are inside the bound
+     * because they say so: {@code XMSSUtil.toBytesBigEndian}, whose size is its caller's argument,
+     * and {@code XMSSEngine}'s H_msg key, whose length is the security parameter, each taking a
+     * min() with 8. The other three are inside it by construction - the index field of a stored
+     * private key in {@code XMSSPrivateKeyCodec} and of an XMSS^MT signature in
+     * {@code XMSSMTSignature}, both 4 or ceil(h/8), and {@code WOTSPlus}'s PRF index at the
+     * constant 8.
      */
     public static void longToBigEndian_Low(long n, byte[] bs, int off, int len)
     {
