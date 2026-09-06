@@ -147,20 +147,25 @@ public class XMSSSigner
      * initialised for verification, or one whose key has already been handed back by
      * {@link #getUpdatedPrivateKey()}, holds no key and so reports zero - reading the absent key
      * would otherwise raise a NullPointerException.
+     * <p>
+     * No monitor is taken, the way the legacy signer takes none and the two key parameter classes
+     * LMS was promoted as leave their own getUsagesRemaining() unsynchronized. What this returns
+     * is a count and not a reservation: it is out of date the moment any monitor held over it is
+     * dropped, because the next signature made on that key - by this signer or by another holding
+     * it - moves it. The field read is of a reference and so cannot tear, and the key's own
+     * accessor takes the key's monitor for the traversal state the count is derived from.
+     * </p>
      */
     public long getUsagesRemaining()
     {
-        synchronized (this)
+        XMSSPrivateKeyParameters privKey = privateKey;
+
+        if (privKey == null)
         {
-            XMSSPrivateKeyParameters privKey = privateKey;
-
-            if (privKey == null)
-            {
-                return 0;
-            }
-
-            return privKey.getUsagesRemaining();
+            return 0;
         }
+
+        return privKey.getUsagesRemaining();
     }
 
     /**
