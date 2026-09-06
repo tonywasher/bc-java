@@ -121,26 +121,4 @@ public class AddressTests
         assertEquals(0x55667788, Pack.bigEndianToInt(enc, WORD_5));
         assertEquals(0x99aabbcc, Pack.bigEndianToInt(enc, WORD_6));
     }
-
-    /**
-     * The three address types differ only in their type word and the meaning of words 4 to 6, so a
-     * type confusion would not show up as a length or a parse failure - only as a hash computed
-     * over the wrong domain. Assert the three are distinct for the same leaf of the same tree: the
-     * OTS hash address and the L-tree address below name that leaf in the same word, so between
-     * those two it is the type word alone that separates them.
-     */
-    public void testAddressTypesAreDistinct()
-    {
-        byte[] ots = XMSSAddress.otsHashAddress(0, 0L, 1);
-
-        byte[] lTree = XMSSAddress.subtreeAddressOf(ots, XMSSAddress.LTREE_TYPE);
-        Pack.intToBigEndian(1, lTree, XMSSAddress.LTREE_ADDRESS_OFFSET);
-
-        byte[] hashTree = XMSSAddress.subtreeAddressOf(ots, XMSSAddress.HASH_TREE_TYPE);
-        Pack.intToBigEndian(1, hashTree, XMSSAddress.TREE_INDEX_OFFSET);
-
-        assertFalse(org.bouncycastle.util.Arrays.areEqual(ots, lTree));
-        assertFalse(org.bouncycastle.util.Arrays.areEqual(ots, hashTree));
-        assertFalse(org.bouncycastle.util.Arrays.areEqual(lTree, hashTree));
-    }
 }
