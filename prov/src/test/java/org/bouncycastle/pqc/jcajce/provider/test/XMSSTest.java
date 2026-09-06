@@ -1004,6 +1004,47 @@ public class XMSSTest
             kp.getPrivate(), collected);
     }
 
+    /**
+     * Collecting the key without having signed leaves this object able to sign, and saying so.
+     * The signer hands back the key advanced past the leaf it is holding and keeps a one-usage
+     * shard of that leaf, so sign() still works afterwards - what isSigningCapable() used to
+     * answer from was the SPI's own treeDigest field, which getUpdatedPrivateKey() cleared on
+     * every call whether a signature had been made or not, so the object reported itself unable
+     * to do the thing it then did.
+     */
+    public void testCollectingWithoutSigningLeavesTheObjectAbleToSign()
+        throws Exception
+    {
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("XMSS", "BCPQC");
+
+        kpg.initialize(new XMSSParameterSpec(4, XMSSParameterSpec.SHA256), new SecureRandom());
+
+        KeyPair kp = kpg.generateKeyPair();
+
+        StateAwareSignature sig = (StateAwareSignature)Signature.getInstance("SHA256withXMSS", "BCPQC");
+
+        sig.initSign(kp.getPrivate());
+
+        PrivateKey collected = sig.getUpdatedPrivateKey();
+
+        assertNotNull(collected);
+        assertTrue("the object kept a usable key and reported that it had not",
+            sig.isSigningCapable());
+
+        sig.update(msg, 0, msg.length);
+
+        byte[] s = sig.sign();
+
+        assertFalse("the shard is spent and the object says it is not", sig.isSigningCapable());
+
+        Signature verifier = Signature.getInstance("SHA256withXMSS", "BCPQC");
+
+        verifier.initVerify(kp.getPublic());
+        verifier.update(msg, 0, msg.length);
+
+        assertTrue("the retained shard did not produce a verifiable signature", verifier.verify(s));
+    }
+
     public void testKeyRebuild()
         throws Exception
     {

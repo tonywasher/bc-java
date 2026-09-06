@@ -222,22 +222,27 @@ public class XMSSMTSignatureSpi
 
     public boolean isSigningCapable()
     {
-        return signing && treeDigest != null && signer.getUsagesRemaining() != 0;
+        return signing && signer.getUsagesRemaining() != 0;
     }
 
 
     public PrivateKey getUpdatedPrivateKey()
     {
-        if (treeDigest == null)
+        // the signer is asked rather than a field of this object being read: what it hands back is
+        // null exactly when there is nothing left to hand back - never initialised for signing, or
+        // a signature made and its key already collected - and it is the same answer isSigningCapable()
+        // is built on, so the two cannot disagree. Clearing treeDigest here made a collection that
+        // followed no signature look like an exhausted object, when what the signer keeps in that
+        // case is a one-usage shard of the leaf the collected key has been advanced past.
+        XMSSMTPrivateKeyParameters updated = (treeDigest == null)
+            ? null : (XMSSMTPrivateKeyParameters)signer.getUpdatedPrivateKey();
+
+        if (updated == null)
         {
             throw new IllegalStateException("signature object not in a signing state");
         }
-        PrivateKey rKey = new BCXMSSMTPrivateKey(treeDigest, (XMSSMTPrivateKeyParameters)signer.getUpdatedPrivateKey(), attributes);
 
-        treeDigest = null;
-        attributes = null;
-
-        return rKey;
+        return new BCXMSSMTPrivateKey(treeDigest, updated, attributes);
     }
 
     static public class generic
