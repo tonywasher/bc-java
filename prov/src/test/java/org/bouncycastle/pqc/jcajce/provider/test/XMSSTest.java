@@ -964,6 +964,46 @@ public class XMSSTest
         assertTrue(xmssSig.verify(s));
     }
 
+    /**
+     * A verification init does not strand the advanced key inside the signature object. The signer
+     * this wraps keeps the private key across an init for verification on purpose - "sign then
+     * verify then collect the advanced state is a legitimate sequence" is XMSSSigner.init's own
+     * comment on why it clears the public key there and not the private one - and
+     * getUpdatedPrivateKey() is how a caller of the JCA API collects it. isSigningCapable() still
+     * answers false in between, because this object is initialised for verification.
+     */
+    public void testKeyCanBeCollectedAfterAVerificationInit()
+        throws Exception
+    {
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("XMSS", "BCPQC");
+
+        kpg.initialize(new XMSSParameterSpec(4, XMSSParameterSpec.SHA256), new SecureRandom());
+
+        KeyPair kp = kpg.generateKeyPair();
+
+        StateAwareSignature sig = (StateAwareSignature)Signature.getInstance("SHA256withXMSS", "BCPQC");
+
+        sig.initSign(kp.getPrivate());
+
+        sig.update(msg, 0, msg.length);
+
+        byte[] s = sig.sign();
+
+        sig.initVerify(kp.getPublic());
+
+        sig.update(msg, 0, msg.length);
+
+        assertTrue(sig.verify(s));
+        assertFalse("initialised for verification and reporting itself able to sign",
+            sig.isSigningCapable());
+
+        PrivateKey collected = sig.getUpdatedPrivateKey();
+
+        assertNotNull("the advanced key was not handed back after a verification init", collected);
+        assertEquals("the key handed back is not the one the signature advanced",
+            kp.getPrivate(), collected);
+    }
+
     public void testKeyRebuild()
         throws Exception
     {

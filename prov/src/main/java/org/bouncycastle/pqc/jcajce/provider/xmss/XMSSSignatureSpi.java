@@ -39,6 +39,11 @@ public class XMSSSignatureSpi
     // hands back is the same key rather than one stripped of them
     private ASN1Set attributes;
     private ASN1ObjectIdentifier[] treeDigests;
+    // whether the last init was for signing. treeDigest says this object has been given a private
+    // key at some point, which a verification init does not take back: the signer keeps the key
+    // across one so that sign, verify, then collect the advanced state is a sequence a caller can
+    // drive, and this is what stops isSigningCapable() answering true while it is verifying.
+    private boolean signing;
 
     protected XMSSSignatureSpi(String sigName, Digest digest, XMSSSigner signer)
     {
@@ -63,7 +68,7 @@ public class XMSSSignatureSpi
 
             CipherParameters param = ((BCXMSSPublicKey)publicKey).getKeyParams();
 
-            treeDigest = null;
+            signing = false;
             digest.reset();
             signer.init(false, param);
         }
@@ -128,6 +133,7 @@ public class XMSSSignatureSpi
                 param = new ParametersWithRandom(param, random);
             }
 
+            signing = true;
             digest.reset();
             signer.init(true, param);
         }
@@ -216,7 +222,7 @@ public class XMSSSignatureSpi
 
     public boolean isSigningCapable()
     {
-        return treeDigest != null && signer.getUsagesRemaining() != 0;
+        return signing && treeDigest != null && signer.getUsagesRemaining() != 0;
     }
 
     public PrivateKey getUpdatedPrivateKey()
