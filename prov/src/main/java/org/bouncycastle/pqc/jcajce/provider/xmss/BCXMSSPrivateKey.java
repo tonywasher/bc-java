@@ -141,6 +141,18 @@ public class BCXMSSPrivateKey
      * The tree digest this class carries alongside the key parameters is not compared, because
      * comparing it decides nothing: it is {@code keyParams.getParameters().getTreeDigestOID()} at
      * every route a key here is constructed by, and that is the OID the key parameters compare.
+     * </p><p>
+     * The PKCS#8 attributes are not compared either, and that one does change what {@code equals}
+     * says about two keys {@link #getEncoded()} writes differently: attributes travel into the
+     * encoding, so one key loaded from a PKCS#8 carrying a friendlyName and one built from the
+     * same secret without it are equal here and encode to different bytes. That is the answer this
+     * class wants. What a stateful key is asked here is whether this is the same key at the same
+     * position - the question a one-time key signing twice is the failure of, RFC 8391 sec. 1.1 -
+     * and a label a caller attached on the way through a keystore moves neither the secret nor the
+     * index. {@code BCLMSPrivateKey}, which carries attributes the same way and is where this
+     * comparison came from, leaves them out for the same reason, as does {@code BCMLDSAPrivateKey}
+     * over its own parameters' encoding. A caller that does need the encodings to agree should
+     * compare the encodings.
      * </p>
      */
     public boolean equals(Object o)
