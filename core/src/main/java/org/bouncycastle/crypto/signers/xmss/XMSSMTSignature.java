@@ -72,7 +72,7 @@ final class XMSSMTSignature
             while (position < signature.length)
             {
                 XMSSReducedSignature xmssSig = new XMSSReducedSignature.Builder(params.getXMSSParameters())
-                    .withReducedSignature(Arrays.copyOfRange(signature, position, position + reducedSignatureSizeSingle))
+                    .withReducedSignature(signature, position)
                     .build();
                 reducedSignatures.add(xmssSig);
                 position += reducedSignatureSizeSingle;

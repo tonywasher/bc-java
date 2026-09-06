@@ -38,11 +38,11 @@ class XMSSReducedSignature
         if (reducedSignature != null)
         {
             /* import */
-            if (reducedSignature.length != sizeOf(params))
+            int position = builder.reducedSignatureOff;
+            if (position < 0 || sizeOf(params) > reducedSignature.length - position)
             {
                 throw new IllegalArgumentException("signature has wrong size");
             }
-            int position = 0;
             byte[][] wotsPlusSignature = new byte[len][];
             for (int i = 0; i < wotsPlusSignature.length; i++)
             {
@@ -95,6 +95,7 @@ class XMSSReducedSignature
         private byte[][] wotsPlusSignature = null;
         private List<XMSSNode> authPath = null;
         private byte[] reducedSignature = null;
+        private int reducedSignatureOff = 0;
 
         public Builder(XMSSParameters params)
         {
@@ -113,9 +114,29 @@ class XMSSReducedSignature
             return this;
         }
 
-        public Builder withReducedSignature(byte[] val)
+        /**
+         * Read signature || authentication path out of {@code in} starting at {@code position},
+         * the read side of {@link #encodeTo}.
+         * <p>
+         * At an offset, rather than out of an array of its own, because that is the shape both
+         * callers are in: an XMSS signature encoding puts index || random in front of one of
+         * these and an XMSS^MT encoding lays down one per layer, so each of them had been cutting
+         * the region out with copyOfRange and handing it over to be cloned again - two copies of
+         * the whole payload, len WOTS+ blocks and h authentication path nodes, before the
+         * constructor copied it a third time into the blocks and nodes it keeps. Only that third
+         * copy is a copy of anything the built object holds.
+         * </p><p>
+         * Nothing of {@code in} is retained, so the caller keeps it; but it is read at
+         * {@link #build()} rather than here, so a builder must not be held across a write to it.
+         * </p>
+         *
+         * @param in       the encoding to read from.
+         * @param position where in it this reduced signature starts.
+         */
+        public Builder withReducedSignature(byte[] in, int position)
         {
-            reducedSignature = Arrays.clone(val);
+            reducedSignature = in;
+            reducedSignatureOff = position;
             return this;
         }
 

@@ -86,7 +86,7 @@ final class XMSSSignature
             /* extract random */
             random = Arrays.copyOfRange(val, position, position + n);
             position += n;
-            withReducedSignature(Arrays.copyOfRange(val, position, position + XMSSReducedSignature.sizeOf(params)));
+            withReducedSignature(val, position);
             return this;
         }
 
