@@ -4,11 +4,15 @@ import java.security.SecureRandom;
 
 import junit.framework.TestCase;
 import org.bouncycastle.crypto.digests.SHA256Digest;
+import org.bouncycastle.crypto.generators.XMSSKeyPairGenerator;
 import org.bouncycastle.crypto.generators.XMSSMTKeyPairGenerator;
+import org.bouncycastle.crypto.params.XMSSKeyGenerationParameters;
 import org.bouncycastle.crypto.params.XMSSMTKeyGenerationParameters;
 import org.bouncycastle.crypto.params.XMSSMTParameters;
 import org.bouncycastle.crypto.params.XMSSMTPrivateKeyParameters;
 import org.bouncycastle.crypto.params.XMSSMTPublicKeyParameters;
+import org.bouncycastle.crypto.params.XMSSParameters;
+import org.bouncycastle.crypto.params.XMSSPrivateKeyParameters;
 import org.bouncycastle.crypto.signers.XMSSMTSigner;
 
 /**
@@ -166,6 +170,162 @@ public class PositionRecordCrossCheckTests
         }
 
         assertEquals("a refused signature must not move the key", index, privKey.getIndex());
+    }
+
+    /**
+     * The index is not the only thing a stateful key records twice. It also carries the tree root in
+     * two places - its own root field, and the root node inside the BDS traversal state - and
+     * validateRoot() is what compares them (github #2414). Nothing exercised it: it is reached from
+     * four call sites in the two key classes, and no test anywhere named the message it raises, so
+     * the whole of this half of the cross-check could have been deleted with every suite still green.
+     * <p>
+     * A root that disagrees is a key built around a traversal state describing a different tree.
+     * Signatures made from it carry authentication paths to that other root, so they do not verify
+     * under the public key the caller believes it holds - a signing key that quietly stopped working,
+     * with each attempt spending a one-time key it can never get back.
+     * </p>
+     */
+    public void testARootThatDisagreesWithTheStateIsRefused()
+        throws Exception
+    {
+        XMSSParameters params = new XMSSParameters(HEIGHT, new SHA256Digest());
+        XMSSKeyPairGenerator kpg = new XMSSKeyPairGenerator();
+
+        kpg.init(new XMSSKeyGenerationParameters(params, new SecureRandom()));
+
+        XMSSPrivateKeyParameters privKey =
+            (XMSSPrivateKeyParameters)kpg.generateKeyPair().getPrivate();
+
+        // through the builder, where a restored state meets a root supplied beside it
+        byte[] wrongRoot = org.bouncycastle.util.Arrays.clone(privKey.getRoot());
+
+        wrongRoot[0] ^= 0x01;
+
+        try
+        {
+            new XMSSPrivateKeyParameters.Builder(params)
+                .withSecretKeySeed(privKey.getSecretKeySeed()).withSecretKeyPRF(privKey.getSecretKeyPRF())
+                .withPublicSeed(privKey.getPublicSeed()).withRoot(wrongRoot)
+                .withBDSState(privKey.getBDSState()).build();
+            fail("a key whose root disagrees with its traversal state was built");
+        }
+        catch (IllegalArgumentException e)
+        {
+            assertEquals("BDS state root does not match the private key root", e.getMessage());
+        }
+
+        // and through the encoded-key path, where the two arrive in one byte string: every byte of
+        // the root field, so the comparison cannot be of a prefix
+        byte[] encoded = privKey.getEncoded();
+        int n = params.getTreeDigestSize();
+        int rootOffset = 4 + 3 * n;
+
+        for (int b = 0; b != n; b++)
+        {
+            byte[] corrupt = org.bouncycastle.util.Arrays.clone(encoded);
+
+            corrupt[rootOffset + b] ^= 0x01;
+
+            try
+            {
+                new XMSSPrivateKeyParameters.Builder(params).withPrivateKey(corrupt).build();
+                fail("corrupt root byte " + b + " accepted");
+            }
+            catch (IllegalArgumentException e)
+            {
+                assertEquals("byte " + b, "BDS state root does not match the private key root",
+                    e.getMessage());
+            }
+        }
+
+        // the harness: the encoding these were made from is accepted and carries the same root
+        XMSSPrivateKeyParameters decoded =
+            new XMSSPrivateKeyParameters.Builder(params).withPrivateKey(encoded).build();
+
+        assertTrue(org.bouncycastle.util.Arrays.areEqual(privKey.getRoot(), decoded.getRoot()));
+    }
+
+    /**
+     * The XMSS^MT half, which reaches the same comparison through the state map. Only the top layer
+     * is compared - the top tree's root is the public root, and the layers below describe subtrees
+     * whose roots are not it - so this is also where a check applied to the wrong layer would show.
+     */
+    public void testATopLayerRootThatDisagreesIsRefused()
+        throws Exception
+    {
+        XMSSMTParameters params = new XMSSMTParameters(HEIGHT, LAYERS, new SHA256Digest());
+        XMSSMTKeyPairGenerator kpg = new XMSSMTKeyPairGenerator();
+
+        kpg.init(new XMSSMTKeyGenerationParameters(params, new SecureRandom()));
+
+        XMSSMTPrivateKeyParameters privKey =
+            (XMSSMTPrivateKeyParameters)kpg.generateKeyPair().getPrivate();
+
+        assertNotNull("no top layer state to compare against",
+            privKey.getBDSState().get(LAYERS - 1));
+
+        byte[] encoded = privKey.getEncoded();
+        int n = params.getTreeDigestSize();
+        int rootOffset = (params.getHeight() + 7) / 8 + 3 * n;
+
+        for (int b = 0; b != n; b++)
+        {
+            byte[] corrupt = org.bouncycastle.util.Arrays.clone(encoded);
+
+            corrupt[rootOffset + b] ^= 0x01;
+
+            try
+            {
+                new XMSSMTPrivateKeyParameters.Builder(params).withPrivateKey(corrupt).build();
+                fail("corrupt root byte " + b + " accepted");
+            }
+            catch (IllegalArgumentException e)
+            {
+                assertEquals("byte " + b, "BDS state root does not match the private key root",
+                    e.getMessage());
+            }
+        }
+
+        XMSSMTPrivateKeyParameters decoded =
+            new XMSSMTPrivateKeyParameters.Builder(params).withPrivateKey(encoded).build();
+
+        assertTrue(org.bouncycastle.util.Arrays.areEqual(privKey.getRoot(), decoded.getRoot()));
+    }
+
+    /**
+     * The compatibility half, and the reason the check cannot simply require a root to be there. A
+     * state carries no root until it has one - a freshly built key's state is computed from the
+     * seeds rather than restored, and the layers below the top of an XMSS^MT key describe subtrees
+     * whose root is not the public one - so validateRoot() compares only when both sides have a
+     * value. A version that refused the absent case would refuse key generation itself.
+     */
+    public void testAnAbsentRootOnEitherSideIsNotAMismatch()
+        throws Exception
+    {
+        XMSSParameters params = new XMSSParameters(HEIGHT, new SHA256Digest());
+        XMSSKeyPairGenerator kpg = new XMSSKeyPairGenerator();
+
+        kpg.init(new XMSSKeyGenerationParameters(params, new SecureRandom()));
+
+        XMSSPrivateKeyParameters privKey =
+            (XMSSPrivateKeyParameters)kpg.generateKeyPair().getPrivate();
+        BDS state = privKey.getBDSState();
+
+        // a state with a real root, asked about a key that declares none
+        state.validateRoot(null);
+
+        // the key that declares none, which is what a key built without a root carries: zeros
+        // rather than a value, and comparing them would refuse it
+        assertNotNull(new XMSSPrivateKeyParameters.Builder(params)
+            .withSecretKeySeed(privKey.getSecretKeySeed()).withSecretKeyPRF(privKey.getSecretKeyPRF())
+            .withPublicSeed(privKey.getPublicSeed())
+            .withBDSState(state).build());
+
+        // the other side absent: an XMSS^MT layer is built lazily, so a map whose top layer is not
+        // there yet has nothing to compare and must not be refused for it
+        XMSSMTParameters mtParams = new XMSSMTParameters(HEIGHT, LAYERS, new SHA256Digest());
+
+        new BDSStateMap(1L << HEIGHT).validateRoot(mtParams, privKey.getRoot());
     }
 
     /**
