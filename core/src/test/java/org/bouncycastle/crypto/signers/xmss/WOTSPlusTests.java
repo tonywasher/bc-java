@@ -53,7 +53,7 @@ public class WOTSPlusTests
         random.nextBytes(publicSeed);
         random.nextBytes(messageDigest);
 
-        byte[] otsHashAddress = new OTSHashAddress.Builder().withOTSAddress(3).build().toByteArray();
+        byte[] otsHashAddress = new OTSHashAddress(0, 0L, 3).toByteArray();
 
         WOTSPlus wotsPlus = newWOTSPlus();
         wotsPlus.importKeys(secretKeySeed, publicSeed);
@@ -84,7 +84,7 @@ public class WOTSPlusTests
         Arrays.fill(messageDigest, (byte)0x03);
         Arrays.fill(otherDigest, (byte)0x04);
 
-        byte[] otsHashAddress = new OTSHashAddress.Builder().build().toByteArray();
+        byte[] otsHashAddress = new OTSHashAddress(0, 0L, 0).toByteArray();
 
         WOTSPlus wotsPlus = newWOTSPlus();
         wotsPlus.importKeys(secretKeySeed, publicSeed);
@@ -116,7 +116,7 @@ public class WOTSPlusTests
         WOTSPlus wotsPlus = newWOTSPlus();
         wotsPlus.importKeys(secretKeySeed, publicSeed);
 
-        byte[] otsHashAddress = new OTSHashAddress.Builder().withOTSAddress(3).build().toByteArray();
+        byte[] otsHashAddress = new OTSHashAddress(0, 0L, 3).toByteArray();
         WOTSPlusPublicKeyParameters publicKey = wotsPlus.getPublicKey(otsHashAddress);
         byte[][] before = blocksOf(publicKey);
 
@@ -147,7 +147,7 @@ public class WOTSPlusTests
         Arrays.fill(publicSeed, (byte)0x09);
         Arrays.fill(messageDigest, (byte)0x0f);
 
-        byte[] otsHashAddress = new OTSHashAddress.Builder().build().toByteArray();
+        byte[] otsHashAddress = new OTSHashAddress(0, 0L, 0).toByteArray();
 
         WOTSPlus wotsPlus = newWOTSPlus();
         wotsPlus.importKeys(secretKeySeed, publicSeed);
@@ -186,10 +186,8 @@ public class WOTSPlusTests
 
         WOTSPlus wotsPlus = newWOTSPlus();
 
-        byte[] first = wotsPlus.getWOTSPlusSecretKey(secretKeySeed,
-            new OTSHashAddress.Builder().withOTSAddress(0).build().toByteArray());
-        byte[] second = wotsPlus.getWOTSPlusSecretKey(secretKeySeed,
-            new OTSHashAddress.Builder().withOTSAddress(1).build().toByteArray());
+        byte[] first = wotsPlus.getWOTSPlusSecretKey(secretKeySeed, new OTSHashAddress(0, 0L, 0).toByteArray());
+        byte[] second = wotsPlus.getWOTSPlusSecretKey(secretKeySeed, new OTSHashAddress(0, 0L, 1).toByteArray());
 
         assertFalse("two leaves share a WOTS+ secret key", Arrays.areEqual(first, second));
     }

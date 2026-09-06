@@ -39,52 +39,28 @@ final class OTSHashAddress
 
     private final int otsAddress;
 
-    private OTSHashAddress(Builder builder)
-    {
-        super(builder);
-        otsAddress = builder.otsAddress;
-    }
-
     /**
-     * Builds the address a leaf's walk starts from, which is the OTS address word and the tree
-     * the three words above it name.
+     * The address a leaf's walk starts from, which is the OTS address word and the tree the three
+     * words above it name.
      * <p>
-     * The chain address and the hash address are not set here, because nothing sets them here: a
-     * walk steps them through the encoding it already holds, at {@link #CHAIN_ADDRESS_OFFSET} and
-     * {@link #HASH_ADDRESS_OFFSET}, rather than building an address per chain and per step. Both
-     * are zero in what {@link #toByteArray()} produces, which is where a walk starts from and what
-     * {@code WOTSPlus.getWOTSPlusSecretKey} puts them back to before each one-time key. Setters
-     * for the two were kept when the walks stopped using them and were left with no caller outside
-     * this package's own address test, which now writes the words the way the walks do.
+     * The chain address and the hash address are not parameters, because nothing builds an address
+     * to set them: a walk steps them through the encoding it already holds, at
+     * {@link #CHAIN_ADDRESS_OFFSET} and {@link #HASH_ADDRESS_OFFSET}, rather than building an
+     * address per chain and per step. Both are zero in what {@link #toByteArray()} produces, which
+     * is where a walk starts from and what {@code WOTSPlus.getWOTSPlusSecretKey} puts them back to
+     * before each one-time key - as is the key-and-mask word past them, for the reason given on
+     * {@link XMSSAddress#XMSSAddress(int, long, int)}.
      * </p>
+     *
+     * @param layerAddress which layer of an XMSS^MT hypertree the leaf's tree is on; zero for
+     *                     XMSS, and for the bottom layer of an XMSS^MT.
+     * @param treeAddress  which tree of that layer; zero where the layer holds one.
+     * @param otsAddress   which leaf of that tree.
      */
-    public static class Builder
-        extends XMSSAddress.Builder<Builder>
+    OTSHashAddress(int layerAddress, long treeAddress, int otsAddress)
     {
-
-        /* optional */
-        private int otsAddress = 0;
-
-        public Builder()
-        {
-            super(TYPE);
-        }
-
-        public Builder withOTSAddress(int val)
-        {
-            otsAddress = val;
-            return this;
-        }
-
-        public XMSSAddress build()
-        {
-            return new OTSHashAddress(this);
-        }
-
-        public Builder getThis()
-        {
-            return this;
-        }
+        super(layerAddress, treeAddress, TYPE);
+        this.otsAddress = otsAddress;
     }
 
     public byte[] toByteArray()

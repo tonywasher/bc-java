@@ -77,52 +77,28 @@ abstract class XMSSAddress
     private final int layerAddress;
     private final long treeAddress;
     private final int type;
-    private final int keyAndMask;
 
-    public XMSSAddress(Builder builder)
+    /**
+     * The words every address type has in common, which between them are the whole of what is
+     * built here: which tree the address is in, and what the words below that are going to mean.
+     * <p>
+     * There is no key-and-mask parameter and no field for it, because nothing builds an address in
+     * order to set it. That word varies per hash rather than per address, so the two walks that
+     * move it write it into the encoding they are already holding - WOTSPlus.chain twice per chain
+     * step, XMSSNodeUtil.randomizeHash three times per node - at {@link #KEY_AND_MASK_OFFSET}.
+     * What {@link #toByteArray()} produces leaves it zero, which is where both of those start.
+     * </p>
+     *
+     * @param layerAddress which layer of an XMSS^MT hypertree the tree is on; zero for XMSS, and
+     *                     for the bottom layer of an XMSS^MT.
+     * @param treeAddress  which tree of that layer; zero where the layer holds one.
+     * @param type         the type word, saying what the three words below it mean.
+     */
+    XMSSAddress(int layerAddress, long treeAddress, int type)
     {
-        layerAddress = builder.layerAddress;
-        treeAddress = builder.treeAddress;
-        type = builder.type;
-        keyAndMask = builder.keyAndMask;
-    }
-
-    public static abstract class Builder<T extends Builder>
-    {
-
-        /* mandatory */
-        private final int type;
-        /* optional */
-        private int layerAddress = 0;
-        private long treeAddress = 0L;
-        private int keyAndMask = 0;
-
-        public Builder(int type)
-        {
-            this.type = type;
-        }
-
-        public T withLayerAddress(int val)
-        {
-            layerAddress = val;
-            return getThis();
-        }
-
-        public T withTreeAddress(long val)
-        {
-            treeAddress = val;
-            return getThis();
-        }
-
-        public T withKeyAndMask(int val)
-        {
-            keyAndMask = val;
-            return getThis();
-        }
-
-        public abstract XMSSAddress build();
-
-        public abstract T getThis();
+        this.layerAddress = layerAddress;
+        this.treeAddress = treeAddress;
+        this.type = type;
     }
 
     public byte[] toByteArray()
@@ -131,7 +107,6 @@ abstract class XMSSAddress
         Pack.intToBigEndian(layerAddress, byteRepresentation, 0);
         Pack.longToBigEndian(treeAddress, byteRepresentation, 4);
         Pack.intToBigEndian(type, byteRepresentation, TYPE_OFFSET);
-        Pack.intToBigEndian(keyAndMask, byteRepresentation, KEY_AND_MASK_OFFSET);
         return byteRepresentation;
     }
 

@@ -27,27 +27,35 @@ public class AddressTests
      */
     private static byte[] otsHashAddress()
     {
-        byte[] enc = new OTSHashAddress.Builder()
-            .withOTSAddress(0x11223344)
-            .withLayerAddress(7)
-            .withTreeAddress(0x0102030405060708L)
-            .withKeyAndMask(2)
-            .build().toByteArray();
+        byte[] enc = new OTSHashAddress(7, 0x0102030405060708L, 0x11223344).toByteArray();
 
-        // the chain address and the hash address are not builder fields: a walk steps them through
-        // the encoding it holds, WOTSPlus.chain writing both once per chain step, so they are
-        // written here the way the walk writes them. They have to hold something for the two tests
-        // below to say anything - what those turn on is that neither carries past the twelve bytes
-        // subtreeAddressOf copies - and writing them through the offset constants is also what
-        // asserts the constants name words 5 and 6, which is the layout production depends on.
+        // the chain address, the hash address and the key-and-mask are not constructor parameters:
+        // each is stepped through the encoding a walk already holds rather than set on an address
+        // - the chain address once per chain by the loops over them, the hash address and the
+        // key-and-mask within WOTSPlus.chain - so they are written here the way those write them.
+        // They have to hold something for the two tests below to say anything, since what those
+        // turn on is that none of them carries past the twelve bytes subtreeAddressOf copies; and
+        // writing them through the offset constants is also what asserts the constants name words
+        // 5 and 6 and the last word of all, which is the layout production depends on.
         Pack.intToBigEndian(0x55667788, enc, OTSHashAddress.CHAIN_ADDRESS_OFFSET);
         Pack.intToBigEndian(0x99aabbcc, enc, OTSHashAddress.HASH_ADDRESS_OFFSET);
+        Pack.intToBigEndian(2, enc, XMSSAddress.KEY_AND_MASK_OFFSET);
 
         return enc;
     }
 
     public void testOTSHashAddressLayout()
     {
+        // the three words the constructor does not take are zero in what it produces, which is
+        // what OTSHashAddress says of them and what the walks that write them start from. Nothing
+        // writes them to say so - toByteArray() lays down the four words it holds and leaves the
+        // rest of a fresh array alone - so assert it against an address nothing has stepped.
+        byte[] fresh = new OTSHashAddress(7, 0x0102030405060708L, 0x11223344).toByteArray();
+
+        assertEquals(0, Pack.bigEndianToInt(fresh, WORD_5));
+        assertEquals(0, Pack.bigEndianToInt(fresh, WORD_6));
+        assertEquals(0, Pack.bigEndianToInt(fresh, KEY_AND_MASK));
+
         byte[] enc = otsHashAddress();
 
         assertEquals(32, enc.length);
@@ -123,7 +131,7 @@ public class AddressTests
      */
     public void testAddressTypesAreDistinct()
     {
-        byte[] ots = new OTSHashAddress.Builder().withOTSAddress(1).build().toByteArray();
+        byte[] ots = new OTSHashAddress(0, 0L, 1).toByteArray();
 
         byte[] lTree = XMSSAddress.subtreeAddressOf(ots, XMSSAddress.LTREE_TYPE);
         Pack.intToBigEndian(1, lTree, XMSSAddress.LTREE_ADDRESS_OFFSET);
