@@ -52,7 +52,14 @@ public class BCXMSSMTPublicKey
         {
             BCXMSSMTPublicKey otherKey = (BCXMSSMTPublicKey)o;
 
-            return treeDigest.equals(otherKey.treeDigest) && Arrays.areEqual(keyParams.toByteArray(), otherKey.keyParams.toByteArray());
+            try
+            {
+                return treeDigest.equals(otherKey.treeDigest) && Arrays.areEqual(keyParams.getEncoded(), otherKey.keyParams.getEncoded());
+            }
+            catch (IOException e)
+            {
+                return false;
+            }
         }
 
         return false;
@@ -60,7 +67,15 @@ public class BCXMSSMTPublicKey
 
     public int hashCode()
     {
-        return treeDigest.hashCode() + 37 * Arrays.hashCode(keyParams.toByteArray());
+        try
+        {
+            return treeDigest.hashCode() + 37 * Arrays.hashCode(keyParams.getEncoded());
+        }
+        catch (IOException e)
+        {
+            // should never happen, but...
+            return treeDigest.hashCode();
+        }
     }
 
     /**
