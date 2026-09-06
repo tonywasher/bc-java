@@ -642,8 +642,12 @@ public class XMSSMTTest
 
         assertTrue(sig.verify(s));
 
-        // the SPI keeps the random it was given, so a later one-argument init still wraps: check
-        // the second, sticky path too
+        // and the one-argument form on the same object afterwards, which is now the other branch
+        // rather than the same one: the SPI used to hold the random in a field, so a second init
+        // without one wrapped the key again with what the first had left behind, and this was that
+        // sticky path. The random is a method argument now and the second init passes null, so what
+        // this asserts is that the two forms are interchangeable on one Signature object - the
+        // unwrapped key after the wrapped one, on a signer that has already signed and verified.
         sig.initSign(kp.getPrivate());
 
         sig.update(msg, 0, msg.length);
