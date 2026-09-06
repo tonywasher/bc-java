@@ -15,6 +15,21 @@ import org.bouncycastle.pqc.jcajce.provider.xmss.XMSSMTKeyFactorySpi;
  * PKCS#8 key naming one could be parsed - but the KeyFactory, KeyPairGenerator and Signature
  * services were only in BCPQC. The service names and OID aliases registered here are the same as
  * the BCPQC ones, and both providers drive the same SPI classes.
+ * <p>
+ * That makes this class a near copy of {@code org.bouncycastle.pqc.jcajce.provider.XMSS}, and the
+ * copy is deliberate: the two providers keep independent service tables, and the pair
+ * {@code jcajce.provider.asymmetric.LMS} / {@code pqc.jcajce.provider.LMS} - the sibling stateful
+ * scheme, promoted the same way - is the same file twice under two package names. A shared table
+ * between the two would be a shape this provider does not otherwise have.
+ * </p><p>
+ * The {@code registerOid} calls at the end also install the six key info converters that
+ * {@code BouncyCastleProvider.loadPQCKeys()} installs, which runs after this and so is the one
+ * whose entry survives - the same class either way. That overlap is not an XMSS accident either:
+ * {@code jcajce.provider.asymmetric.NTRU} registers the four NTRU OIDs that {@code loadPQCKeys}
+ * also registers. What {@code registerOid} adds over it is the {@code Alg.Alias.KeyFactory} and
+ * {@code Alg.Alias.KeyPairGenerator} entries for each OID, which {@code loadPQCKeys} does not
+ * write, so neither of the two is redundant in the other.
+ * </p>
  */
 public class XMSS
 {
