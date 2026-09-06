@@ -19,6 +19,7 @@ import org.bouncycastle.crypto.params.XMSSParameters;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Exceptions;
 import org.bouncycastle.util.Integers;
+import org.bouncycastle.util.Pack;
 
 /**
  * Codec for the implementation-specific BDS traversal state stored with an XMSS or XMSSMT private key.
@@ -550,11 +551,7 @@ final class BDSStateCodec
 
     private static boolean hasMagic(byte[] encoding, int magic)
     {
-        return encoding != null && encoding.length >= 4
-            && (encoding[0] & 0xff) == (magic >>> 24)
-            && (encoding[1] & 0xff) == ((magic >>> 16) & 0xff)
-            && (encoding[2] & 0xff) == ((magic >>> 8) & 0xff)
-            && (encoding[3] & 0xff) == (magic & 0xff);
+        return encoding != null && encoding.length >= 4 && Pack.bigEndianToInt(encoding, 0) == magic;
     }
 
     private static IOException invalidState(IllegalStateException cause)
