@@ -1,5 +1,6 @@
 package org.bouncycastle.crypto.params;
 
+import org.bouncycastle.crypto.signers.xmss.XMSSEngine;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Pack;
 
@@ -13,6 +14,12 @@ import org.bouncycastle.util.Pack;
  * lockstep whenever it changed; this is the one copy. It stays package private: the classes it
  * serves are the public surface, and the name starts XMSS so that the {@code crypto/params/XMSS*}
  * excludes the jdk1.4 and jdk1.3 Ant builds already carry keep covering it.
+ * </p><p>
+ * {@link #resolve} is the same argument one level up. A key is built either from an encoding or
+ * from the fields themselves, and which of the two it was decides where its parameter set
+ * identifier comes from and whether the root and the seed are checked against n or decoded at it -
+ * so a rule about how a public key resolves its three fields is a rule about the encoding, and
+ * belonged beside it rather than in two constructors that had it word for word.
  * </p>
  */
 class XMSSPublicKeyCodec
@@ -59,6 +66,33 @@ class XMSSPublicKeyCodec
         }
 
         throw new IllegalArgumentException("public key has wrong size");
+    }
+
+    /**
+     * The three fields of a public key, from whichever of the two ways its builder was given them.
+     *
+     * @param publicKey       an encoding to take apart, or null when the fields were set directly.
+     * @param n               the security parameter of the key's parameter set, in bytes.
+     * @param parameterSetOID the identifier the key's own parameter set carries, which is what a
+     *                        key built from fields records; a decoded key keeps the one its
+     *                        encoding named, including the zero of a key written before the
+     *                        identifier existed.
+     * @param root            the root, or null to be allocated at n.
+     * @param publicSeed      the seed, or null to be allocated at n.
+     */
+    static XMSSPublicKeyCodec resolve(byte[] publicKey, int n, int parameterSetOID, byte[] root,
+        byte[] publicSeed)
+    {
+        if (publicKey != null)
+        {
+            /* import */
+            return decode(publicKey, n);
+        }
+
+        /* set */
+        return new XMSSPublicKeyCodec(parameterSetOID,
+            XMSSEngine.validateOrAllocate(root, n, "root"),
+            XMSSEngine.validateOrAllocate(publicSeed, n, "publicSeed"));
     }
 
     /**

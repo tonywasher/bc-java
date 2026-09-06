@@ -2,7 +2,6 @@ package org.bouncycastle.crypto.params;
 
 import java.io.IOException;
 
-import org.bouncycastle.crypto.signers.xmss.XMSSEngine;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Encodable;
 
@@ -26,24 +25,18 @@ public final class XMSSPublicKeyParameters
     {
         super(false, builder.params.getTreeDigest());
         params = builder.params;
-        int n = params.getTreeDigestSize();
-        byte[] publicKey = builder.publicKey;
-        if (publicKey != null)
-        {
-            /* import */
-            XMSSPublicKeyCodec decoded = XMSSPublicKeyCodec.decode(publicKey, n);
 
-            oid = decoded.getOid();
-            root = decoded.getRoot();
-            publicSeed = decoded.getPublicSeed();
-        }
-        else
-        {
-            /* set */
-            this.oid = params.getParameterSetOID();
-            root = XMSSEngine.validateOrAllocate(builder.root, n, "root");
-            publicSeed = XMSSEngine.validateOrAllocate(builder.publicSeed, n, "publicSeed");
-        }
+        // through the codec, which is where the encoding is: which of the two ways this builder
+        // was given its fields decides where the parameter set identifier comes from and whether
+        // the root and the seed are checked at n or read out at it, and that is the same rule for
+        // both families - it was written out once per family here.
+        XMSSPublicKeyCodec fields = XMSSPublicKeyCodec.resolve(builder.publicKey,
+            params.getTreeDigestSize(), params.getParameterSetOID(), builder.root,
+            builder.publicSeed);
+
+        oid = fields.getOid();
+        root = fields.getRoot();
+        publicSeed = fields.getPublicSeed();
     }
 
     public byte[] getEncoded()
