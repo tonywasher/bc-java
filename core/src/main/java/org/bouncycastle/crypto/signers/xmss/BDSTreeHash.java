@@ -65,10 +65,10 @@ class BDSTreeHash
         Pack.intToBigEndian(nextIndex, otsAddress, OTSHashAddress.OTS_ADDRESS_OFFSET);
         /* the leaf's own two addresses, taken from the tree its encoding names and then named for
          * the same leaf a second and a third time */
-        byte[] lTreeAddress = XMSSAddress.subtreeAddressOf(otsAddress, LTreeAddress.TYPE);
-        Pack.intToBigEndian(nextIndex, lTreeAddress, LTreeAddress.LTREE_ADDRESS_OFFSET);
-        byte[] hashTreeAddress = XMSSAddress.subtreeAddressOf(otsAddress, HashTreeAddress.TYPE);
-        Pack.intToBigEndian(nextIndex, hashTreeAddress, HashTreeAddress.TREE_INDEX_OFFSET);
+        byte[] lTreeAddress = XMSSAddress.subtreeAddressOf(otsAddress, XMSSAddress.LTREE_TYPE);
+        Pack.intToBigEndian(nextIndex, lTreeAddress, XMSSAddress.LTREE_ADDRESS_OFFSET);
+        byte[] hashTreeAddress = XMSSAddress.subtreeAddressOf(otsAddress, XMSSAddress.HASH_TREE_TYPE);
+        Pack.intToBigEndian(nextIndex, hashTreeAddress, XMSSAddress.TREE_INDEX_OFFSET);
         /* the two words of that encoding this climb moves, kept alongside it so stepping one is an
          * increment rather than a read back out of the bytes */
         int hashTreeHeight = 0;
@@ -87,10 +87,10 @@ class BDSTreeHash
             && stack.peek().getHeight() != initialHeight)
         {
             hashTreeIndex = (hashTreeIndex - 1) / 2;
-            Pack.intToBigEndian(hashTreeIndex, hashTreeAddress, HashTreeAddress.TREE_INDEX_OFFSET);
+            Pack.intToBigEndian(hashTreeIndex, hashTreeAddress, XMSSAddress.TREE_INDEX_OFFSET);
             node = XMSSNodeUtil.randomizeHash(wotsPlus, stack.pop(), node, hashTreeAddress, nodeKey, nodeMask);
             node = node.incrementHeight();
-            Pack.intToBigEndian(++hashTreeHeight, hashTreeAddress, HashTreeAddress.TREE_HEIGHT_OFFSET);
+            Pack.intToBigEndian(++hashTreeHeight, hashTreeAddress, XMSSAddress.TREE_HEIGHT_OFFSET);
         }
 
         if (tailNode == null)
@@ -102,7 +102,7 @@ class BDSTreeHash
             if (tailNode.getHeight() == node.getHeight())
             {
                 hashTreeIndex = (hashTreeIndex - 1) / 2;
-                Pack.intToBigEndian(hashTreeIndex, hashTreeAddress, HashTreeAddress.TREE_INDEX_OFFSET);
+                Pack.intToBigEndian(hashTreeIndex, hashTreeAddress, XMSSAddress.TREE_INDEX_OFFSET);
                 node = XMSSNodeUtil.randomizeHash(wotsPlus, tailNode, node, hashTreeAddress, nodeKey, nodeMask);
                 node = node.incrementHeight();
                 tailNode = node;
@@ -111,7 +111,7 @@ class BDSTreeHash
                 // kept so both merges read alike and so the code still matches the unconditional
                 // increment that closes the loop of RFC 8391 sec. 4.1.6 algorithm 9. The address
                 // names the height of the children, so the hash above is at the right level.
-                Pack.intToBigEndian(++hashTreeHeight, hashTreeAddress, HashTreeAddress.TREE_HEIGHT_OFFSET);
+                Pack.intToBigEndian(++hashTreeHeight, hashTreeAddress, XMSSAddress.TREE_HEIGHT_OFFSET);
             }
             else
             {

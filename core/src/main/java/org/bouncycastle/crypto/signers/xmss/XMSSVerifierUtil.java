@@ -30,10 +30,10 @@ class XMSSVerifierUtil
 
         /* prepare adresses */
         int otsIndex = OTSHashAddress.otsAddressOf(otsAddress);
-        byte[] lTreeAddress = XMSSAddress.subtreeAddressOf(otsAddress, LTreeAddress.TYPE);
-        Pack.intToBigEndian(otsIndex, lTreeAddress, LTreeAddress.LTREE_ADDRESS_OFFSET);
-        byte[] hashTreeAddress = XMSSAddress.subtreeAddressOf(otsAddress, HashTreeAddress.TYPE);
-        Pack.intToBigEndian(otsIndex, hashTreeAddress, HashTreeAddress.TREE_INDEX_OFFSET);
+        byte[] lTreeAddress = XMSSAddress.subtreeAddressOf(otsAddress, XMSSAddress.LTREE_TYPE);
+        Pack.intToBigEndian(otsIndex, lTreeAddress, XMSSAddress.LTREE_ADDRESS_OFFSET);
+        byte[] hashTreeAddress = XMSSAddress.subtreeAddressOf(otsAddress, XMSSAddress.HASH_TREE_TYPE);
+        Pack.intToBigEndian(otsIndex, hashTreeAddress, XMSSAddress.TREE_INDEX_OFFSET);
         /* the tree index of that encoding, kept alongside it as the climb halves it */
         int hashTreeIndex = otsIndex;
         /* and one pair of working buffers for every node hashed below, L-tree and climb alike; see
@@ -51,18 +51,18 @@ class XMSSVerifierUtil
 
         for (int k = 0; k < height; k++)
         {
-            Pack.intToBigEndian(k, hashTreeAddress, HashTreeAddress.TREE_HEIGHT_OFFSET);
+            Pack.intToBigEndian(k, hashTreeAddress, XMSSAddress.TREE_HEIGHT_OFFSET);
             if (Math.floor(indexLeaf / (1 << k)) % 2 == 0)
             {
                 hashTreeIndex = hashTreeIndex / 2;
-                Pack.intToBigEndian(hashTreeIndex, hashTreeAddress, HashTreeAddress.TREE_INDEX_OFFSET);
+                Pack.intToBigEndian(hashTreeIndex, hashTreeAddress, XMSSAddress.TREE_INDEX_OFFSET);
                 node[1] = XMSSNodeUtil.randomizeHash(wotsPlus, node[0], signature.getAuthPath().get(k),
                     hashTreeAddress, nodeKey, nodeMask);
             }
             else
             {
                 hashTreeIndex = (hashTreeIndex - 1) / 2;
-                Pack.intToBigEndian(hashTreeIndex, hashTreeAddress, HashTreeAddress.TREE_INDEX_OFFSET);
+                Pack.intToBigEndian(hashTreeIndex, hashTreeAddress, XMSSAddress.TREE_INDEX_OFFSET);
                 node[1] = XMSSNodeUtil.randomizeHash(wotsPlus, signature.getAuthPath().get(k), node[0],
                     hashTreeAddress, nodeKey, nodeMask);
             }

@@ -69,7 +69,7 @@ public class AddressTests
      */
     public void testLTreeAddressLayout()
     {
-        byte[] enc = XMSSAddress.subtreeAddressOf(otsHashAddress(), LTreeAddress.TYPE);
+        byte[] enc = XMSSAddress.subtreeAddressOf(otsHashAddress(), XMSSAddress.LTREE_TYPE);
 
         assertEquals(32, enc.length);
         assertEquals(7, Pack.bigEndianToInt(enc, LAYER));
@@ -80,9 +80,9 @@ public class AddressTests
         assertEquals(0, Pack.bigEndianToInt(enc, WORD_6));
         assertEquals(0, Pack.bigEndianToInt(enc, KEY_AND_MASK));
 
-        Pack.intToBigEndian(0x11223344, enc, LTreeAddress.LTREE_ADDRESS_OFFSET);
-        Pack.intToBigEndian(0x55667788, enc, LTreeAddress.TREE_HEIGHT_OFFSET);
-        Pack.intToBigEndian(0x99aabbcc, enc, LTreeAddress.TREE_INDEX_OFFSET);
+        Pack.intToBigEndian(0x11223344, enc, XMSSAddress.LTREE_ADDRESS_OFFSET);
+        Pack.intToBigEndian(0x55667788, enc, XMSSAddress.TREE_HEIGHT_OFFSET);
+        Pack.intToBigEndian(0x99aabbcc, enc, XMSSAddress.TREE_INDEX_OFFSET);
 
         assertEquals(0x11223344, Pack.bigEndianToInt(enc, WORD_4));
         assertEquals(0x55667788, Pack.bigEndianToInt(enc, WORD_5));
@@ -95,7 +95,7 @@ public class AddressTests
      */
     public void testHashTreeAddressLayout()
     {
-        byte[] enc = XMSSAddress.subtreeAddressOf(otsHashAddress(), HashTreeAddress.TYPE);
+        byte[] enc = XMSSAddress.subtreeAddressOf(otsHashAddress(), XMSSAddress.HASH_TREE_TYPE);
 
         assertEquals(32, enc.length);
         assertEquals(7, Pack.bigEndianToInt(enc, LAYER));
@@ -106,8 +106,8 @@ public class AddressTests
         assertEquals(0, Pack.bigEndianToInt(enc, WORD_6));
         assertEquals(0, Pack.bigEndianToInt(enc, KEY_AND_MASK));
 
-        Pack.intToBigEndian(0x55667788, enc, HashTreeAddress.TREE_HEIGHT_OFFSET);
-        Pack.intToBigEndian(0x99aabbcc, enc, HashTreeAddress.TREE_INDEX_OFFSET);
+        Pack.intToBigEndian(0x55667788, enc, XMSSAddress.TREE_HEIGHT_OFFSET);
+        Pack.intToBigEndian(0x99aabbcc, enc, XMSSAddress.TREE_INDEX_OFFSET);
 
         assertEquals(0, Pack.bigEndianToInt(enc, WORD_4));
         assertEquals(0x55667788, Pack.bigEndianToInt(enc, WORD_5));
@@ -125,11 +125,11 @@ public class AddressTests
     {
         byte[] ots = new OTSHashAddress.Builder().withOTSAddress(1).build().toByteArray();
 
-        byte[] lTree = XMSSAddress.subtreeAddressOf(ots, LTreeAddress.TYPE);
-        Pack.intToBigEndian(1, lTree, LTreeAddress.LTREE_ADDRESS_OFFSET);
+        byte[] lTree = XMSSAddress.subtreeAddressOf(ots, XMSSAddress.LTREE_TYPE);
+        Pack.intToBigEndian(1, lTree, XMSSAddress.LTREE_ADDRESS_OFFSET);
 
-        byte[] hashTree = XMSSAddress.subtreeAddressOf(ots, HashTreeAddress.TYPE);
-        Pack.intToBigEndian(1, hashTree, HashTreeAddress.TREE_INDEX_OFFSET);
+        byte[] hashTree = XMSSAddress.subtreeAddressOf(ots, XMSSAddress.HASH_TREE_TYPE);
+        Pack.intToBigEndian(1, hashTree, XMSSAddress.TREE_INDEX_OFFSET);
 
         assertFalse(org.bouncycastle.util.Arrays.areEqual(ots, lTree));
         assertFalse(org.bouncycastle.util.Arrays.areEqual(ots, hashTree));

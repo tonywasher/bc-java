@@ -120,8 +120,8 @@ public class WOTSPlusTests
         WOTSPlusPublicKeyParameters publicKey = wotsPlus.getPublicKey(otsHashAddress);
         byte[][] before = blocksOf(publicKey);
 
-        byte[] lTreeAddress = XMSSAddress.subtreeAddressOf(otsHashAddress, LTreeAddress.TYPE);
-        Pack.intToBigEndian(3, lTreeAddress, LTreeAddress.LTREE_ADDRESS_OFFSET);
+        byte[] lTreeAddress = XMSSAddress.subtreeAddressOf(otsHashAddress, XMSSAddress.LTREE_TYPE);
+        Pack.intToBigEndian(3, lTreeAddress, XMSSAddress.LTREE_ADDRESS_OFFSET);
         XMSSNodeUtil.lTree(wotsPlus, publicKey, lTreeAddress, new byte[N], new byte[2 * N]);
 
         assertTrue("compressing a public key changed the key",

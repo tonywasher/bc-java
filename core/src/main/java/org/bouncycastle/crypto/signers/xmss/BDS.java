@@ -286,8 +286,8 @@ public final class BDS
          * written into them as it goes. The two below the leaf's are the same tree as it, so they
          * are taken from its encoding rather than assembled beside it. */
         byte[] leafAddress = Arrays.clone(otsAddress);
-        byte[] lTreeAddress = XMSSAddress.subtreeAddressOf(otsAddress, LTreeAddress.TYPE);
-        byte[] hashTreeAddress = XMSSAddress.subtreeAddressOf(otsAddress, HashTreeAddress.TYPE);
+        byte[] lTreeAddress = XMSSAddress.subtreeAddressOf(otsAddress, XMSSAddress.LTREE_TYPE);
+        byte[] hashTreeAddress = XMSSAddress.subtreeAddressOf(otsAddress, XMSSAddress.HASH_TREE_TYPE);
         /* and one pair of working buffers for every node hashed below, L-tree and tree alike; see
          * XMSSNodeUtil.randomizeHash for why one pair serves a whole walk */
         int n = wotsPlus.getParams().getTreeDigestSize();
@@ -308,7 +308,7 @@ public final class BDS
              */
             wotsPlus.importKeys(wotsPlus.getWOTSPlusSecretKey(secretSeed, leafAddress), publicSeed);
             WOTSPlusPublicKeyParameters wotsPlusPublicKey = wotsPlus.getPublicKey(leafAddress);
-            Pack.intToBigEndian(indexLeaf, lTreeAddress, LTreeAddress.LTREE_ADDRESS_OFFSET);
+            Pack.intToBigEndian(indexLeaf, lTreeAddress, XMSSAddress.LTREE_ADDRESS_OFFSET);
             XMSSNode node = XMSSNodeUtil.lTree(wotsPlus, wotsPlusPublicKey, lTreeAddress, nodeKey, nodeMask);
 
             // the two words of the hash tree encoding the climb below moves, kept beside it so
@@ -322,8 +322,8 @@ public final class BDS
             // at that height.
             int hashTreeHeight = 0;
             int hashTreeIndex = indexLeaf;
-            Pack.intToBigEndian(hashTreeHeight, hashTreeAddress, HashTreeAddress.TREE_HEIGHT_OFFSET);
-            Pack.intToBigEndian(hashTreeIndex, hashTreeAddress, HashTreeAddress.TREE_INDEX_OFFSET);
+            Pack.intToBigEndian(hashTreeHeight, hashTreeAddress, XMSSAddress.TREE_HEIGHT_OFFSET);
+            Pack.intToBigEndian(hashTreeIndex, hashTreeAddress, XMSSAddress.TREE_INDEX_OFFSET);
             while (!stack.isEmpty() && stack.peek().getHeight() == node.getHeight())
             {
                 /* add to authenticationPath if leafIndex == 1 */
@@ -352,10 +352,10 @@ public final class BDS
                     }
                 }
                 hashTreeIndex = (hashTreeIndex - 1) / 2;
-                Pack.intToBigEndian(hashTreeIndex, hashTreeAddress, HashTreeAddress.TREE_INDEX_OFFSET);
+                Pack.intToBigEndian(hashTreeIndex, hashTreeAddress, XMSSAddress.TREE_INDEX_OFFSET);
                 node = XMSSNodeUtil.randomizeHash(wotsPlus, stack.pop(), node, hashTreeAddress, nodeKey, nodeMask);
                 node = node.incrementHeight();
-                Pack.intToBigEndian(++hashTreeHeight, hashTreeAddress, HashTreeAddress.TREE_HEIGHT_OFFSET);
+                Pack.intToBigEndian(++hashTreeHeight, hashTreeAddress, XMSSAddress.TREE_HEIGHT_OFFSET);
             }
             /* push to stack */
             stack.push(node);
@@ -397,8 +397,8 @@ public final class BDS
         /* prepare addresses - the two below the leaf's name the same tree as it, so they are taken
          * from its encoding rather than assembled beside it */
         byte[] leafAddress = Arrays.clone(otsAddress);
-        byte[] lTreeAddress = XMSSAddress.subtreeAddressOf(otsAddress, LTreeAddress.TYPE);
-        byte[] hashTreeAddress = XMSSAddress.subtreeAddressOf(otsAddress, HashTreeAddress.TYPE);
+        byte[] lTreeAddress = XMSSAddress.subtreeAddressOf(otsAddress, XMSSAddress.LTREE_TYPE);
+        byte[] hashTreeAddress = XMSSAddress.subtreeAddressOf(otsAddress, XMSSAddress.HASH_TREE_TYPE);
         /* and one pair of working buffers for whichever of the two branches below runs; see
          * XMSSNodeUtil.randomizeHash */
         int n = wotsPlus.getParams().getTreeDigestSize();
@@ -415,15 +415,15 @@ public final class BDS
              */
             wotsPlus.importKeys(wotsPlus.getWOTSPlusSecretKey(secretSeed, leafAddress), publicSeed);
             WOTSPlusPublicKeyParameters wotsPlusPublicKey = wotsPlus.getPublicKey(leafAddress);
-            Pack.intToBigEndian(index, lTreeAddress, LTreeAddress.LTREE_ADDRESS_OFFSET);
+            Pack.intToBigEndian(index, lTreeAddress, XMSSAddress.LTREE_ADDRESS_OFFSET);
             XMSSNode node = XMSSNodeUtil.lTree(wotsPlus, wotsPlusPublicKey, lTreeAddress, nodeKey, nodeMask);
             authenticationPath.set(0, node);
         }
         else
         {
             /* add new left node on height tau to authentication path */
-            Pack.intToBigEndian(tau - 1, hashTreeAddress, HashTreeAddress.TREE_HEIGHT_OFFSET);
-            Pack.intToBigEndian(index >> tau, hashTreeAddress, HashTreeAddress.TREE_INDEX_OFFSET);
+            Pack.intToBigEndian(tau - 1, hashTreeAddress, XMSSAddress.TREE_HEIGHT_OFFSET);
+            Pack.intToBigEndian(index >> tau, hashTreeAddress, XMSSAddress.TREE_INDEX_OFFSET);
             // the public seed, and a placeholder where the one-time secret key goes. Nothing on
             // this branch derives a WOTS+ key: randomizeHash below takes getPublicSeed() and
             // getKhf() off this object and reads nothing else, where the leaf branch above imports

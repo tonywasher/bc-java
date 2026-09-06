@@ -35,12 +35,12 @@ class XMSSNodeUtil
         /* the key's blocks as the leaves of the L-tree, and the walk overwrites the array, not them */
         XMSSNode[] publicKeyNodes = publicKey.toNodes();
         int treeHeight = 0;
-        Pack.intToBigEndian(treeHeight, address, LTreeAddress.TREE_HEIGHT_OFFSET);
+        Pack.intToBigEndian(treeHeight, address, XMSSAddress.TREE_HEIGHT_OFFSET);
         while (len > 1)
         {
             for (int i = 0; i < (int)Math.floor(len / 2); i++)
             {
-                Pack.intToBigEndian(i, address, LTreeAddress.TREE_INDEX_OFFSET);
+                Pack.intToBigEndian(i, address, XMSSAddress.TREE_INDEX_OFFSET);
                 publicKeyNodes[i] = randomizeHash(wotsPlus, publicKeyNodes[2 * i], publicKeyNodes[(2 * i) + 1],
                     address, key, tmpMask);
             }
@@ -49,7 +49,7 @@ class XMSSNodeUtil
                 publicKeyNodes[(int)Math.floor(len / 2)] = publicKeyNodes[len - 1];
             }
             len = (int)Math.ceil((double)len / 2);
-            Pack.intToBigEndian(++treeHeight, address, LTreeAddress.TREE_HEIGHT_OFFSET);
+            Pack.intToBigEndian(++treeHeight, address, XMSSAddress.TREE_HEIGHT_OFFSET);
         }
         return publicKeyNodes[0];
     }
@@ -98,12 +98,13 @@ class XMSSNodeUtil
         // another 1023, and every one of them used to rebuild an address and encode it again.
         //
         // This is where withKeyAndMask() was, and what it did with an address that was neither an
-        // LTreeAddress nor a HashTreeAddress was return it unchanged - leaving key-and-mask at
-        // whatever it already held, so the three PRFs would be three of the same hash. Writing the
-        // word sets it whatever address the encoding was taken from. Nothing changes today, no
-        // caller passing anything else - lTree an L-tree address, BDS, BDSTreeHash and
-        // XMSSVerifierUtil a hash tree address - but the rule is now the one RFC 8391 sec. 4.1.5
-        // states rather than one about subtypes.
+        // L-tree address nor a hash tree address - the two that had a subclass of their own to be
+        // tested for - was return it unchanged, leaving key-and-mask at whatever it already held,
+        // so the three PRFs would be three of the same hash. Writing the word sets it whatever
+        // address the encoding was taken from. Nothing changes today, no caller passing anything
+        // else - lTree an L-tree address, BDS, BDSTreeHash and XMSSVerifierUtil a hash tree
+        // address - but the rule is now the one RFC 8391 sec. 4.1.5 states rather than one about
+        // subtypes.
         //
         // The two working buffers come from the caller for the same reason, one pair for a whole
         // walk rather than a pair per node, the way WOTSPlus.chain takes its two. Nothing carries
