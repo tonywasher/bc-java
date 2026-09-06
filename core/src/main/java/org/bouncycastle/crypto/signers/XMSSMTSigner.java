@@ -23,6 +23,10 @@ public class XMSSMTSigner
 
     private boolean hasGenerated;
     private boolean initSign;
+    // what a collection that followed no signature handed back, so a second one can hand back the
+    // same object rather than shard the single usage this signer kept for itself. Null once a
+    // signature has spent that usage, and on every init().
+    private XMSSMTPrivateKeyParameters collected;
 
     /**
      * Initialise for signing or verification. A {@link ParametersWithRandom} wrapper is accepted
@@ -54,6 +58,7 @@ public class XMSSMTSigner
             {
                 initSign = true;
                 hasGenerated = false;
+                collected = null;
                 privateKey = (XMSSMTPrivateKeyParameters)param;
 
                 // the public key from a previous verification init must not stay behind, or this
@@ -140,6 +145,7 @@ public class XMSSMTSigner
                     if (privKey.getIndex() != indexBefore)
                     {
                         hasGenerated = true;
+                        collected = null;
                     }
                 }
             }
@@ -250,14 +256,27 @@ public class XMSSMTSigner
                 {
                     privateKey = null;
                 }
+                else if (collected != null)
+                {
+                    // asked twice with no signature between. The key handed over the first time is
+                    // still the whole of what this signer is not keeping, so hand back that same
+                    // object: rolling again would shard the single usage kept for signing, leaving
+                    // the caller a key reporting nothing remaining while the usages it was given
+                    // the first time live only in a return value it has been given no reason to
+                    // think it still needs. A caller that stores the latest collection - a retry
+                    // after a failed write, a collection in a finally beside an explicit one -
+                    // would persist the empty one and lose the rest.
+                    return collected;
+                }
                 else if (privKey.getUsagesRemaining() > 0)
                 {
                     privateKey = privKey.getNextKey();
+                    collected = privKey;
                 }
                 // else: a key with nothing left to spend has no next usage to leave behind, and
                 // asking for one reported the shard API's own "usageCount exceeds usages remaining"
                 // to a caller that never asked for a shard. Hand the spent key back so it can still
-                // be stored.
+                // be stored - and again on a second call, since nothing was consumed handing it over.
 
                 return privKey;
             }

@@ -7,6 +7,7 @@ import org.bouncycastle.crypto.AsymmetricCipherKeyPair;
 import org.bouncycastle.crypto.digests.SHA256Digest;
 import org.bouncycastle.crypto.generators.XMSSKeyPairGenerator;
 import org.bouncycastle.crypto.generators.XMSSMTKeyPairGenerator;
+import org.bouncycastle.crypto.params.AsymmetricKeyParameter;
 import org.bouncycastle.crypto.params.XMSSKeyGenerationParameters;
 import org.bouncycastle.crypto.params.XMSSMTKeyGenerationParameters;
 import org.bouncycastle.crypto.params.XMSSMTParameters;
@@ -214,6 +215,100 @@ public class SignerStateHandoverTests
         assertSame(mtPrivKey, mtSigner.getUpdatedPrivateKey());
         assertNotNull("the signer spent nothing, so it still holds a key",
             mtSigner.getUpdatedPrivateKey());
+    }
+
+    /**
+     * Collected twice with no signature between, a signer hands back the same key both times. The
+     * first call rolls the key past the one leaf the signer keeps for itself and returns the rest;
+     * a second roll has only that one leaf left to divide, so it took it - marking the key it
+     * returned as having nothing remaining while the usages handed over the first time survived
+     * only in that first return value. Two collections is not an exotic sequence: a store that
+     * failed and is retried, or one written in a finally beside the explicit one, both reach it,
+     * and a caller that treats the latest collection as the state to persist then writes an empty
+     * key over a live one. Nothing distinguishes what came back from a genuinely spent key.
+     * <p>
+     * Asserted as object identity rather than as a usage count, because the count alone is what a
+     * fresh shard of the last leaf would also satisfy. The signer must still hold its own leaf
+     * after both calls, and must still be able to spend it.
+     * </p>
+     */
+    public void testCollectingTwiceWithNoSignatureBetweenHandsBackTheSameKey()
+    {
+        AsymmetricCipherKeyPair kp = xmssKeyPair(new XMSSParameters(HEIGHT, new SHA256Digest()));
+        XMSSPrivateKeyParameters privKey = (XMSSPrivateKeyParameters)kp.getPrivate();
+        XMSSSigner signer = new XMSSSigner();
+
+        signer.init(true, privKey);
+
+        assertSame(privKey, signer.getUpdatedPrivateKey());
+        assertSame(privKey, signer.getUpdatedPrivateKey());
+        assertSame(privKey, signer.getUpdatedPrivateKey());
+        assertEquals("the collected key keeps every usage the signer is not holding",
+            (1 << HEIGHT) - 1, privKey.getUsagesRemaining());
+        assertEquals(1, signer.getUsagesRemaining());
+
+        signer.update(new byte[]{ 1, 2, 3 }, 0, 3);
+        assertNotNull("the leaf the signer kept is still there to spend", signer.generateSignature());
+
+        AsymmetricCipherKeyPair mtKp = xmssMTKeyPair(new XMSSMTParameters(HEIGHT, LAYERS, new SHA256Digest()));
+        XMSSMTPrivateKeyParameters mtPrivKey = (XMSSMTPrivateKeyParameters)mtKp.getPrivate();
+        XMSSMTSigner mtSigner = new XMSSMTSigner();
+
+        mtSigner.init(true, mtPrivKey);
+
+        assertSame(mtPrivKey, mtSigner.getUpdatedPrivateKey());
+        assertSame(mtPrivKey, mtSigner.getUpdatedPrivateKey());
+        assertSame(mtPrivKey, mtSigner.getUpdatedPrivateKey());
+        assertEquals("the collected key keeps every usage the signer is not holding",
+            (1 << HEIGHT) - 1, mtPrivKey.getUsagesRemaining());
+        assertEquals(1, mtSigner.getUsagesRemaining());
+
+        mtSigner.update(new byte[]{ 1, 2, 3 }, 0, 3);
+        assertNotNull("the leaf the signer kept is still there to spend", mtSigner.generateSignature());
+    }
+
+    /**
+     * A signature makes the previous collection stale, so the collection after it hands over the
+     * key that signature spent rather than the one handed over before it - and empties the signer,
+     * as it does when no collection preceded the signature at all.
+     */
+    public void testCollectionAfterASignatureIsNotTheCollectionBeforeIt()
+    {
+        AsymmetricCipherKeyPair kp = xmssKeyPair(new XMSSParameters(HEIGHT, new SHA256Digest()));
+        XMSSPrivateKeyParameters privKey = (XMSSPrivateKeyParameters)kp.getPrivate();
+        XMSSSigner signer = new XMSSSigner();
+
+        signer.init(true, privKey);
+
+        assertSame(privKey, signer.getUpdatedPrivateKey());
+
+        signer.update(new byte[]{ 1, 2, 3 }, 0, 3);
+        signer.generateSignature();
+
+        AsymmetricKeyParameter spent = signer.getUpdatedPrivateKey();
+
+        assertNotNull(spent);
+        assertNotSame("the key the signature spent, not the one collected before it", privKey, spent);
+        assertEquals(0, ((XMSSPrivateKeyParameters)spent).getUsagesRemaining());
+        assertNull(signer.getUpdatedPrivateKey());
+
+        AsymmetricCipherKeyPair mtKp = xmssMTKeyPair(new XMSSMTParameters(HEIGHT, LAYERS, new SHA256Digest()));
+        XMSSMTPrivateKeyParameters mtPrivKey = (XMSSMTPrivateKeyParameters)mtKp.getPrivate();
+        XMSSMTSigner mtSigner = new XMSSMTSigner();
+
+        mtSigner.init(true, mtPrivKey);
+
+        assertSame(mtPrivKey, mtSigner.getUpdatedPrivateKey());
+
+        mtSigner.update(new byte[]{ 1, 2, 3 }, 0, 3);
+        mtSigner.generateSignature();
+
+        AsymmetricKeyParameter mtSpent = mtSigner.getUpdatedPrivateKey();
+
+        assertNotNull(mtSpent);
+        assertNotSame("the key the signature spent, not the one collected before it", mtPrivKey, mtSpent);
+        assertEquals(0, ((XMSSMTPrivateKeyParameters)mtSpent).getUsagesRemaining());
+        assertNull(mtSigner.getUpdatedPrivateKey());
     }
 
     /**
