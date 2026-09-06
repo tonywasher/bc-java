@@ -768,6 +768,33 @@ public final class XMSSEngine
         return XMSSUtil.validateOrAllocate(value, size, name);
     }
 
+    /**
+     * Refuse a request for a key shard of {@code usageCount} signatures from a key with
+     * {@code usagesRemaining} left: a shard of none, and a shard of more than the key has.
+     * <p>
+     * Shared by the two private key classes, which mean the same thing by both and had said it in
+     * the same words twice - and the words are the contract, since a message is what a caller
+     * catching IllegalArgumentException has to tell the two cases apart by. Beside
+     * validateOrAllocate above for the same reason it is here: the four key classes and the two
+     * signature classes take their optional n-byte fields on the same terms, and this is the
+     * terms both key classes hand out a shard on.
+     * </p>
+     *
+     * @param usageCount      signatures asked for.
+     * @param usagesRemaining signatures the key has left, read under the key's own monitor.
+     */
+    public static void validateShardSize(int usageCount, long usagesRemaining)
+    {
+        if (usageCount < 1)
+        {
+            throw new IllegalArgumentException("cannot ask for a shard with 0 keys");
+        }
+        if (usageCount > usagesRemaining)
+        {
+            throw new IllegalArgumentException("usageCount exceeds usages remaining");
+        }
+    }
+
     static WOTSPlus newWOTSPlus(XMSSParameters params)
     {
         return new WOTSPlus(newWOTSPlusParameters(params));

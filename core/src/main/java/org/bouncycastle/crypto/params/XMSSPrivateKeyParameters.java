@@ -178,41 +178,38 @@ public final class XMSSPrivateKeyParameters
      */
     public XMSSPrivateKeyParameters extractKeyShard(int usageCount)
     {
-        if (usageCount < 1)
-        {
-            throw new IllegalArgumentException("cannot ask for a shard with 0 keys");
-        }
         synchronized (this)
         {
+            // both refusals through the one check the XMSS^MT key uses, so the two messages a
+            // caller tells the two cases apart by are written down once. Inside the monitor
+            // because the count it is checked against is this key's, and a signature landing
+            // between the check and the shard would leave the shard covering a leaf already spent.
+            long usagesRemaining = getUsagesRemaining();
+
+            XMSSEngine.validateShardSize(usageCount, usagesRemaining);
+
             /* prepare authentication path for next leaf */
-            if (usageCount <= this.getUsagesRemaining())
+            XMSSPrivateKeyParameters keyParams = new XMSSPrivateKeyParameters.Builder(params)
+                .withSecretKeySeed(secretKeySeed).withSecretKeyPRF(secretKeyPRF)
+                .withPublicSeed(publicSeed).withRoot(root)
+                .withIndex(getIndex())
+                .withOwnedBDSState(bdsState.withMaxIndex(bdsState.getIndex() + usageCount - 1,
+                    params.getTreeDigestOID(), params.getTreeDigestSize())).build();
+
+            if (usageCount == usagesRemaining)
             {
-                XMSSPrivateKeyParameters keyParams = new XMSSPrivateKeyParameters.Builder(params)
-                    .withSecretKeySeed(secretKeySeed).withSecretKeyPRF(secretKeyPRF)
-                    .withPublicSeed(publicSeed).withRoot(root)
-                    .withIndex(getIndex())
-                    .withOwnedBDSState(bdsState.withMaxIndex(bdsState.getIndex() + usageCount - 1,
-                        params.getTreeDigestOID(), params.getTreeDigestSize())).build();
-
-                if (usageCount == this.getUsagesRemaining())
-                {
-                    this.bdsState = new BDS(params, bdsState.getMaxIndex(), getIndex() + usageCount);   // we're finished.
-                }
-                else
-                {
-                    // update the tree to the new index.
-                    for (int i = 0; i != usageCount; i++)
-                    {
-                        this.bdsState = XMSSEngine.getNextBDSState(bdsState, publicSeed, secretKeySeed);
-                    }
-                }
-
-                return keyParams;
+                this.bdsState = new BDS(params, bdsState.getMaxIndex(), getIndex() + usageCount);   // we're finished.
             }
             else
             {
-                throw new IllegalArgumentException("usageCount exceeds usages remaining");
+                // update the tree to the new index.
+                for (int i = 0; i != usageCount; i++)
+                {
+                    this.bdsState = XMSSEngine.getNextBDSState(bdsState, publicSeed, secretKeySeed);
+                }
             }
+
+            return keyParams;
         }
     }
 

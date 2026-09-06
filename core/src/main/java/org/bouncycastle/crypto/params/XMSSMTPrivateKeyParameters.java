@@ -381,33 +381,26 @@ public final class XMSSMTPrivateKeyParameters
      */
     public XMSSMTPrivateKeyParameters extractKeyShard(int usageCount)
     {
-        if (usageCount < 1)
-        {
-            throw new IllegalArgumentException("cannot ask for a shard with 0 keys");
-        }
         synchronized (this)
         {
+            // as XMSSPrivateKeyParameters.extractKeyShard: both refusals through the one check,
+            // and inside the monitor because the count is this key's.
+            XMSSEngine.validateShardSize(usageCount, getUsagesRemaining());
+
             /* prepare authentication path for next leaf */
-            if (usageCount <= this.getUsagesRemaining())
-            {
-                XMSSMTPrivateKeyParameters keyParams = new XMSSMTPrivateKeyParameters.Builder(params)
-                                    .withSecretKeySeed(secretKeySeed).withSecretKeyPRF(secretKeyPRF)
-                                    .withPublicSeed(publicSeed).withRoot(root)
-                                    .withIndex(getIndex())
-                                    .withOwnedBDSState(new BDSStateMap(this.bdsState,
-                                        getIndex() + usageCount - 1)).build();
+            XMSSMTPrivateKeyParameters keyParams = new XMSSMTPrivateKeyParameters.Builder(params)
+                                .withSecretKeySeed(secretKeySeed).withSecretKeyPRF(secretKeyPRF)
+                                .withPublicSeed(publicSeed).withRoot(root)
+                                .withIndex(getIndex())
+                                .withOwnedBDSState(new BDSStateMap(this.bdsState,
+                                    getIndex() + usageCount - 1)).build();
 
-                for (int i = 0; i != usageCount; i++)
-                {
-                    this.rollKey();
-                }
-
-                return keyParams;
-            }
-            else
+            for (int i = 0; i != usageCount; i++)
             {
-                throw new IllegalArgumentException("usageCount exceeds usages remaining");
+                this.rollKey();
             }
+
+            return keyParams;
         }
     }
 

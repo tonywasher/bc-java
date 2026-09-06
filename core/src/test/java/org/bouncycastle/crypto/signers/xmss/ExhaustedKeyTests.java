@@ -313,6 +313,73 @@ public class ExhaustedKeyTests
     }
 
     /**
+     * The two ways a shard request is outside what the key can give: none at all, and more than
+     * the key has left. Both families refuse both, and the message is how a caller catching
+     * IllegalArgumentException tells them apart - the shard API has no other way of saying which
+     * it was - so the message is the thing asserted, for both families, since the two used to
+     * carry a copy of each string apiece.
+     */
+    public void testShardRequestsOutsideWhatTheKeyHasAreRefused()
+        throws Exception
+    {
+        XMSSParameters params = xmssParams();
+        XMSSKeyPairGenerator kpg = new XMSSKeyPairGenerator();
+
+        kpg.init(new XMSSKeyGenerationParameters(params, new SecureRandom()));
+
+        XMSSPrivateKeyParameters privKey = (XMSSPrivateKeyParameters)kpg.generateKeyPair().getPrivate();
+        long usages = privKey.getUsagesRemaining();
+
+        checkShardRefused(privKey, 0, "cannot ask for a shard with 0 keys");
+        checkShardRefused(privKey, -1, "cannot ask for a shard with 0 keys");
+        checkShardRefused(privKey, (int)usages + 1, "usageCount exceeds usages remaining");
+
+        assertEquals("a refused shard must not move the key", usages, privKey.getUsagesRemaining());
+
+        XMSSMTParameters mtParams = xmssMTParams();
+        XMSSMTKeyPairGenerator mtKpg = new XMSSMTKeyPairGenerator();
+
+        mtKpg.init(new XMSSMTKeyGenerationParameters(mtParams, new SecureRandom()));
+
+        XMSSMTPrivateKeyParameters mtPrivKey =
+            (XMSSMTPrivateKeyParameters)mtKpg.generateKeyPair().getPrivate();
+        long mtUsages = mtPrivKey.getUsagesRemaining();
+
+        checkShardRefused(mtPrivKey, 0, "cannot ask for a shard with 0 keys");
+        checkShardRefused(mtPrivKey, -1, "cannot ask for a shard with 0 keys");
+        checkShardRefused(mtPrivKey, (int)mtUsages + 1, "usageCount exceeds usages remaining");
+
+        assertEquals("a refused shard must not move the key", mtUsages,
+            mtPrivKey.getUsagesRemaining());
+    }
+
+    private void checkShardRefused(XMSSPrivateKeyParameters privKey, int usageCount, String message)
+    {
+        try
+        {
+            privKey.extractKeyShard(usageCount);
+            fail("shard of " + usageCount + " was handed out");
+        }
+        catch (IllegalArgumentException e)
+        {
+            assertEquals(message, e.getMessage());
+        }
+    }
+
+    private void checkShardRefused(XMSSMTPrivateKeyParameters privKey, int usageCount, String message)
+    {
+        try
+        {
+            privKey.extractKeyShard(usageCount);
+            fail("shard of " + usageCount + " was handed out");
+        }
+        catch (IllegalArgumentException e)
+        {
+            assertEquals(message, e.getMessage());
+        }
+    }
+
+    /**
      * The index bound is one leaf wider than the signing bound, not open: one past the exhausted
      * index is still out of bounds, so is a negative index, and an index that does not match the
      * traversal state it arrived with is still caught.
