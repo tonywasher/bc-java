@@ -8,6 +8,9 @@ import org.bouncycastle.asn1.DERSet;
 import org.bouncycastle.asn1.pkcs.Attribute;
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
+import org.bouncycastle.crypto.Digest;
+import org.bouncycastle.crypto.digests.SHAKEDigest;
+import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Strings;
 
 /**
@@ -26,6 +29,66 @@ class XMSSTestUtils
 
     private XMSSTestUtils()
     {
+    }
+
+    /**
+     * A tree-digest-sized block of one repeated byte, for a key built field by field where what
+     * matters is that the fields differ from each other rather than what is in them.
+     */
+    static byte[] filled(int value)
+    {
+        byte[] out = new byte[32];
+
+        Arrays.fill(out, (byte)value);
+
+        return out;
+    }
+
+    /**
+     * A SHAKE reporting twice its own output length and producing that many bytes, which is what
+     * the SHAKE128(512) and SHAKE256(1024) prehash variants are prehashed with. The parameter sets
+     * name a SHAKE at an output length the digest does not offer by default, and the prehash
+     * comparison needs the same bytes the provider produces.
+     */
+    static class DoubleDigest
+        implements Digest
+    {
+        private SHAKEDigest digest;
+
+        DoubleDigest(SHAKEDigest digest)
+        {
+             this.digest = digest;
+        }
+
+        public String getAlgorithmName()
+        {
+            return digest.getAlgorithmName() + "/" + (digest.getDigestSize() * 2 * 8);
+        }
+
+        public int getDigestSize()
+        {
+            return digest.getDigestSize() * 2;
+        }
+
+        public void update(byte in)
+        {
+             digest.update(in);
+        }
+
+        public void update(byte[] in, int inOff, int len)
+        {
+            digest.update(in, inOff, len);
+        }
+
+        public int doFinal(byte[] out, int outOff)
+        {
+            return digest.doFinal(out, outOff, this.getDigestSize());
+        }
+
+        public void reset()
+        {
+            digest.reset();
+        }
     }
 
     /**

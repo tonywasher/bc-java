@@ -891,18 +891,10 @@ public class XMSSTest
     {
         return new BCXMSSPrivateKey(NISTObjectIdentifiers.id_sha256,
             new XMSSPrivateKeyParameters.Builder(params)
-                .withSecretKeySeed(filled(secretKeySeed)).withSecretKeyPRF(filled(secretKeyPRF))
-                .withPublicSeed(filled(3)).withRoot(filled(4)).build());
+                .withSecretKeySeed(XMSSTestUtils.filled(secretKeySeed)).withSecretKeyPRF(XMSSTestUtils.filled(secretKeyPRF))
+                .withPublicSeed(XMSSTestUtils.filled(3)).withRoot(XMSSTestUtils.filled(4)).build());
     }
 
-    private static byte[] filled(int value)
-    {
-        byte[] out = new byte[32];
-
-        Arrays.fill(out, (byte)value);
-
-        return out;
-    }
 
     public void testKeyExtraction()
         throws Exception
@@ -1143,10 +1135,10 @@ public class XMSSTest
 
         testPrehashAndWithoutPrehash(BCObjectIdentifiers.xmss_SHA256ph, BCObjectIdentifiers.xmss_SHA256, "SHA256", new SHA256Digest());
         testPrehashAndWithoutPrehash(BCObjectIdentifiers.xmss_SHAKE128ph, BCObjectIdentifiers.xmss_SHAKE128, "SHAKE128", new SHAKEDigest(128));
-        testPrehashAndWithoutPrehash(BCObjectIdentifiers.xmss_SHAKE128_512ph, BCObjectIdentifiers.xmss_SHAKE128, "SHAKE128", new DoubleDigest(new SHAKEDigest(128)));
+        testPrehashAndWithoutPrehash(BCObjectIdentifiers.xmss_SHAKE128_512ph, BCObjectIdentifiers.xmss_SHAKE128, "SHAKE128", new XMSSTestUtils.DoubleDigest(new SHAKEDigest(128)));
         testPrehashAndWithoutPrehash(BCObjectIdentifiers.xmss_SHA512ph, BCObjectIdentifiers.xmss_SHA512, "SHA512", new SHA512Digest());
         testPrehashAndWithoutPrehash(BCObjectIdentifiers.xmss_SHAKE256ph, BCObjectIdentifiers.xmss_SHAKE256, "SHAKE256", new SHAKEDigest(256));
-        testPrehashAndWithoutPrehash(BCObjectIdentifiers.xmss_SHAKE256_1024ph, BCObjectIdentifiers.xmss_SHAKE256, "SHAKE256", new DoubleDigest(new SHAKEDigest(256)));
+        testPrehashAndWithoutPrehash(BCObjectIdentifiers.xmss_SHAKE256_1024ph, BCObjectIdentifiers.xmss_SHAKE256, "SHAKE256", new XMSSTestUtils.DoubleDigest(new SHAKEDigest(256)));
     }
 
     public void testExhaustion()
@@ -1457,52 +1449,6 @@ public class XMSSTest
         oIn.readObject();
     }
 
-    static class DoubleDigest
-        implements Digest
-    {
-        private SHAKEDigest digest;
-
-        DoubleDigest(SHAKEDigest digest)
-        {
-             this.digest = digest;
-        }
-
-        @Override
-        public String getAlgorithmName()
-        {
-            return digest.getAlgorithmName() + "/" + (digest.getDigestSize() * 2 * 8);
-        }
-
-        @Override
-        public int getDigestSize()
-        {
-            return digest.getDigestSize() * 2;
-        }
-
-        @Override
-        public void update(byte in)
-        {
-             digest.update(in);
-        }
-
-        @Override
-        public void update(byte[] in, int inOff, int len)
-        {
-            digest.update(in, inOff, len);
-        }
-
-        @Override
-        public int doFinal(byte[] out, int outOff)
-        {
-            return digest.doFinal(out, outOff, this.getDigestSize());
-        }
-
-        @Override
-        public void reset()
-        {
-            digest.reset();
-        }
-    }
 
     /**
      * A key loaded from a PKCS#8 that carried attributes keeps them across the two operations that
