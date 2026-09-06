@@ -89,6 +89,133 @@ public class CorruptedStateTests
         checkReported(7, "retain-empty", "missing retain node in BDS state");
     }
 
+    /**
+     * The state carries a checksum over itself bound to the owning key's public seed, and every
+     * single-byte change past its eight-byte header is refused by it. The node values inside a BDS
+     * state cannot be checked any other way - a path, stack, retain or keep node has no children
+     * stored beside it, so recomputing one means rebuilding a subtree, which is the work the state
+     * exists to avoid - so without this a corrupted state decodes and then signs, and the signature
+     * simply does not verify.
+     * <p>
+     * The header is the other eight bytes: a change there is not recognised as a codec encoding at
+     * all and falls through to the legacy Java-serialization reader, which refuses it for its own
+     * reasons. Both halves are asserted, because a magic that stopped being checked would send a
+     * valid codec encoding down that reader instead.
+     * </p><p>
+     * What this is not is integrity protection - anyone able to rewrite the stored key recomputes
+     * it (github #2414). Note the promoted codec is a second implementation of this: the checks in
+     * <code>org.bouncycastle.pqc.crypto.xmss</code> have their own tests over there, and neither
+     * set reaches the other.
+     * </p>
+     */
+    public void testEveryCorruptionOfTheStateBodyIsRefusedByTheChecksum()
+        throws Exception
+    {
+        XMSSParameters params = new XMSSParameters(HEIGHT, new SHA256Digest());
+        byte[] encoded = signedTo(params, 3);
+        int stateOffset = 4 + 4 * params.getTreeDigestSize();
+
+        for (int i = stateOffset + 8; i != encoded.length; i++)
+        {
+            byte[] corrupt = Arrays.clone(encoded);
+
+            corrupt[i] ^= 0x01;
+
+            try
+            {
+                new XMSSPrivateKeyParameters.Builder(params).withPrivateKey(corrupt).build();
+                fail("corrupt state byte " + i + " accepted");
+            }
+            catch (IllegalArgumentException e)
+            {
+                assertEquals("byte " + i, "BDS state checksum does not match", e.getMessage());
+            }
+        }
+
+        for (int i = stateOffset; i != stateOffset + 8; i++)
+        {
+            byte[] corrupt = Arrays.clone(encoded);
+
+            corrupt[i] ^= 0x01;
+
+            try
+            {
+                new XMSSPrivateKeyParameters.Builder(params).withPrivateKey(corrupt).build();
+                fail("corrupt state header byte " + i + " accepted");
+            }
+            catch (IllegalArgumentException e)
+            {
+                // refused by the magic and version check, or by the legacy reader it falls through
+                // to - which is what the missing magic leaves behind
+            }
+        }
+
+        // the harness: the encoding these were made from decodes and still signs, or every case
+        // above would be passing for a reason of its own
+        XMSSPrivateKeyParameters decoded =
+            new XMSSPrivateKeyParameters.Builder(params).withPrivateKey(encoded).build();
+        XMSSSigner signer = new XMSSSigner();
+
+        signer.init(true, decoded);
+        signer.update((byte)9);
+        assertNotNull(signer.generateSignature());
+    }
+
+    /**
+     * A state that is internally consistent and brings its own matching root, taken off a different
+     * key of the same parameters, is refused too: the checksum is taken with the owning key's public
+     * seed in front of it, so it does not carry across keys. This is the case a checksum over the
+     * state alone would accept, and the one that would put a key on a traversal state belonging to a
+     * tree it does not describe.
+     */
+    public void testStateFromAnotherKeyIsRefused()
+        throws Exception
+    {
+        XMSSParameters params = new XMSSParameters(HEIGHT, new SHA256Digest());
+        byte[] mine = signedTo(params, 3);
+        byte[] theirs = signedTo(params, 3);
+        int stateOffset = 4 + 4 * params.getTreeDigestSize();
+
+        assertEquals(mine.length, theirs.length);
+
+        byte[] transplant = Arrays.clone(mine);
+
+        System.arraycopy(theirs, stateOffset, transplant, stateOffset, theirs.length - stateOffset);
+
+        try
+        {
+            new XMSSPrivateKeyParameters.Builder(params).withPrivateKey(transplant).build();
+            fail("state from a different key accepted");
+        }
+        catch (IllegalArgumentException e)
+        {
+            assertEquals("BDS state checksum does not match", e.getMessage());
+        }
+    }
+
+    /**
+     * A fresh key advanced by {@code signatures} signatures, encoded.
+     */
+    private byte[] signedTo(XMSSParameters params, int signatures)
+        throws Exception
+    {
+        XMSSKeyPairGenerator kpg = new XMSSKeyPairGenerator();
+
+        kpg.init(new XMSSKeyGenerationParameters(params, new SecureRandom()));
+
+        XMSSSigner signer = new XMSSSigner();
+
+        signer.init(true, kpg.generateKeyPair().getPrivate());
+
+        for (int i = 0; i != signatures; i++)
+        {
+            signer.update((byte)i);
+            signer.generateSignature();
+        }
+
+        return ((XMSSPrivateKeyParameters)signer.getUpdatedPrivateKey()).getEncoded();
+    }
+
     private void checkReported(int atIndex, String drop, String expected)
         throws Exception
     {
