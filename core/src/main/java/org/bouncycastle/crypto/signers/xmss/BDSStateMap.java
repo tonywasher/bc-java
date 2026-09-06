@@ -52,15 +52,21 @@ public class BDSStateMap
      * Each layer is copied rather than shared, and the copy is not incidental. A {@code BDS} is
      * filled at construction and never written afterwards - the block above {@code BDS}'s getLive
      * accessors says so, and advancing a layer builds its successor and {@code put}s it here - with
-     * one exception: {@code markUsed()} writes the used mark in place. Two of the three callers of
-     * this constructor leave two live keys holding maps built from one map, {@code extractKeyShard}
-     * and the {@code withBDSState} of both key builders, and a shared layer zero would be those two
-     * keys sharing one record of whether the one-time key at that leaf has been spent - the mark
-     * one of them made becoming the refusal the other gets, and the mark it did not make becoming
-     * the refusal it does not get, which is the direction RFC 8391 sec. 1.1 is about. Only layer
-     * zero is ever marked, so sharing the layers above it would be safe as {@code markUsed()} is
-     * written today; that is a fact about that method rather than about this one, and it would buy
-     * the copy on the roll path alone.
+     * one exception: {@code markUsed()} writes the used mark in place. This constructor has two
+     * callers, {@link #getNextState} and {@code XMSSMTPrivateKeyParameters.extractKeyShard}, and it
+     * is the second that leaves two live keys holding maps built from one map. A shared layer zero
+     * would be those two keys sharing one record of whether the one-time key at that leaf has been
+     * spent - the mark one of them made becoming the refusal the other gets, and the mark it did
+     * not make becoming the refusal it does not get, which is the direction RFC 8391 sec. 1.1 is
+     * about. Only layer zero is ever marked, so sharing the layers above it would be safe as
+     * {@code markUsed()} is written today; that is a fact about that method rather than about this
+     * one, and it would buy the copy on {@code getNextState}'s roll path alone.
+     * </p><p>
+     * The two key builders' {@code withBDSState} leave two live keys the same way and reach the
+     * same guarantee, but not through here: they go through {@link #withMaxIndex}, which builds an
+     * empty map and fills it a layer at a time out of {@link BDS#withWOTSDigest}, itself a copy.
+     * So there are two ways a state map is copied per layer in this package rather than one, and a
+     * change to the copying here covers neither builder.
      * </p>
      */
     public BDSStateMap(BDSStateMap stateMap, long maxIndex)
