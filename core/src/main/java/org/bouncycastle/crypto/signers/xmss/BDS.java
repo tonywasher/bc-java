@@ -410,11 +410,16 @@ public final class BDS
             /* add new left node on height tau to authentication path */
             Pack.intToBigEndian(tau - 1, hashTreeAddress, HashTreeAddress.TREE_HEIGHT_OFFSET);
             Pack.intToBigEndian(index >> tau, hashTreeAddress, HashTreeAddress.TREE_INDEX_OFFSET);
-            /*
-             * import WOTSPlusSecretKey as its needed to calculate the public
-             * key on the fly
-             */
-            wotsPlus.importKeys(wotsPlus.getWOTSPlusSecretKey(secretSeed, leafAddress), publicSeed);
+            // the public seed, and a placeholder where the one-time secret key goes. Nothing on
+            // this branch derives a WOTS+ key: randomizeHash below takes getPublicSeed() and
+            // getKhf() off this object and reads nothing else, where the leaf branch above imports
+            // a real key because it goes on to build a public key out of it. So the PRF this used
+            // to run was a hash computed to be thrown away, on the roughly half of all advances
+            // that come here - and it was a PRF over an address this branch never named its leaf
+            // in, so what it derived was not even the leaf's key. The zero placeholder is the one
+            // XMSSEngine imports wherever it needs the seed alone, and it leaves no one-time key
+            // material behind in an object that has no use for it.
+            wotsPlus.importKeys(new byte[n], publicSeed);
             // the node this state kept the last time the path passed height tau - 1. One that
             // reached this index by signing always has it; one that arrived by import need not, and
             // reading through the gap raises a NullPointerException from inside the hash rather than
