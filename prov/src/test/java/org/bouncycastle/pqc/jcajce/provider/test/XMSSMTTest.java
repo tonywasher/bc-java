@@ -25,16 +25,11 @@ import junit.framework.TestCase;
 import org.bouncycastle.asn1.ASN1Encodable;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.ASN1Sequence;
-import org.bouncycastle.asn1.ASN1Set;
-import org.bouncycastle.asn1.DERBMPString;
 import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.DERSequence;
-import org.bouncycastle.asn1.DERSet;
 import org.bouncycastle.asn1.bc.BCObjectIdentifiers;
 import org.bouncycastle.asn1.iana.IANAObjectIdentifiers;
 import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
-import org.bouncycastle.asn1.pkcs.Attribute;
-import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
@@ -1302,10 +1297,10 @@ public class XMSSMTTest
         KeyFactory kf = KeyFactory.getInstance("XMSSMT", "BCPQC");
 
         PrivateKey withAttributes = kf.generatePrivate(
-            new PKCS8EncodedKeySpec(withAttributes(kp.getPrivate().getEncoded())));
+            new PKCS8EncodedKeySpec(XMSSTestUtils.withAttributes(kp.getPrivate().getEncoded())));
 
         assertEquals("the loaded key did not carry the attributes",
-            ATTRIBUTES, attributesOf(withAttributes.getEncoded()));
+            XMSSTestUtils.ATTRIBUTES, XMSSTestUtils.attributesOf(withAttributes.getEncoded()));
 
         StateAwareSignature sig = (StateAwareSignature)Signature.getInstance("SHA256withXMSSMT", "BCPQC");
 
@@ -1314,30 +1309,14 @@ public class XMSSMTTest
         sig.sign();
 
         assertEquals("getUpdatedPrivateKey() dropped the attributes",
-            ATTRIBUTES, attributesOf(sig.getUpdatedPrivateKey().getEncoded()));
+            XMSSTestUtils.ATTRIBUTES,
+            XMSSTestUtils.attributesOf(sig.getUpdatedPrivateKey().getEncoded()));
 
-        assertEquals("extractKeyShard() dropped the attributes", ATTRIBUTES,
-            attributesOf(((XMSSMTPrivateKey)withAttributes).extractKeyShard(1).getEncoded()));
+        assertEquals("extractKeyShard() dropped the attributes", XMSSTestUtils.ATTRIBUTES,
+            XMSSTestUtils.attributesOf(((XMSSMTPrivateKey)withAttributes).extractKeyShard(1).getEncoded()));
 
         // a generated key has no origin to take attributes from, and must still encode without any
-        assertNull("a generated key invented attributes", attributesOf(kp.getPrivate().getEncoded()));
-    }
-
-    private static final ASN1Set ATTRIBUTES = new DERSet(new Attribute(
-        PKCSObjectIdentifiers.pkcs_9_at_friendlyName, new DERSet(new DERBMPString("a stateful key"))));
-
-    private static byte[] withAttributes(byte[] pkcs8)
-        throws Exception
-    {
-        PrivateKeyInfo info = PrivateKeyInfo.getInstance(pkcs8);
-
-        return new PrivateKeyInfo(info.getPrivateKeyAlgorithm(), info.parsePrivateKey(), ATTRIBUTES)
-            .getEncoded();
-    }
-
-    private static ASN1Set attributesOf(byte[] pkcs8)
-    {
-        return PrivateKeyInfo.getInstance(pkcs8).getAttributes();
+        assertNull("a generated key invented attributes", XMSSTestUtils.attributesOf(kp.getPrivate().getEncoded()));
     }
 
     /**
