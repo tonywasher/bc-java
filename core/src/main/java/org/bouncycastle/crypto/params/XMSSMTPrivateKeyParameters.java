@@ -227,15 +227,15 @@ public final class XMSSMTPrivateKeyParameters
          * an exclusive map too, but they are in other packages and so go on paying for the copy -
          * once per key pair and once per key read, against a shard that can be taken once per
          * signature.
+         * </p><p>
+         * The maximum index arrives with the map rather than being resolved here the way the
+         * public setter resolves a legacy one: a caller that built the map built it with the
+         * maximum index it is to have.
          * </p>
          */
         Builder withOwnedBDSState(BDSStateMap val)
         {
-            long maxIndex = maxIndexFor(val);
-
-            // a legacy state map cannot be given a maximum index in place without changing the map
-            // that was handed over, so that one is copied even here
-            bdsState = (maxIndex == val.getMaxIndex()) ? val : new BDSStateMap(val, maxIndex);
+            bdsState = val;
             return this;
         }
 
