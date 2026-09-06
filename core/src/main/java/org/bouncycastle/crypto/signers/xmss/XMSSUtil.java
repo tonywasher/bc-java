@@ -129,11 +129,19 @@ class XMSSUtil
     }
 
     /**
-     * Check whether an index is valid or not.
+     * Check whether an index is within the leaves of a tree of the given height.
+     * <p>
+     * Only the upper bound is answered as a boolean. A negative index is not reported false but
+     * raised as an IllegalStateException, which is what a caller passing one has to be ready for -
+     * and a caller can pass one, because the index of a signature that arrived from somewhere else
+     * is read out of its encoding as a signed value. The two callers here take that inside the same
+     * catch as the false, so both come back to a verifier as a signature that did not verify.
+     * </p>
      *
      * @param height Height of binary tree.
      * @param index  Index to validate.
-     * @return true if index is valid false else.
+     * @return true if the index is below the tree's leaf count, false if it is at or above it.
+     * @throws IllegalStateException if the index is negative.
      */
     public static boolean isIndexValid(int height, long index)
     {
