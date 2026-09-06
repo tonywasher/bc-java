@@ -230,10 +230,16 @@ public class XMSSMTSignatureSpi
     {
         // the signer is asked rather than a field of this object being read: what it hands back is
         // null exactly when there is nothing left to hand back - never initialised for signing, or
-        // a signature made and its key already collected - and it is the same answer isSigningCapable()
-        // is built on, so the two cannot disagree. Clearing treeDigest here made a collection that
-        // followed no signature look like an exhausted object, when what the signer keeps in that
-        // case is a one-usage shard of the leaf the collected key has been advanced past.
+        // a signature made and its key already collected. Clearing treeDigest here made a collection
+        // that followed no signature look like an exhausted object, when what the signer keeps in
+        // that case is a one-usage shard of the leaf the collected key has been advanced past.
+        //
+        // That is a different question from the one isSigningCapable() answers, and the two do part
+        // company: it asks the signer for a count, this asks whether it holds a key at all, and a
+        // signer initialised on a spent key holds one. Measured, that signer answers false to
+        // isSigningCapable() and hands a key back from here - deliberately, because a spent key is
+        // still state its caller has to store. So a key from here is not a statement that anything
+        // is left to sign with; only isSigningCapable() says that.
         XMSSMTPrivateKeyParameters updated = (treeDigest == null)
             ? null : (XMSSMTPrivateKeyParameters)signer.getUpdatedPrivateKey();
 
