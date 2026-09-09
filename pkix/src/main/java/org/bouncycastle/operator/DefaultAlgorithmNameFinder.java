@@ -12,6 +12,7 @@ import org.bouncycastle.asn1.eac.EACObjectIdentifiers;
 import org.bouncycastle.asn1.gm.GMObjectIdentifiers;
 import org.bouncycastle.asn1.edec.EdECObjectIdentifiers;
 import org.bouncycastle.asn1.gnu.GNUObjectIdentifiers;
+import org.bouncycastle.asn1.iana.IANAObjectIdentifiers;
 import org.bouncycastle.asn1.iso.ISOIECObjectIdentifiers;
 import org.bouncycastle.asn1.kisa.KISAObjectIdentifiers;
 import org.bouncycastle.asn1.misc.MiscObjectIdentifiers;
@@ -74,6 +75,41 @@ public class DefaultAlgorithmNameFinder
         addAlgorithm(NISTObjectIdentifiers.id_hash_ml_dsa_44_with_sha512, "ML-DSA-44-WITH-SHA512");
         addAlgorithm(NISTObjectIdentifiers.id_hash_ml_dsa_65_with_sha512, "ML-DSA-65-WITH-SHA512");
         addAlgorithm(NISTObjectIdentifiers.id_hash_ml_dsa_87_with_sha512, "ML-DSA-87-WITH-SHA512");
+
+        // Composite ML-DSA (draft-ietf-lamps-pq-composite-sigs); names as CompositeIndex spells them,
+        // so getAlgorithmName() round-trips to the name the BC provider registers the service under.
+        addAlgorithm(IANAObjectIdentifiers.id_MLDSA44_RSA2048_PSS_SHA256, "MLDSA44-RSA2048-PSS-SHA256");
+        addAlgorithm(IANAObjectIdentifiers.id_MLDSA44_RSA2048_PKCS15_SHA256, "MLDSA44-RSA2048-PKCS15-SHA256");
+        addAlgorithm(IANAObjectIdentifiers.id_MLDSA44_Ed25519_SHA512, "MLDSA44-Ed25519-SHA512");
+        addAlgorithm(IANAObjectIdentifiers.id_MLDSA44_ECDSA_P256_SHA256, "MLDSA44-ECDSA-P256-SHA256");
+        addAlgorithm(IANAObjectIdentifiers.id_MLDSA65_RSA3072_PSS_SHA512, "MLDSA65-RSA3072-PSS-SHA512");
+        addAlgorithm(IANAObjectIdentifiers.id_MLDSA65_RSA3072_PKCS15_SHA512, "MLDSA65-RSA3072-PKCS15-SHA512");
+        addAlgorithm(IANAObjectIdentifiers.id_MLDSA65_RSA4096_PSS_SHA512, "MLDSA65-RSA4096-PSS-SHA512");
+        addAlgorithm(IANAObjectIdentifiers.id_MLDSA65_RSA4096_PKCS15_SHA512, "MLDSA65-RSA4096-PKCS15-SHA512");
+        addAlgorithm(IANAObjectIdentifiers.id_MLDSA65_ECDSA_P256_SHA512, "MLDSA65-ECDSA-P256-SHA512");
+        addAlgorithm(IANAObjectIdentifiers.id_MLDSA65_ECDSA_P384_SHA512, "MLDSA65-ECDSA-P384-SHA512");
+        addAlgorithm(IANAObjectIdentifiers.id_MLDSA65_ECDSA_brainpoolP256r1_SHA512, "MLDSA65-ECDSA-brainpoolP256r1-SHA512");
+        addAlgorithm(IANAObjectIdentifiers.id_MLDSA65_Ed25519_SHA512, "MLDSA65-Ed25519-SHA512");
+        addAlgorithm(IANAObjectIdentifiers.id_MLDSA87_ECDSA_P384_SHA512, "MLDSA87-ECDSA-P384-SHA512");
+        addAlgorithm(IANAObjectIdentifiers.id_MLDSA87_ECDSA_brainpoolP384r1_SHA512, "MLDSA87-ECDSA-brainpoolP384r1-SHA512");
+        addAlgorithm(IANAObjectIdentifiers.id_MLDSA87_Ed448_SHAKE256, "MLDSA87-Ed448-SHAKE256");
+        addAlgorithm(IANAObjectIdentifiers.id_MLDSA87_RSA3072_PSS_SHA512, "MLDSA87-RSA3072-PSS-SHA512");
+        addAlgorithm(IANAObjectIdentifiers.id_MLDSA87_RSA4096_PSS_SHA512, "MLDSA87-RSA4096-PSS-SHA512");
+        addAlgorithm(IANAObjectIdentifiers.id_MLDSA87_ECDSA_P521_SHA512, "MLDSA87-ECDSA-P521-SHA512");
+
+        // Composite ML-KEM (draft-ietf-lamps-pq-composite-kem)
+        addAlgorithm(IANAObjectIdentifiers.id_MLKEM768_RSA2048_SHA3_256, "MLKEM768-RSA2048-SHA3-256");
+        addAlgorithm(IANAObjectIdentifiers.id_MLKEM768_RSA3072_SHA3_256, "MLKEM768-RSA3072-SHA3-256");
+        addAlgorithm(IANAObjectIdentifiers.id_MLKEM768_RSA4096_SHA3_256, "MLKEM768-RSA4096-SHA3-256");
+        addAlgorithm(IANAObjectIdentifiers.id_MLKEM768_X25519_SHA3_256, "MLKEM768-X25519-SHA3-256");
+        addAlgorithm(IANAObjectIdentifiers.id_MLKEM768_ECDH_P256_SHA3_256, "MLKEM768-ECDH-P256-SHA3-256");
+        addAlgorithm(IANAObjectIdentifiers.id_MLKEM768_ECDH_P384_SHA3_256, "MLKEM768-ECDH-P384-SHA3-256");
+        addAlgorithm(IANAObjectIdentifiers.id_MLKEM768_ECDH_brainpoolP256r1_SHA3_256, "MLKEM768-ECDH-brainpoolP256r1-SHA3-256");
+        addAlgorithm(IANAObjectIdentifiers.id_MLKEM1024_RSA3072_SHA3_256, "MLKEM1024-RSA3072-SHA3-256");
+        addAlgorithm(IANAObjectIdentifiers.id_MLKEM1024_ECDH_P384_SHA3_256, "MLKEM1024-ECDH-P384-SHA3-256");
+        addAlgorithm(IANAObjectIdentifiers.id_MLKEM1024_ECDH_brainpoolP384r1_SHA3_256, "MLKEM1024-ECDH-brainpoolP384r1-SHA3-256");
+        addAlgorithm(IANAObjectIdentifiers.id_MLKEM1024_X448_SHA3_256, "MLKEM1024-X448-SHA3-256");
+        addAlgorithm(IANAObjectIdentifiers.id_MLKEM1024_ECDH_P521_SHA3_256, "MLKEM1024-ECDH-P521-SHA3-256");
 
         addAlgorithm(NISTObjectIdentifiers.id_slh_dsa_sha2_128s, "SLH-DSA-SHA2-128S");
         addAlgorithm(NISTObjectIdentifiers.id_slh_dsa_sha2_128f, "SLH-DSA-SHA2-128F");
