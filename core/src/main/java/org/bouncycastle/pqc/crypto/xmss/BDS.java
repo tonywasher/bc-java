@@ -255,6 +255,20 @@ public final class BDS
         return new BDS(this, publicSeed, secretKeySeed, otsHashAddress);
     }
 
+    /**
+     * Zeroize the secret material this state retains: the WOTS+ secret key its hash-function
+     * instance imported for the last leaf it processed, which is a future leaf's one-time key
+     * while the tree is not exhausted. The tree nodes are kept - they are not secret. Called when
+     * the enclosing private key is destroyed.
+     */
+    void clearSecrets()
+    {
+        if (wotsPlus != null)
+        {
+            wotsPlus.clearSecretKeySeed();
+        }
+    }
+
     private void initialize(byte[] publicSeed, byte[] secretSeed, OTSHashAddress otsHashAddress)
     {
         if (otsHashAddress == null)

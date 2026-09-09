@@ -13,6 +13,7 @@ import org.bouncycastle.crypto.params.LMSPrivateKeyParameters;
 import org.bouncycastle.crypto.util.PrivateKeyFactory;
 import org.bouncycastle.crypto.util.PrivateKeyInfoFactory;
 import org.bouncycastle.pqc.jcajce.interfaces.LMSPrivateKey;
+import org.bouncycastle.util.Exceptions;
 
 public class BCLMSPrivateKey
     implements LMSPrivateKey
@@ -84,6 +85,11 @@ public class BCLMSPrivateKey
 
     public byte[] getEncoded()
     {
+        if (keyParams.isDestroyed())
+        {
+            throw new IllegalStateException("key destroyed");
+        }
+
         try
         {
             PrivateKeyInfo pki = PrivateKeyInfoFactory.createPrivateKeyInfo(keyParams, attributes);
@@ -105,7 +111,15 @@ public class BCLMSPrivateKey
 
         if (o instanceof BCLMSPrivateKey)
         {
-            return keyParams.equals(((BCLMSPrivateKey)o).keyParams);
+            BCLMSPrivateKey otherKey = (BCLMSPrivateKey)o;
+
+            // a destroyed key no longer exposes its value, so it is only equal to itself.
+            if (isDestroyed() || otherKey.isDestroyed())
+            {
+                return false;
+            }
+
+            return keyParams.equals(otherKey.keyParams);
         }
 
         return false;
@@ -126,6 +140,28 @@ public class BCLMSPrivateKey
         return keyParams.getL();
     }
 
+    /**
+     * Destroy this key, zeroizing the secret key material it holds.
+     * <p>
+     * The master secret of every tree in the hierarchy is zeroized; the key identifiers, indexes,
+     * chaining signatures and cached tree nodes are retained, so {@link #getIndex()},
+     * {@link #getUsagesRemaining()} and {@link #getLevels()} keep working. After destruction
+     * {@link #isDestroyed()} returns true, {@link #getEncoded()} and {@link #extractKeyShard(int)}
+     * throw {@link IllegalStateException}, the key can no longer be serialized, and a Signature
+     * refuses it at initSign. Shards extracted before destruction are independent copies and are
+     * unaffected. As the underlying {@link HSSPrivateKeyParameters} object is destroyed, keys
+     * sharing it are invalidated too.
+     */
+    public synchronized void destroy()
+    {
+        keyParams.destroy();
+    }
+
+    public boolean isDestroyed()
+    {
+        return keyParams.isDestroyed();
+    }
+
     private void readObject(
         ObjectInputStream in)
         throws IOException, ClassNotFoundException
@@ -143,6 +179,13 @@ public class BCLMSPrivateKey
     {
         out.defaultWriteObject();
 
-        out.writeObject(this.getEncoded());
+        try
+        {
+            out.writeObject(this.getEncoded());
+        }
+        catch (IllegalStateException e)
+        {
+            throw Exceptions.ioException(e.getMessage(), e);
+        }
     }
 }
