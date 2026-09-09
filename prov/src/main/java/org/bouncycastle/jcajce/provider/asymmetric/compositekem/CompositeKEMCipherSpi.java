@@ -254,6 +254,13 @@ public class CompositeKEMCipherSpi
         {
             int encapsulationLength = engine.getEncapsulationLength(unwrapKey);
 
+            // Arrays.copyOfRange zero-pads a range that runs off the end, so without this the
+            // decapsulation would run on a padded encapsulation and fail later and less clearly.
+            if (wrappedKey.length < encapsulationLength)
+            {
+                throw new InvalidKeyException("malformed composite KEM ciphertext: shorter than the encapsulation");
+            }
+
             secret = engine.decapsulate(unwrapKey, Arrays.copyOfRange(wrappedKey, 0, encapsulationLength));
 
             Wrapper kWrap = WrapUtil.getKeyUnwrapper(kemParameterSpec, secret);

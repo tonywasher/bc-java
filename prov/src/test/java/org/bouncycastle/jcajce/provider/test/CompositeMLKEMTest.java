@@ -3,6 +3,7 @@ package org.bouncycastle.jcajce.provider.test;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.security.InvalidKeyException;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -20,8 +21,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 
+import javax.crypto.spec.SecretKeySpec;
 import junit.framework.TestCase;
 
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
@@ -184,6 +187,124 @@ public class CompositeMLKEMTest
             byte[] decapsulated = decapsulate(oid, bc, priv2, enc.getEncapsulation());
             assertTrue(label + ": generated key pair failed encapsulate/decapsulate round-trip",
                 Arrays.areEqual(enc.getEncoded(), decapsulated));
+        }
+    }
+
+    /**
+     * initialize(null, random) is documented as existing only to supply a SecureRandom, but it
+     * forwarded to a component only where CompositeIndex held a non-null key-generation spec for it.
+     * The ML-KEM half never had one, and for the X25519 and X448 composites neither half did, so on
+     * those the caller's random reached neither component and on the rest it never reached the
+     * post-quantum one. This is the composite-KEM half of the same defect fixed on the signature
+     * side; see CompositeSignaturesTest.testKeyPairGeneratorSecureRandom.
+     */
+    public void testKeyPairGeneratorSecureRandom()
+        throws Exception
+    {
+        Provider bc = Security.getProvider("BC");
+
+        // neither component of the XDH composites had a spec, so nothing consumed the random at all
+        String[] neither = new String[]{"MLKEM768-X25519-SHA3-256", "MLKEM1024-X448-SHA3-256"};
+
+        for (int i = 0; i != neither.length; i++)
+        {
+            CompositeSignaturesTest.CountingSecureRandom counting = new CompositeSignaturesTest.CountingSecureRandom();
+
+            KeyPairGenerator kpg = KeyPairGenerator.getInstance(neither[i], bc);
+            kpg.initialize(null, counting);
+            kpg.generateKeyPair();
+
+            assertTrue(neither[i] + ": supplied SecureRandom was never drawn from", counting.calls > 0);
+        }
+
+        // and across the parameter sets it has to be the only source, or the key pair would not be
+        // reproducible from the seed - which is what pins the ML-KEM half of every combination
+        for (Map.Entry<String, String> entry : OIDS.entrySet())
+        {
+            String label = entry.getKey();
+
+            if (isPureMLKEM(label))
+            {
+                continue;
+            }
+
+            String algorithm = algorithmNameFor(label);
+
+            if (algorithm.indexOf("RSA") >= 0)
+            {
+                continue;       // an RSA prime search draws an unbounded, seed-dependent amount
+            }
+
+            KeyPairGenerator first = KeyPairGenerator.getInstance(algorithm, bc);
+            first.initialize(null, new CompositeSignaturesTest.SeededSecureRandom(11));
+
+            KeyPairGenerator second = KeyPairGenerator.getInstance(algorithm, bc);
+            second.initialize(null, new CompositeSignaturesTest.SeededSecureRandom(11));
+
+            assertTrue(algorithm + ": key pair not determined by the supplied SecureRandom",
+                Arrays.areEqual(first.generateKeyPair().getPublic().getEncoded(),
+                    second.generateKeyPair().getPublic().getEncoded()));
+        }
+    }
+
+    /**
+     * The SupportedKeyClasses / SupportedKeyFormats maps were built and then never passed to a
+     * provider registration, so JCA key-class filtering did not work for any composite KEM service.
+     */
+    public void testServiceAttributesPublished()
+        throws Exception
+    {
+        Provider prov = Security.getProvider("BC");
+
+        String[] types = new String[]{"Cipher", "KeyGenerator"};
+
+        for (int i = 0; i != types.length; i++)
+        {
+            Provider.Service service = prov.getService(types[i], "MLKEM768-ECDH-P256-SHA3-256");
+
+            assertNotNull(types[i], service);
+            assertEquals(types[i],
+                "org.bouncycastle.jcajce.CompositePublicKey|org.bouncycastle.jcajce.CompositePrivateKey",
+                service.getAttribute("SupportedKeyClasses"));
+            assertEquals(types[i], "PKCS#8|X.509", service.getAttribute("SupportedKeyFormats"));
+        }
+    }
+
+    /**
+     * A wrapped key shorter than the composite encapsulation was not rejected: BC's
+     * Arrays.copyOfRange zero-pads a range running off the end, so the decapsulation ran on a padded
+     * encapsulation - which ML-KEM's implicit rejection makes succeed - and the failure surfaced
+     * from the AES-KWP unwrap instead, naming the wrong thing.
+     */
+    public void testShortCiphertextRejected()
+        throws Exception
+    {
+        Provider bc = Security.getProvider("BC");
+
+        String name = "MLKEM768-ECDH-P256-SHA3-256";
+
+        KeyPair kp = KeyPairGenerator.getInstance(name, bc).generateKeyPair();
+        SecretKeySpec toWrap = new SecretKeySpec(new byte[32], "AES");
+
+        Cipher wrapper = Cipher.getInstance(name, bc);
+        wrapper.init(Cipher.WRAP_MODE, kp.getPublic());
+
+        byte[] wrapped = wrapper.wrap(toWrap);
+
+        Cipher unwrapper = Cipher.getInstance(name, bc);
+        unwrapper.init(Cipher.UNWRAP_MODE, kp.getPrivate());
+
+        assertTrue("the unmodified wrap must still round-trip", Arrays.areEqual(toWrap.getEncoded(),
+            unwrapper.unwrap(wrapped, "AES", Cipher.SECRET_KEY).getEncoded()));
+
+        try
+        {
+            unwrapper.unwrap(new byte[10], "AES", Cipher.SECRET_KEY);
+            fail("ciphertext shorter than the encapsulation accepted");
+        }
+        catch (InvalidKeyException e)
+        {
+            assertEquals("malformed composite KEM ciphertext: shorter than the encapsulation", e.getMessage());
         }
     }
 

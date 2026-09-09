@@ -41,11 +41,7 @@ public class KeyPairGeneratorSpi
             {
                 this.generators[i] = KeyPairGenerator.getInstance(CompositeIndex.getBaseName(algorithms[i]), "BC");
 
-                AlgorithmParameterSpec initSpec = initSpecs[i];
-                if (initSpec != null)
-                {
-                    this.generators[i].initialize(initSpec);
-                }
+                this.generators[i].initialize(initSpecs[i]);
             }
             catch (Exception e)
             {
@@ -84,11 +80,9 @@ public class KeyPairGeneratorSpi
         AlgorithmParameterSpec[] initSpecs = CompositeIndex.getKeyPairSpecs(algorithm);
         for (int i = 0; i != initSpecs.length; i++)
         {
-            AlgorithmParameterSpec initSpec = initSpecs[i];
-            if (initSpec != null)
-            {
-                this.generators[i].initialize(initSpec, secureRandom);
-            }
+            // CompositeIndex gives every component a spec precisely because this call is the only way
+            // the caller's SecureRandom can reach one - a null slot here would silently drop it.
+            this.generators[i].initialize(initSpecs[i], secureRandom);
         }
     }
 
