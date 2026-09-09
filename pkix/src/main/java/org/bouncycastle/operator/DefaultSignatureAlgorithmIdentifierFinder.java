@@ -334,21 +334,6 @@ public class DefaultSignatureAlgorithmIdentifierFinder
         addAlgorithm("MAYO_3", BCObjectIdentifiers.mayo_3);
         addAlgorithm("MAYO_5", BCObjectIdentifiers.mayo_5);
 
-        addAlgorithm("HASHMLDSA44-RSA2048-PSS-SHA256", MiscObjectIdentifiers.id_HashMLDSA44_RSA2048_PSS_SHA256);
-        addAlgorithm("HASHMLDSA44-RSA2048-PKCS15-SHA256", MiscObjectIdentifiers.id_HashMLDSA44_RSA2048_PKCS15_SHA256);
-        addAlgorithm("HASHMLDSA44-ED25519-SHA512", MiscObjectIdentifiers.id_HashMLDSA44_Ed25519_SHA512);
-        addAlgorithm("HASHMLDSA44-ECDSA-P256-SHA256", MiscObjectIdentifiers.id_HashMLDSA44_ECDSA_P256_SHA256);
-        addAlgorithm("HASHMLDSA65-RSA3072-PSS-SHA512", MiscObjectIdentifiers.id_HashMLDSA65_RSA3072_PSS_SHA512);
-        addAlgorithm("HASHMLDSA65-RSA3072-PKCS15-SHA512", MiscObjectIdentifiers.id_HashMLDSA65_RSA3072_PKCS15_SHA512);
-        addAlgorithm("HASHMLDSA65-RSA4096-PSS-SHA512", MiscObjectIdentifiers.id_HashMLDSA65_RSA4096_PSS_SHA512);
-        addAlgorithm("HASHMLDSA65-RSA4096-PKCS15-SHA512", MiscObjectIdentifiers.id_HashMLDSA65_RSA4096_PKCS15_SHA512);
-        addAlgorithm("HASHMLDSA65-ECDSA-P384-SHA512", MiscObjectIdentifiers.id_HashMLDSA65_ECDSA_P384_SHA512);
-        addAlgorithm("HASHMLDSA65-ECDSA-BRAINPOOLP256R1-SHA512", MiscObjectIdentifiers.id_HashMLDSA65_ECDSA_brainpoolP256r1_SHA512);
-        addAlgorithm("HASHMLDSA65-ED25519-SHA512", MiscObjectIdentifiers.id_HashMLDSA65_Ed25519_SHA512);
-        addAlgorithm("HASHMLDSA87-ECDSA-P384-SHA512", MiscObjectIdentifiers.id_HashMLDSA87_ECDSA_P384_SHA512);
-        addAlgorithm("HASHMLDSA87-ECDSA-BRAINPOOLP384R1-SHA512", MiscObjectIdentifiers.id_HashMLDSA87_ECDSA_brainpoolP384r1_SHA512);
-        addAlgorithm("HASHMLDSA87-ED448-SHA512", MiscObjectIdentifiers.id_HashMLDSA87_Ed448_SHA512);
-
         addAlgorithm("MLDSA44-RSA2048-PSS-SHA256", IANAObjectIdentifiers.id_MLDSA44_RSA2048_PSS_SHA256);
         addAlgorithm("MLDSA44-RSA2048-PKCS15-SHA256", IANAObjectIdentifiers.id_MLDSA44_RSA2048_PKCS15_SHA256);
         addAlgorithm("MLDSA44-ED25519-SHA512", IANAObjectIdentifiers.id_MLDSA44_Ed25519_SHA512);

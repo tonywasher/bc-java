@@ -5328,83 +5328,10 @@ public class CertTest
             isEquals(oid, cert.getSigAlgOID());
             CompositePublicKey compositePublicKey = (CompositePublicKey)cert.getPublicKey();
 
-            // isEquals(CompositeSignaturesConstants.ASN1IdentifierAlgorithmNameMap.get(new ASN1ObjectIdentifier(oid)).getId(), compositePublicKey.getAlgorithm());
-
             isEquals(subjectName, cert.getSubjectX500Principal().getName());
 
             cert.verify(cert.getPublicKey(), "BC");
             index++;
-        }
-    }
-
-    private void checkParseCompositePublicKey()
-    {
-//        try
-//        {
-//            //compositePublicKeyExampleRFC.pem contains the sample public key from https://www.ietf.org/archive/id/draft-ounsworth-pq-composite-sigs-13.html
-//            PEMParser pemParser = new PEMParser(new InputStreamReader(TestResourceFinder.findTestResource("pqc/composite", "compositePublicKeyExampleRFC.pem")));
-//            SubjectPublicKeyInfo subjectPublicKeyInfo = (SubjectPublicKeyInfo)pemParser.readObject();
-//            isEquals(subjectPublicKeyInfo.getAlgorithm().getAlgorithm(), IANAObjectIdentifiers.id_MLDSA44_ECDSA_P256_SHA256);
-//
-//            CompositePublicKey compositePublicKey = new CompositePublicKey(subjectPublicKeyInfo);
-//
-//            isEquals(compositePublicKey.getPublicKeys().get(0).getAlgorithm(), "ML-DSA-44");
-//            isEquals(compositePublicKey.getPublicKeys().get(1).getAlgorithm(), "ECDSA");
-//        }
-//        catch (Exception e)
-//        {
-//            fail("checkParseCompositePublicKey failed: " + e.getMessage());
-//        }
-    }
-
-    // TODO: OIDS no updated
-//    private void checkParseCompositePrivateKey()
-//    {
-//        try
-//        {
-//            //compositePrivateKeyExample.pem does NOT contain the sample private key from https://www.ietf.org/archive/id/draft-ounsworth-pq-composite-sigs-13.html
-//            //because the at this moment, the Dilithium private key formats don't match.
-//            //this sample was generated from this BC implementation
-//            PEMParser pemParser = new PEMParser(new InputStreamReader(TestResourceFinder.findTestResource("pqc/composite", "compositePrivateKeyExample.pem")));
-//            PrivateKeyInfo privateKeyInfo = (PrivateKeyInfo)pemParser.readObject();
-//
-//            isEquals(privateKeyInfo.getPrivateKeyAlgorithm().getAlgorithm(), IANAObjectIdentifiers.id_MLDSA44_ECDSA_P256_SHA256);
-//
-//            CompositePrivateKey compositePrivateKey = new CompositePrivateKey(privateKeyInfo);
-//
-//            isEquals(compositePrivateKey.getPrivateKeys().get(0).getAlgorithm(), "DILITHIUM2");
-//            isEquals(compositePrivateKey.getPrivateKeys().get(1).getAlgorithm(), "ECDSA");
-//        }
-//        catch (Exception e)
-//        {
-//            fail("checkParseCompositePrivateKey failed: " + e.getMessage());
-//        }
-//    }
-
-    private void checkParseAndVerifyCompositeCertificate()
-    {
-        try
-        {
-            //compositeCertificateExampleRFC.pem contains the sample certificate from https://www.ietf.org/archive/id/draft-ounsworth-pq-composite-sigs-13.html
-//            PEMParser pemParser = new PEMParser(new InputStreamReader(TestResourceFinder.findTestResource("pqc/composite", "compositeCertificateExampleRFC.pem")));
-//            X509CertificateHolder certificateHolder = (X509CertificateHolder)pemParser.readObject();
-//            JcaX509CertificateConverter x509Converter = new JcaX509CertificateConverter().setProvider("BC");
-//            X509Certificate certificate = x509Converter.getCertificate(certificateHolder);
-//
-//            isEquals(certificate.getSigAlgOID(), IANAObjectIdentifiers.id_MLDSA44_ECDSA_P256_SHA256.toString());
-//
-//            CompositePublicKey compositePublicKey = (CompositePublicKey)certificate.getPublicKey();
-//
-//            isEquals(compositePublicKey.getPublicKeys().get(0).getAlgorithm(), "ML-DSA-44");
-//            isEquals(compositePublicKey.getPublicKeys().get(1).getAlgorithm(), "ECDSA");
-
-            // TODO: dilithium was used in the sample.
-            //certificate.verify(compositePublicKey);
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-            fail("checkParseAndVerifyCompositeCertificate failed: " + e.getMessage());
         }
     }
 
@@ -5559,9 +5486,6 @@ public class CertTest
         checkSerialisation();
 
         checkCompositeSignatureCertificateCreation();
-        checkParseCompositePublicKey();
-//        checkParseCompositePrivateKey();
-        checkParseAndVerifyCompositeCertificate();
     }
 
     private Extensions generateExtensions(Vector oids, Vector values)

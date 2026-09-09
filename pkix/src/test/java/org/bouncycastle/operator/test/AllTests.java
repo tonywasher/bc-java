@@ -1075,6 +1075,69 @@ public class AllTests
     }
 
     /**
+     * The signature-algorithm finder knew 14 HASHMLDSA* names that mapped onto the superseded
+     * draft-13 OIDs. Those OIDs were never in CompositeIndex.pairings, so no provider service
+     * backed them: find() handed back an AlgorithmIdentifier that JcaContentSignerBuilder then
+     * failed on with NoSuchAlgorithmException. This locks the finder's composite names to what the
+     * BC provider can actually do.
+     */
+    public void testCompositeNamesAreBackedByServices()
+        throws Exception
+    {
+        DefaultSignatureAlgorithmIdentifierFinder finder = new DefaultSignatureAlgorithmIdentifierFinder();
+
+        String[] names = new String[]
+        {
+            "MLDSA44-RSA2048-PSS-SHA256",
+            "MLDSA44-RSA2048-PKCS15-SHA256",
+            "MLDSA44-ED25519-SHA512",
+            "MLDSA44-ECDSA-P256-SHA256",
+            "MLDSA65-RSA3072-PSS-SHA512",
+            "MLDSA65-RSA3072-PKCS15-SHA512",
+            "MLDSA65-RSA4096-PSS-SHA512",
+            "MLDSA65-RSA4096-PKCS15-SHA512",
+            "MLDSA65-ECDSA-P256-SHA512",
+            "MLDSA65-ECDSA-P384-SHA512",
+            "MLDSA65-ECDSA-BRAINPOOLP256R1-SHA512",
+            "MLDSA65-ED25519-SHA512",
+            "MLDSA87-ECDSA-P384-SHA512",
+            "MLDSA87-ECDSA-BRAINPOOLP384R1-SHA512",
+            "MLDSA87-ED448-SHAKE256",
+            "MLDSA87-RSA3072-PSS-SHA512",
+            "MLDSA87-RSA4096-PSS-SHA512",
+            "MLDSA87-ECDSA-P521-SHA512"
+        };
+
+        for (int i = 0; i != names.length; i++)
+        {
+            AlgorithmIdentifier algId = finder.find(names[i]);
+
+            assertNull("composite algorithm identifiers carry no parameters", algId.getParameters());
+            assertNotNull(names[i], Signature.getInstance(algId.getAlgorithm().getId(), "BC"));
+        }
+
+        String[] superseded = new String[]
+        {
+            "HASHMLDSA44-RSA2048-PSS-SHA256",
+            "HASHMLDSA65-ECDSA-P384-SHA512",
+            "HASHMLDSA87-ED448-SHA512"
+        };
+
+        for (int i = 0; i != superseded.length; i++)
+        {
+            try
+            {
+                finder.find(superseded[i]);
+                fail("superseded composite name still resolved: " + superseded[i]);
+            }
+            catch (IllegalArgumentException e)
+            {
+                assertEquals("Unknown signature type requested: " + superseded[i], e.getMessage());
+            }
+        }
+    }
+
+    /**
      * github #1510: JceInputDecryptorProviderBuilder previously assumed
      * algorithm parameters were either a raw IV (ASN1OctetString) or
      * GOST28147Parameters. AES-GCM AlgorithmIdentifiers carry a SEQUENCE
