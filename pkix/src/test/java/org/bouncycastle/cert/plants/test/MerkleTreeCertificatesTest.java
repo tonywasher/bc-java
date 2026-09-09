@@ -823,6 +823,93 @@ public class MerkleTreeCertificatesTest
             !foreignCert.isSignatureValid(provider));
     }
 
+    /**
+     * The certificate-mode adapter follows Section 7.2 for any subtree shape:
+     * the entry index comes from the serial and the inclusion proof is
+     * evaluated in full, so an EE at index 2 of the four-entry subtree [0, 4)
+     * (a two-hash proof) verifies through isSignatureValid exactly as it does
+     * through the validator, and the same proof presented under a serial that
+     * names another index does not.
+     */
+    public void testCertificateModeGeneralSubtree()
+        throws Exception
+    {
+        SecureRandom random = new SecureRandom();
+        Ed25519KeyPairGenerator gen = new Ed25519KeyPairGenerator();
+        gen.init(new Ed25519KeyGenerationParameters(random));
+        AsymmetricCipherKeyPair caKp = gen.generateKeyPair();
+        AsymmetricCipherKeyPair eeKp = gen.generateKeyPair();
+        SubjectPublicKeyInfo eeSpki = SubjectPublicKeyInfoFactory.createSubjectPublicKeyInfo(eeKp.getPublic());
+
+        MTCCertAuth ca = new MTCCertAuth(
+            LOG_TAID_STRING,
+            new BcSha256MerkleTreeHash(),
+            MTCObjectIdentifiers.id_alg_mtcProof);
+        MTCLog log = new MTCLog(ca, 1L, 0L, 4L);
+        long index = 2L;
+
+        // The proof for index 2 in [0, 4) is {leaf 3, MTH([0, 2))}; it does not
+        // depend on entry 2 itself, so placeholder entries suffice to build it.
+        List<byte[]> entryHashes = new ArrayList<byte[]>();
+        for (int i = 0; i < 4; i++)
+        {
+            entryHashes.add(hashFunc.hashLeaf(("entry-" + i).getBytes()));
+        }
+        List<byte[]> proofHashes = MerkleTreePrimitives.generateSubtreeInclusionProof(
+            index, 0L, 4L, entryHashes, hashFunc);
+        isTrue("two-hash inclusion proof", proofHashes.size() == 2);
+        ByteArrayOutputStream proofOut = new ByteArrayOutputStream();
+        for (int i = 0; i < proofHashes.size(); i++)
+        {
+            proofOut.write((byte[])proofHashes.get(i));
+        }
+        byte[] inclusionProof = proofOut.toByteArray();
+
+        ContentSigner mtcSigner = new MTCContentSigner(
+            log, inclusionProof, new BcMTCCosigner(ca.getCaId(), caKp.getPrivate()));
+
+        long now = System.currentTimeMillis();
+        X509CertificateHolder cert = new X509v3CertificateBuilder(
+            ca.issuerName(), ca.certSerial(log, index),
+            new Date(now), new Date(now + 24L * 60 * 60 * 1000),
+            new X500Name("CN=mtc-test-ee"), eeSpki).build(mtcSigner);
+
+        ContentVerifierProvider provider = new MTCSignatureVerifierProvider(ca,
+            BcMTCCosignerVerifierProvider.singleCosigner(ca.getCaId(), caKp.getPublic()).get(ca.getCaId()));
+        isTrue("certificate-mode verifies a two-level inclusion proof", cert.isSignatureValid(provider));
+
+        isTrue("validator agrees", MerkleTreeCertificateValidator.validateCertificate(cert,
+            new MerkleTreeCertificateValidator.ValidationParams(
+                BcMTCCosignerVerifierProvider.singleCosigner(ca.getCaId(), caKp.getPublic()),
+                hashFunc, 1, null)));
+
+        // Replay the same MTCProof under a serial naming index 3: the recomputed
+        // subtree hash is not the one the cosigner signed.
+        final byte[] proofBytes = cert.getSignature();
+        ContentSigner replay = new ContentSigner()
+        {
+            public AlgorithmIdentifier getAlgorithmIdentifier()
+            {
+                return new AlgorithmIdentifier(MTCObjectIdentifiers.id_alg_mtcProof);
+            }
+
+            public java.io.OutputStream getOutputStream()
+            {
+                return new ByteArrayOutputStream();
+            }
+
+            public byte[] getSignature()
+            {
+                return proofBytes;
+            }
+        };
+        X509CertificateHolder wrongIndex = new X509v3CertificateBuilder(
+            ca.issuerName(), ca.certSerial(log, 3L),
+            new Date(now), new Date(now + 24L * 60 * 60 * 1000),
+            new X500Name("CN=mtc-test-ee"), eeSpki).build(replay);
+        isTrue("serial naming another index is rejected", !wrongIndex.isSignatureValid(provider));
+    }
+
     public void testStandaloneCertificateValidation()
         throws Exception
     {
@@ -1864,6 +1951,7 @@ public class MerkleTreeCertificatesTest
         testCosignatureVerificationMlDsa87();
         testMTCSignatureVerifierProviderManualMode();
         testMTCSignatureVerifierProviderCertificateMode();
+        testCertificateModeGeneralSubtree();
         testStandaloneCertificateValidation();
         testMalformedInclusionProofLengthRejected();
         testSubtreeInfoEquality();

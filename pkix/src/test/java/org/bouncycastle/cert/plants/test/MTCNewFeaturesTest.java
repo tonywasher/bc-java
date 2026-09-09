@@ -29,7 +29,7 @@ import org.bouncycastle.util.test.SimpleTest;
 /**
  * Tests for the new features added in draft-ietf-plants-merkle-tree-certs-04:
  * trust anchor ID helpers (Section 5.1), CA certificate representation
- * (Section 5.5), and landmark sequence parsing (Section 6.3.3).
+ * (Section 5.5), and landmark sequence parsing (Section 6.4.3).
  */
 public class MTCNewFeaturesTest
     extends SimpleTest

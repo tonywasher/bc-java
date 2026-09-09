@@ -79,7 +79,7 @@ public class MerkleTreeCertificateJcaExample
         // 3. Issue the EE certificate. The cert's issuer carries the CA's
         //    trust anchor ID; the validator recovers the issuance log ID by
         //    appending the log_number from the serial. The result is a
-        //    standalone certificate (Section 6.2 of the draft) over the
+        //    standalone certificate (Section 6.3 of the draft) over the
         //    minimal subtree [0, 2): the EE's entry at index 0 with a
         //    sibling leaf at index 1.
         //

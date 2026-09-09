@@ -226,7 +226,7 @@ public class MerkleTreeCertificateValidator
      * A half-open range {@code [start, end)} of revoked certificate serial
      * numbers, per Section 7.5 of the draft. The serial packs the log number
      * into the upper 16 bits and the entry index into the lower 48 (Section
-     * 6.1), so ranges can revoke spans of entries within one log, whole logs,
+     * 6.2), so ranges can revoke spans of entries within one log, whole logs,
      * or spans of logs. The relying party's list of ranges is checked against
      * the full serial before it is decomposed (Section 7.2 step 4).
      *
@@ -389,7 +389,12 @@ public class MerkleTreeCertificateValidator
             }
         }
 
-        // Step 2: decode the signatureValue as an MTCProof.
+        // Step 2: decode the signatureValue as an MTCProof. A BIT STRING with
+        // unused bits is not a multiple of 8 bits and fails verification.
+        if (certHolder.toASN1Structure().getSignature().getPadBits() != 0)
+        {
+            throw new SecurityException("signatureValue is not a multiple of 8 bits");
+        }
         MTCProof proof = new MTCProof(certHolder.getSignature());
 
         // Step 3: the serial number must be positive and fit in a uint64.
