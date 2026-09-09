@@ -147,7 +147,7 @@ public class MTCNewFeaturesTest
             }
         });
 
-        // Serial composition per Section 6.1: serial = (log_number << 48) | index,
+        // Serial composition per Section 6.2: serial = (log_number << 48) | index,
         // "positive and at most 2^64-1". log_number >= 32768 overflows a signed
         // long shift, so the composition must be done in BigInteger.
         isTrue("small serial",

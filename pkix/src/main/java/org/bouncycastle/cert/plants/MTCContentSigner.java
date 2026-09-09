@@ -12,7 +12,7 @@ import org.bouncycastle.util.Arrays;
 /**
  * Issuer-side {@link ContentSigner} that emits an MTC {@code signatureValue}
  * (an encoded {@link MTCProof}) for an EE Merkle Tree certificate per
- * Section 6.1 of draft-ietf-plants-merkle-tree-certs.
+ * Section 6.2 of draft-ietf-plants-merkle-tree-certs.
  *
  * <p>The signer is plugged into the standard
  * {@link org.bouncycastle.cert.X509v3CertificateBuilder#build(ContentSigner)

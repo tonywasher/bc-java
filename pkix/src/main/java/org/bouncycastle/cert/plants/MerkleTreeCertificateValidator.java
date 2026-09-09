@@ -424,7 +424,7 @@ public class MerkleTreeCertificateValidator
             }
         }
 
-        // Step 5: decompose the serial number per Section 6.1 of the draft:
+        // Step 5: decompose the serial number per Section 6.2 of the draft:
         //   serial = (log_number << 48) | index
         long index = serialBig.and(BigInteger.valueOf(0xFFFFFFFFFFFFL)).longValue();
         long logNumber = BigIntegers.longValueExact(serialBig.shiftRight(48));

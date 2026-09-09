@@ -19,8 +19,8 @@ import org.bouncycastle.crypto.signers.PlainDSAEncoding;
 
 /**
  * Shared algorithm-string to lightweight {@link Signer} dispatch for the
- * MTC signature algorithms enumerated in Section 6.1 of
- * draft-ietf-plants-merkle-tree-certs.
+ * MTC signature algorithms named in {@link org.bouncycastle.cert.plants.MTCSignatureAlgorithm},
+ * permitted by Section 5.3.3 of draft-ietf-plants-merkle-tree-certs.
  */
 final class BcMTCSigners
 {

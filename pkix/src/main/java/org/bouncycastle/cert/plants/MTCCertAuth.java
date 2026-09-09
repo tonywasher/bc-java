@@ -114,7 +114,7 @@ public class MTCCertAuth
     /**
      * @param logNumber log number ({@code 1 <= logNumber <= 2^16-1})
      * @param index     entry index in the log ({@code 0 <= index <= 2^48-1})
-     * @return the 64-bit cert serial composed per Section 6.1
+     * @return the 64-bit cert serial composed per Section 6.2
      */
     public BigInteger certSerial(long logNumber, long index)
     {

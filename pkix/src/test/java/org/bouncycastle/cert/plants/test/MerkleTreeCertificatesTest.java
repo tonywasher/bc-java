@@ -84,7 +84,7 @@ import org.bouncycastle.util.test.SimpleTest;
 /**
  * Tests for the Merkle Tree Certificates implementation, exercising the
  * primitives, cosignature verification, and full certificate validation paths
- * defined by draft-ietf-plants-merkle-tree-certs-03.
+ * defined by draft-ietf-plants-merkle-tree-certs-05.
  */
 public class MerkleTreeCertificatesTest
     extends SimpleTest
@@ -833,7 +833,7 @@ public class MerkleTreeCertificatesTest
         // of BIT_CEIL(end - start) = BIT_CEIL(2) = 2.
         final long logNumber = 1;
         final long index = 42;
-        final long serial = (logNumber << 48) | index;  // Section 6.1 of draft-04
+        final long serial = (logNumber << 48) | index;  // Section 6.2
         long start = 42;
         long end = 44;
         // Construct the log ID by appending OID components 0 and logNumber to
@@ -1151,7 +1151,7 @@ public class MerkleTreeCertificatesTest
     }
 
     /**
-     * Draft-04 §6.1: signatures in an MTCProof MUST be ordered by cosigner_id
+     * Section 6.2: signatures in an MTCProof MUST be ordered by cosigner_id
      * (shorter byte strings before longer; same-length lexicographic), and
      * duplicate cosigner_ids MUST be rejected. The constructor must validate
      * this and the parser must reject malformed encodings.
@@ -1235,7 +1235,7 @@ public class MerkleTreeCertificatesTest
     }
 
     /**
-     * MTCProof wire format (Section 6.1): the {@code extensions<0..2^16-1>}
+     * MTCProof wire format (Section 6.2): the {@code extensions<0..2^16-1>}
      * field precedes {@code start}. An empty list is just the uint16 length
      * prefix 0x0000; a non-empty list round-trips through encode/decode and
      * is reflected in {@link org.bouncycastle.cert.plants.MTCProof#getExtensionsWire()}.
@@ -1724,7 +1724,7 @@ public class MerkleTreeCertificatesTest
     };
 
     /**
-     * Builds a CosignedMessage per Section 5.3.1 of draft-04 for the MTCProof
+     * Builds a CosignedMessage per Section 5.3.1 for the MTCProof
      * use case (timestamp == 0).
      */
     private byte[] buildSignatureInput(byte[] logId, long start, long end, byte[] subtreeHash, byte[] cosignerId)
@@ -1783,7 +1783,7 @@ public class MerkleTreeCertificatesTest
         SubjectPublicKeyInfo spki)
     {
         ASN1EncodableVector v = new ASN1EncodableVector();
-        v.add(new ASN1Integer(serialNumber));  // serialNumber per Section 6.1: (log_number << 48) | index
+        v.add(new ASN1Integer(serialNumber));  // serialNumber per Section 6.2: (log_number << 48) | index
         v.add(sigAlg);                          // signature
         v.add(tbsEntry.getIssuer());            // issuer
         v.add(tbsEntry.getValidity());          // validity

@@ -39,7 +39,7 @@ public class LandmarkCertificateManager
      * Builds a landmark-relative certificate (no signatures, only an inclusion
      * proof to a predistributed landmark subtree, Section 6.3.4). The
      * certificate serial number is packed from the log number and the entry's
-     * index per Section 6.1: {@code serial = (log_number << 48) | index}.
+     * index per Section 6.2: {@code serial = (log_number << 48) | index}.
      *
      * @param logNumber            number of the issuance log containing the entry
      *                             ({@code 1 <= logNumber <= 2^16-1})
