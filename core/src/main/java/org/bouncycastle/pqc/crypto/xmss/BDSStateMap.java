@@ -50,6 +50,17 @@ public class BDSStateMap
         return maxIndex;
     }
 
+    /**
+     * Zeroize the secret material retained by every layer's state; see {@link BDS#clearSecrets()}.
+     */
+    void clearSecrets()
+    {
+        for (Iterator<BDS> it = bdsState.values().iterator(); it.hasNext();)
+        {
+            it.next().clearSecrets();
+        }
+    }
+
     void updateState(XMSSMTParameters params, long globalIndex, byte[] publicSeed, byte[] secretKeySeed)
     {
         XMSSParameters xmssParams = params.getXMSSParameters();

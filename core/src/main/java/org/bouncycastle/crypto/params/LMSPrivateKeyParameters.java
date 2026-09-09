@@ -8,6 +8,8 @@ import java.io.InputStream;
 import java.util.Map;
 import java.util.WeakHashMap;
 
+import javax.security.auth.Destroyable;
+
 import org.bouncycastle.crypto.Digest;
 import org.bouncycastle.crypto.ExhaustedPrivateKeyException;
 import org.bouncycastle.crypto.signers.LMSContextBasedSigner;
@@ -20,7 +22,7 @@ import org.bouncycastle.util.io.Streams;
 
 public class LMSPrivateKeyParameters
     extends LMSKeyParameters
-    implements LMSContextBasedSigner
+    implements LMSContextBasedSigner, Destroyable
 {
     private static CacheKey T1 = new CacheKey(1);
     private static CacheKey[] internedKeys = new CacheKey[64];
@@ -43,6 +45,8 @@ public class LMSPrivateKeyParameters
     private final int maxCacheR;
 
     private int q;
+
+    private volatile boolean destroyed;
 
     //
     // These are not final because they can be generated.
@@ -400,6 +404,8 @@ public class LMSPrivateKeyParameters
         int q;
         synchronized (this)
         {
+            checkDestroyed();
+
             q = this.q;
             if (q >= maxQ)
             {
@@ -439,6 +445,8 @@ public class LMSPrivateKeyParameters
         //
         synchronized (this)
         {
+            checkDestroyed();
+
             if (this.q >= maxQ)
             {
                 throw new ExhaustedPrivateKeyException("ots private key exhausted");
@@ -522,7 +530,47 @@ public class LMSPrivateKeyParameters
 
     public byte[] getMasterSecret()
     {
-        return Arrays.clone(masterSecret);
+        byte[] rv = Arrays.clone(masterSecret);
+
+        // clone first, check second: a destroy() that lands in between has set the flag before
+        // it clears the array, so a stale copy is never handed out.
+        checkDestroyed();
+
+        return rv;
+    }
+
+    /**
+     * Destroy this key, zeroizing the master secret it holds.
+     * <p>
+     * The key identifier I, the parameter sets, the index and the cached Merkle tree nodes are
+     * retained - none of them is secret, and the public key stays derivable where the tree's
+     * root is already cached. After destruction {@link #isDestroyed()} returns true and
+     * {@link #getMasterSecret()}, {@link #getEncoded()}, {@link #generateLMSContext()} and the
+     * derivation of child trees throw {@link IllegalStateException}; a signature attempt fails
+     * before its one-time index is claimed. Note: keys repositioned within this tree or split
+     * off it with {@link #extractKeyShard(int)} share its master secret array, so destroying
+     * this key invalidates them too.
+     */
+    public synchronized void destroy()
+    {
+        if (!destroyed)
+        {
+            destroyed = true;
+            Arrays.clear(masterSecret);
+        }
+    }
+
+    public boolean isDestroyed()
+    {
+        return destroyed;
+    }
+
+    private void checkDestroyed()
+    {
+        if (destroyed)
+        {
+            throw new IllegalStateException("key destroyed");
+        }
     }
 
     public int getIndexLimit()
@@ -594,6 +642,8 @@ public class LMSPrivateKeyParameters
             // These can be pre generated at the time of key generation and held within the private key.
             // However it will cost memory to have them stick around.
             //
+            checkDestroyed();
+
             return LMSEngine.computeLeaf(tDigest, otsParameters, I, r, r - twoToh, masterSecret);
         }
 
@@ -666,6 +716,12 @@ public class LMSPrivateKeyParameters
 
         LMSPrivateKeyParameters that = (LMSPrivateKeyParameters)o;
 
+        // a destroyed key no longer exposes its value, so it is only equal to itself.
+        if (this.destroyed || that.destroyed)
+        {
+            return false;
+        }
+
         return this.getIndex() == that.getIndex()
             && this.maxQ == that.maxQ
             && Arrays.areEqual(this.I, that.I)
@@ -695,6 +751,8 @@ public class LMSPrivateKeyParameters
     public byte[] getEncoded()
         throws IOException
     {
+        checkDestroyed();
+
         int q = getIndex();
 
         //

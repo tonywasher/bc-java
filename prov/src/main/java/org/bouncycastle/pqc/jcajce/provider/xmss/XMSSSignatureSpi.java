@@ -105,6 +105,11 @@ public class XMSSSignatureSpi
     {
         if (privateKey instanceof BCXMSSPrivateKey)
         {
+            if (((BCXMSSPrivateKey)privateKey).isDestroyed())
+            {
+                throw new InvalidKeyException("key destroyed");
+            }
+
             checkTreeDigest(((BCXMSSPrivateKey)privateKey).getTreeDigestOID());
 
             CipherParameters param = ((BCXMSSPrivateKey)privateKey).getKeyParams();
