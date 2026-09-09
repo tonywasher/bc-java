@@ -803,6 +803,8 @@ public class PKCS12KeyStoreSpi
         char[] password)
         throws IOException
     {
+        // a PBES2 content-encryption keyLength, not a MAC one: 16 (AES-128) is legal here, so this
+        // stays on validateKeyLength and must not pick up validateMacKeyLength's 20-octet floor.
         PBEKeySpec pbeSpec = new PBEKeySpec(password, pbeParams.getSalt(),
             PKCS12Util.validateIterationCount(pbeParams.getIterationCount()),
             PKCS12Util.validateKeyLength(pbeParams.getKeyLength()) * 8);
@@ -2304,7 +2306,7 @@ public class PKCS12KeyStoreSpi
                     pbkdf2Params.getSalt(),
                     PKCS12Util.validateIterationCount(pbkdf2Params.getIterationCount()));
 
-                CipherParameters key = generator.generateDerivedParameters(PKCS12Util.validateKeyLength(pbkdf2Params.getKeyLength()) * 8);
+                CipherParameters key = generator.generateDerivedParameters(PKCS12Util.validateMacKeyLength(pbkdf2Params.getKeyLength()) * 8);
 
                 Arrays.clear(generator.getPassword());
 

@@ -147,7 +147,7 @@ class PKCS12PBEUtils
             pbkdf2Params.getSalt(),
             PKCS12Util.validateIterationCount(pbkdf2Params.getIterationCount()));
 
-        CipherParameters key = generator.generateDerivedParameters(PKCS12Util.validateKeyLength(pbkdf2Params.getKeyLength()) * 8);
+        CipherParameters key = generator.generateDerivedParameters(PKCS12Util.validateMacKeyLength(pbkdf2Params.getKeyLength()) * 8);
 
         hMac.init(key);
 

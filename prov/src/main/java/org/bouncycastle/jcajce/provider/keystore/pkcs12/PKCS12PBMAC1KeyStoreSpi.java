@@ -2284,7 +2284,10 @@ public class PKCS12PBMAC1KeyStoreSpi
                 byte[] pbSalt = new byte[32];
                 helper.createSecureRandom("DEFAULT").nextBytes(pbSalt);
 
-                PBKDF2Params pbkdf2Params = new PBKDF2Params(pbSalt, 1 << 16, 256, new AlgorithmIdentifier(PKCSObjectIdentifiers.id_hmacWithSHA256));
+                // RFC 9579 sec. 5: the derived key SHOULD be the size of the HMAC output, which is 64
+                // for the HMAC-SHA-512 auth scheme below. Releases up to 1.86 asked for 256 here; those
+                // files still verify, since the length is read back from the file.
+                PBKDF2Params pbkdf2Params = new PBKDF2Params(pbSalt, 1 << 16, 64, new AlgorithmIdentifier(PKCSObjectIdentifiers.id_hmacWithSHA256));
                 AlgorithmIdentifier keyDevFunc = new AlgorithmIdentifier(PKCSObjectIdentifiers.id_PBKDF2, pbkdf2Params);
                 AlgorithmIdentifier authScheme = new AlgorithmIdentifier(id_hmacWithSHA512);
                 PBMAC1Params pbmac1Params = new PBMAC1Params(keyDevFunc, authScheme);
@@ -2312,7 +2315,7 @@ public class PKCS12PBMAC1KeyStoreSpi
                     pbkdf2Params.getSalt(),
                     PKCS12Util.validateIterationCount(pbkdf2Params.getIterationCount()));
 
-                CipherParameters key = generator.generateDerivedParameters(PKCS12Util.validateKeyLength(pbkdf2Params.getKeyLength()) * 8);
+                CipherParameters key = generator.generateDerivedParameters(PKCS12Util.validateMacKeyLength(pbkdf2Params.getKeyLength()) * 8);
 
                 Arrays.clear(generator.getPassword());
 
