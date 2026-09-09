@@ -28,6 +28,7 @@ public class AllTestsXMSS
         suite.addTestSuite(XMSSPublicKeyParseTest.class);
         suite.addTestSuite(XMSSPrivateKeyEncodingTest.class);
         suite.addTestSuite(XMSSStateEncodingTest.class);
+        suite.addTestSuite(XMSSPromotionCompatibilityTest.class);
 
         return new AllTests.BCTestSetup(suite);
     }

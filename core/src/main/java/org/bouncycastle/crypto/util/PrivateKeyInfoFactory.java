@@ -95,6 +95,11 @@ public class PrivateKeyInfoFactory
     public static PrivateKeyInfo createPrivateKeyInfo(AsymmetricKeyParameter privateKey, ASN1Set attributes)
         throws IOException
     {
+        // the two helpers below answer null for anything they do not handle, so they are asked
+        // rather than tested for - encoding a key is the work this method exists to do, and doing
+        // it once to decide whether it can be done and again to keep the answer would do it twice
+        PrivateKeyInfo keyInfo;
+
         if (privateKey instanceof RSAKeyParameters)
         {
             RSAPrivateCrtKeyParameters priv = (RSAPrivateCrtKeyParameters)privateKey;
@@ -215,9 +220,13 @@ public class PrivateKeyInfoFactory
             }
             return new PrivateKeyInfo(algorithmIdentifier, getBasicPQCEncoding(params.getSeed(), params.getEncoded()), attributes);
         }
-        else if (LmsKeyUtil.createPrivateKeyInfo(privateKey, attributes) != null)
+        else if ((keyInfo = LmsKeyUtil.createPrivateKeyInfo(privateKey, attributes)) != null)
         {
-            return LmsKeyUtil.createPrivateKeyInfo(privateKey, attributes);
+            return keyInfo;
+        }
+        else if ((keyInfo = XmssKeyUtil.createPrivateKeyInfo(privateKey, attributes)) != null)
+        {
+            return keyInfo;
         }
         else if (privateKey instanceof CMCEPrivateKeyParameters)
         {

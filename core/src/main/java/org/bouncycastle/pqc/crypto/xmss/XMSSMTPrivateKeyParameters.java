@@ -10,7 +10,10 @@ import org.bouncycastle.util.Exceptions;
 
 /**
  * XMSS^MT Private Key.
+ *
+ * @deprecated use {@link org.bouncycastle.crypto.params.XMSSMTPrivateKeyParameters} instead.
  */
+@Deprecated
 public final class XMSSMTPrivateKeyParameters
     extends XMSSMTKeyParameters
     implements XMSSStoreableObjectInterface, Encodable, Destroyable

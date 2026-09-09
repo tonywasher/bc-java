@@ -73,6 +73,11 @@ public class SubjectPublicKeyInfoFactory
     public static SubjectPublicKeyInfo createSubjectPublicKeyInfo(AsymmetricKeyParameter publicKey)
         throws IOException
     {
+        // the two helpers below answer null for anything they do not handle, so they are asked
+        // rather than tested for - encoding a key is the work this method exists to do, and doing
+        // it once to decide whether it can be done and again to keep the answer would do it twice
+        SubjectPublicKeyInfo keyInfo;
+
         if (publicKey instanceof RSAKeyParameters)
         {
             RSAKeyParameters pub = (RSAKeyParameters)publicKey;
@@ -239,9 +244,13 @@ public class SubjectPublicKeyInfoFactory
 
             return new SubjectPublicKeyInfo(new AlgorithmIdentifier(EdECObjectIdentifiers.id_Ed25519), key.getEncoded());
         }
-        else if (LmsKeyUtil.createSubjectPublicKeyInfo(publicKey) != null)
+        else if ((keyInfo = LmsKeyUtil.createSubjectPublicKeyInfo(publicKey)) != null)
         {
-            return LmsKeyUtil.createSubjectPublicKeyInfo(publicKey);
+            return keyInfo;
+        }
+        else if ((keyInfo = XmssKeyUtil.createSubjectPublicKeyInfo(publicKey)) != null)
+        {
+            return keyInfo;
         }
         else
         {

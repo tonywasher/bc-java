@@ -11,6 +11,10 @@ import java.util.TreeMap;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.util.Integers;
 
+/**
+ * @deprecated use {@link org.bouncycastle.crypto.signers.xmss.BDSStateMap} instead.
+ */
+@Deprecated
 public class BDSStateMap
     implements Serializable
 {

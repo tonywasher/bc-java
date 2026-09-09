@@ -16,6 +16,7 @@ module org.bouncycastle.provider
     opens org.bouncycastle.pqc.jcajce.provider.mqom to java.base;
     opens org.bouncycastle.pqc.jcajce.provider.uov to java.base;
     opens org.bouncycastle.pqc.jcajce.provider.lms to java.base;
+    opens org.bouncycastle.pqc.jcajce.provider.xmss to java.base;
     opens org.bouncycastle.pqc.jcajce.provider.falcon to java.base;
     opens org.bouncycastle.pqc.jcajce.provider.mayo to java.base;
     opens org.bouncycastle.pqc.jcajce.provider.sdith to java.base;
@@ -86,6 +87,7 @@ module org.bouncycastle.provider
     exports org.bouncycastle.crypto.signers.lms;
     exports org.bouncycastle.crypto.signers.mldsa;
     exports org.bouncycastle.crypto.signers.slhdsa;
+    exports org.bouncycastle.crypto.signers.xmss;
     exports org.bouncycastle.crypto.threshold;
     exports org.bouncycastle.crypto.tls;
     exports org.bouncycastle.crypto.util;

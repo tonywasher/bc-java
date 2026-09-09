@@ -9,12 +9,10 @@ import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.ASN1Set;
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.crypto.CipherParameters;
-import org.bouncycastle.pqc.crypto.util.PrivateKeyFactory;
-import org.bouncycastle.pqc.crypto.util.PrivateKeyInfoFactory;
-import org.bouncycastle.pqc.crypto.xmss.XMSSPrivateKeyParameters;
-import org.bouncycastle.pqc.crypto.xmss.XMSSPublicKeyParameters;
+import org.bouncycastle.crypto.params.XMSSPrivateKeyParameters;
+import org.bouncycastle.crypto.util.PrivateKeyFactory;
+import org.bouncycastle.crypto.util.PrivateKeyInfoFactory;
 import org.bouncycastle.pqc.jcajce.interfaces.XMSSPrivateKey;
-import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Exceptions;
 
 public class BCXMSSPrivateKey
@@ -30,8 +28,29 @@ public class BCXMSSPrivateKey
         ASN1ObjectIdentifier treeDigest,
         XMSSPrivateKeyParameters keyParams)
     {
+        this(treeDigest, keyParams, null);
+    }
+
+    /**
+     * As above, carrying the PKCS#8 attributes of the key this one was derived from.
+     * <p>
+     * The two-argument form is for a key that has no such origin - key pair generation - and the
+     * attributes it leaves null are what {@link #getEncoded()} writes. Every other caller is
+     * re-wrapping a key that already exists, and had been reaching this class through that form:
+     * {@code extractKeyShard} below and the {@code getUpdatedPrivateKey()} of the signature SPI,
+     * which is the StateAwareSignature contract's own way of taking the key back after signing.
+     * So a key loaded from a PKCS#8 carrying attributes lost them on being signed with once, or
+     * on being sharded once, with nothing to say so.
+     * </p>
+     */
+    BCXMSSPrivateKey(
+        ASN1ObjectIdentifier treeDigest,
+        XMSSPrivateKeyParameters keyParams,
+        ASN1Set attributes)
+    {
         this.treeDigest = treeDigest;
         this.keyParams = keyParams;
+        this.attributes = attributes;
     }
 
     public BCXMSSPrivateKey(PrivateKeyInfo keyInfo)
@@ -53,11 +72,16 @@ public class BCXMSSPrivateKey
 
     public long getIndex()
     {
-        if (getUsagesRemaining() == 0)
+        // both reads under the key's own monitor, so a signature in between cannot split them
+        synchronized (keyParams)
         {
-            throw new IllegalStateException("key exhausted");
+            if (keyParams.getUsagesRemaining() == 0)
+            {
+                throw new IllegalStateException("key exhausted");
+            }
+
+            return keyParams.getIndex();
         }
-        return keyParams.getIndex();
     }
 
     public long getUsagesRemaining()
@@ -67,7 +91,7 @@ public class BCXMSSPrivateKey
 
     public XMSSPrivateKey extractKeyShard(int usageCount)
     {
-        return new BCXMSSPrivateKey(this.treeDigest, keyParams.extractKeyShard(usageCount));
+        return new BCXMSSPrivateKey(this.treeDigest, keyParams.extractKeyShard(usageCount), this.attributes);
     }
 
     public String getAlgorithm()
@@ -78,6 +102,15 @@ public class BCXMSSPrivateKey
     public String getFormat()
     {
         return "PKCS#8";
+    }
+
+    /**
+     * The PKCS#8 attributes this key carries, for the signature SPI to put on the key it hands
+     * back from getUpdatedPrivateKey().
+     */
+    ASN1Set getAttributes()
+    {
+        return attributes;
     }
 
     public byte[] getEncoded()
@@ -99,6 +132,35 @@ public class BCXMSSPrivateKey
         }
     }
 
+    /**
+     * Whether these are the same key at the same position, which for a stateful key means the same
+     * traversal state too - the whole of which {@link XMSSPrivateKeyParameters#equals(Object)}
+     * decides, this being the line that asks it.
+     * <p>
+     * It was written out here, over the accessors, and none of it belonged here: the fields it
+     * reads are the key parameters' own, the monitor a signature is taken under is the key
+     * parameters' own, and each accessor hands out a clone rather than a value that could be held
+     * still beside another key's. {@code BCLMSPrivateKey} is this same line over
+     * {@code HSSPrivateKeyParameters}, which is where the other stateful family in this provider
+     * keeps the same reasoning.
+     * </p><p>
+     * The tree digest this class carries alongside the key parameters is not compared, because
+     * comparing it decides nothing: it is {@code keyParams.getParameters().getTreeDigestOID()} at
+     * every route a key here is constructed by, and that is the OID the key parameters compare.
+     * </p><p>
+     * The PKCS#8 attributes are not compared either, and that one does change what {@code equals}
+     * says about two keys {@link #getEncoded()} writes differently: attributes travel into the
+     * encoding, so one key loaded from a PKCS#8 carrying a friendlyName and one built from the
+     * same secret without it are equal here and encode to different bytes. That is the answer this
+     * class wants. What a stateful key is asked here is whether this is the same key at the same
+     * position - the question a one-time key signing twice is the failure of, RFC 8391 sec. 1.1 -
+     * and a label a caller attached on the way through a keystore moves neither the secret nor the
+     * index. {@code BCLMSPrivateKey}, which carries attributes the same way and is where this
+     * comparison came from, leaves them out for the same reason, as does {@code BCMLDSAPrivateKey}
+     * over its own parameters' encoding. A caller that does need the encodings to agree should
+     * compare the encodings.
+     * </p>
+     */
     public boolean equals(Object o)
     {
         if (o == this)
@@ -110,13 +172,16 @@ public class BCXMSSPrivateKey
         {
             BCXMSSPrivateKey otherKey = (BCXMSSPrivateKey)o;
 
-            // a destroyed key no longer exposes its value, so it is only equal to itself.
+            // a destroyed key no longer exposes its value, so it is only equal to itself. Ahead of
+            // the delegation because the key parameters' own equals() reads the secret arrays as
+            // fields rather than through the checked accessors, so it would find two destroyed keys
+            // equal on their zeroized copies.
             if (isDestroyed() || otherKey.isDestroyed())
             {
                 return false;
             }
 
-            return treeDigest.equals(otherKey.treeDigest) & Arrays.constantTimeAreEqual(keyParams.toByteArray(), otherKey.keyParams.toByteArray());
+            return keyParams.equals(otherKey.keyParams);
         }
 
         return false;
@@ -124,16 +189,7 @@ public class BCXMSSPrivateKey
 
     public int hashCode()
     {
-        return getPublicKey().hashCode();
-    }
-
-    private BCXMSSPublicKey getPublicKey()
-    {
-        XMSSPublicKeyParameters pubParams = new XMSSPublicKeyParameters.Builder(keyParams.getParameters())
-            .withRoot(keyParams.getRoot())
-            .withPublicSeed(keyParams.getPublicSeed())
-            .build();
-        return new BCXMSSPublicKey(treeDigest, pubParams);
+        return keyParams.hashCode();
     }
 
     CipherParameters getKeyParams()

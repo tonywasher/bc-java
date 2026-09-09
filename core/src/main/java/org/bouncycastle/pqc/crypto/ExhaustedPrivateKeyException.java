@@ -6,6 +6,7 @@ package org.bouncycastle.pqc.crypto;
  * @deprecated use org.bouncycastle.crypto.ExhaustedPrivateKeyException instead. This class now
  * extends it, so a catch of the replacement catches this one as well.
  */
+@Deprecated
 public class ExhaustedPrivateKeyException
     extends org.bouncycastle.crypto.ExhaustedPrivateKeyException
 {

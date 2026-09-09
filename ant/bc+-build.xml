@@ -334,6 +334,7 @@
                  <exclude name="org/bouncycastle/pqc/**/AllTests*.java" />
                  <exclude name="org/bouncycastle/crypto/params/*Tests.java" />
                  <exclude name="org/bouncycastle/crypto/signers/lms/*Tests.java" />
+                 <exclude name="org/bouncycastle/crypto/signers/xmss/*Tests.java" />
                  <exclude name="org/bouncycastle/crypto/params/LMSVectorUtils.java" />
                  <exclude name="org/bouncycastle/pqc/**/LMSVectorUtils.java" />
                  <exclude name="org/bouncycastle/crypto/test/AllTestsSlow.java" />
@@ -389,6 +390,7 @@
                  <exclude name="org/bouncycastle/pqc/**/*Test.java" />
                  <exclude name="org/bouncycastle/crypto/params/*Tests.java" />
                  <exclude name="org/bouncycastle/crypto/signers/lms/*Tests.java" />
+                 <exclude name="org/bouncycastle/crypto/signers/xmss/*Tests.java" />
                  <exclude name="org/bouncycastle/crypto/params/LMSVectorUtils.java" />
                  <exclude name="org/bouncycastle/pqc/**/LMSVectorUtils.java" />
                  <exclude name="**/*.crl" />
@@ -538,6 +540,7 @@
                  <exclude name="org/bouncycastle/pqc/**/AllTests*.java" />
                  <exclude name="org/bouncycastle/crypto/params/*Tests.java" />
                  <exclude name="org/bouncycastle/crypto/signers/lms/*Tests.java" />
+                 <exclude name="org/bouncycastle/crypto/signers/xmss/*Tests.java" />
                  <exclude name="org/bouncycastle/crypto/params/LMSVectorUtils.java" />
                  <exclude name="org/bouncycastle/pqc/**/LMSVectorUtils.java" />
                  <exclude name="**/*.crl" />
@@ -1046,6 +1049,7 @@
         <delete file="${test.target.src.dir}/org/bouncycastle/pqc/crypto/lms/AllTests.java" />
         <delete file="${test.target.src.dir}/org/bouncycastle/crypto/params/AllTests.java" />
         <delete file="${test.target.src.dir}/org/bouncycastle/crypto/signers/lms/AllTests.java" />
+        <delete file="${test.target.src.dir}/org/bouncycastle/crypto/signers/xmss/AllTests.java" />
         <delete file="${test.target.src.dir}/org/bouncycastle/pqc/crypto/mayo/AllTests.java" />
         <delete file="${test.target.src.dir}/org/bouncycastle/est/AllTests.java" />
         <delete file="${test.target.src.dir}/org/bouncycastle/gpg/keybox/AllTests.java" />

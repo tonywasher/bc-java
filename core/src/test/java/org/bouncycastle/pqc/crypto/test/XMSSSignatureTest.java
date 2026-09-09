@@ -1,12 +1,19 @@
 package org.bouncycastle.pqc.crypto.test;
 
+import java.security.SecureRandom;
+
 import junit.framework.TestCase;
+import org.bouncycastle.crypto.AsymmetricCipherKeyPair;
 import org.bouncycastle.crypto.digests.SHA256Digest;
 import org.bouncycastle.crypto.digests.SHA512Digest;
 import org.bouncycastle.pqc.crypto.xmss.XMSS;
+import org.bouncycastle.pqc.crypto.xmss.XMSSKeyGenerationParameters;
+import org.bouncycastle.pqc.crypto.xmss.XMSSKeyPairGenerator;
 import org.bouncycastle.pqc.crypto.xmss.XMSSParameters;
 import org.bouncycastle.pqc.crypto.xmss.XMSSSignature;
+import org.bouncycastle.pqc.crypto.xmss.XMSSSigner;
 import org.bouncycastle.util.Arrays;
+import org.bouncycastle.util.Strings;
 
 /**
  * Test cases for XMSSSignature class.
@@ -72,6 +79,33 @@ public class XMSSSignatureTest
                 assertEquals("signature has wrong size", e.getMessage());
             }
         }
+    }
+
+    /**
+     * The parse-level check above has to reach verification: a signature with bytes appended, or
+     * one cut short, must answer false rather than verify (github #2408).
+     */
+    public void testVerifyRejectsWrongSize()
+    {
+        byte[] msg = Strings.toByteArray("Cthulhu Fthagn --What a wonderful phrase!");
+
+        XMSSKeyPairGenerator kpGen = new XMSSKeyPairGenerator();
+
+        kpGen.init(new XMSSKeyGenerationParameters(new XMSSParameters(4, new SHA256Digest()), new SecureRandom()));
+
+        AsymmetricCipherKeyPair kp = kpGen.generateKeyPair();
+
+        XMSSSigner signer = new XMSSSigner();
+
+        signer.init(true, kp.getPrivate());
+
+        byte[] sig = signer.generateSignature(msg);
+
+        signer.init(false, kp.getPublic());
+
+        assertTrue(signer.verifySignature(msg, sig));
+        assertFalse(signer.verifySignature(msg, Arrays.append(sig, (byte)0x2a)));
+        assertFalse(signer.verifySignature(msg, Arrays.copyOfRange(sig, 0, sig.length - 1)));
     }
 
     public void testConstructor()

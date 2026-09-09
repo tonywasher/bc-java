@@ -2,7 +2,7 @@
 
 This document describes the byte encodings Bouncy Castle uses for an XMSS (RFC 8391) private
 key: the raw form produced by
-`org.bouncycastle.pqc.crypto.xmss.XMSSPrivateKeyParameters.getEncoded()`, the versioned binary
+`org.bouncycastle.crypto.params.XMSSPrivateKeyParameters.getEncoded()`, the versioned binary
 BDS traversal state embedded in it, and the two PKCS#8 wrappings.
 
 RFC 8391 deliberately does not define a private-key format: *"we do not define any specific
@@ -36,7 +36,7 @@ unsigned big-endian:
 The BDS state is the working state of the tree-traversal algorithm ([BDS09], referenced from
 RFC 8391 sec. 4.1.9) that lets each signature compute its authentication path without
 regenerating the tree. Since release 1.86 it is written in a versioned binary form
-(`org.bouncycastle.pqc.crypto.xmss.BDSStateCodec`); earlier releases wrote a Java
+(`org.bouncycastle.crypto.signers.xmss.BDSStateCodec`); earlier releases wrote a Java
 `ObjectOutputStream` stream here instead, which 1.86+ still *reads* (through a restricted
 class allow-list) but never generates. The conversion is one way: once a key has been
 re-persisted by 1.86 or later, releases before it fail to read the state.
@@ -235,11 +235,17 @@ The corresponding RFC 9802-style public key body (`parameter set || root || publ
 
 ## Where this is implemented
 
-- `core/src/main/java/org/bouncycastle/pqc/crypto/xmss/XMSSPrivateKeyParameters.java` — the
-  raw form (`getEncoded()`, and the `Builder` that reads it back).
-- `core/src/main/java/org/bouncycastle/pqc/crypto/xmss/BDSStateCodec.java` — the binary BDS
+- `core/src/main/java/org/bouncycastle/crypto/params/XMSSPrivateKeyCodec.java` — the raw form,
+  written and read in one place for both families; `XMSSPrivateKeyParameters.java` and
+  `XMSSMTPrivateKeyParameters.java` beside it are the public surface (`getEncoded()`, and the
+  `Builder` that reads it back) and supply the width of the index field.
+- `core/src/main/java/org/bouncycastle/crypto/signers/xmss/BDSStateCodec.java` — the binary BDS
   state codec (and the XMSS^MT state-map variant).
-- `core/src/main/java/org/bouncycastle/pqc/crypto/util/PrivateKeyInfoFactory.java` /
-  `PrivateKeyFactory.java` — both PKCS#8 wrappings.
+- `core/src/main/java/org/bouncycastle/crypto/util/PrivateKeyInfoFactory.java` /
+  `PrivateKeyFactory.java` — both PKCS#8 wrappings, through `XmssKeyUtil.java` beside them.
 - `core/src/main/java/org/bouncycastle/pqc/asn1/XMSSPrivateKey.java` — the legacy ASN.1
   structure used for non-standard tree heights.
+
+The deprecated `org.bouncycastle.pqc.crypto.xmss` and `org.bouncycastle.pqc.crypto.util`
+packages carry a second copy of all of these. It writes and reads the same bytes; the classes
+above are the ones to work from.

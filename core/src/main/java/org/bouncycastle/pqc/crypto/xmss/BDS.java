@@ -17,7 +17,10 @@ import org.bouncycastle.util.Arrays;
 
 /**
  * BDS.
+ *
+ * @deprecated use {@link org.bouncycastle.crypto.signers.xmss.BDS} instead.
  */
+@Deprecated
 public final class BDS
     implements Serializable
 {
