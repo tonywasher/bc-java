@@ -835,7 +835,8 @@ public class OpenPGPMessageInputStream
         List<OpenPGPSignature.OpenPGPDocumentSignature> verify(
             OpenPGPMessageProcessor processor)
         {
-            OpenPGPPolicy policy = processor.getImplementation().policy();
+            // the policy the processor was configured with, not the implementation default it may override
+            OpenPGPPolicy policy = processor.getPolicy();
             List<OpenPGPSignature.OpenPGPDocumentSignature> dataSignatures = new ArrayList<OpenPGPSignature.OpenPGPDocumentSignature>();
             int num = onePassSignatures.size();
             for (int i = 0; i < signatures.size(); i++)
@@ -960,7 +961,8 @@ public class OpenPGPMessageInputStream
         List<OpenPGPSignature.OpenPGPDocumentSignature> verify(OpenPGPMessageProcessor processor)
         {
             List<OpenPGPSignature.OpenPGPDocumentSignature> verifiedSignatures = new ArrayList<OpenPGPSignature.OpenPGPDocumentSignature>();
-            OpenPGPPolicy policy = processor.getImplementation().policy();
+            // the policy the processor was configured with, not the implementation default it may override
+            OpenPGPPolicy policy = processor.getPolicy();
             for (Iterator it = dataSignatures.iterator(); it.hasNext();)
             {
                 OpenPGPSignature.OpenPGPDocumentSignature sig = (OpenPGPSignature.OpenPGPDocumentSignature)it.next();
