@@ -2,6 +2,8 @@ package org.bouncycastle.jcajce.provider.asymmetric.sm9;
 
 import java.io.IOException;
 
+import javax.security.auth.Destroyable;
+
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Exceptions;
 import org.bouncycastle.asn1.ASN1Encoding;
@@ -23,7 +25,7 @@ import org.bouncycastle.jcajce.interfaces.SM9EncUserPrivateKey;
  * lightweight key-parameter class's {@code getEncoded()}.
  */
 class BCSM9EncPrivateKey
-    implements SM9EncUserPrivateKey
+    implements SM9EncUserPrivateKey, Destroyable
 {
     private static final long serialVersionUID = 1L;
 

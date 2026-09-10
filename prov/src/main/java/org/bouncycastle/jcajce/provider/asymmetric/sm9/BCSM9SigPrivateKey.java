@@ -3,6 +3,8 @@ package org.bouncycastle.jcajce.provider.asymmetric.sm9;
 import java.io.IOException;
 import java.security.PrivateKey;
 
+import javax.security.auth.Destroyable;
+
 import org.bouncycastle.jcajce.interfaces.SM9SigUserPrivateKey;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Exceptions;
@@ -23,7 +25,7 @@ import org.bouncycastle.crypto.params.SM9SigPrivateKeyParameters;
  * the identity the key was derived for, so a caller need not track it separately.
  */
 class BCSM9SigPrivateKey
-    implements SM9SigUserPrivateKey
+    implements SM9SigUserPrivateKey, Destroyable
 {
     private static final long serialVersionUID = 1L;
 

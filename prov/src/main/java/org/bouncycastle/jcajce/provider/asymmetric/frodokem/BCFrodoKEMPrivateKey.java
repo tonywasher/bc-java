@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 
+import javax.security.auth.Destroyable;
+
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.crypto.kems.frodo.FrodoKEMEngine;
 import org.bouncycastle.crypto.params.FrodoKEMPrivateKeyParameters;
@@ -16,7 +18,7 @@ import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Exceptions;
 
 public class BCFrodoKEMPrivateKey
-    implements FrodoKEMPrivateKey
+    implements FrodoKEMPrivateKey, Destroyable
 {
     private static final long serialVersionUID = 1L;
 

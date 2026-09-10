@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 
+import javax.security.auth.Destroyable;
+
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.crypto.params.CMCEPrivateKeyParameters;
 import org.bouncycastle.crypto.util.PrivateKeyFactory;
@@ -14,7 +16,7 @@ import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Exceptions;
 
 public class BCCMCEPrivateKey
-    implements CMCEPrivateKey
+    implements CMCEPrivateKey, Destroyable
 {
     private static final long serialVersionUID = 1L;
 

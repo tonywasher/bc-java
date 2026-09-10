@@ -5,6 +5,8 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.security.PrivateKey;
 
+import javax.security.auth.Destroyable;
+
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.ASN1Set;
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
@@ -16,7 +18,7 @@ import org.bouncycastle.pqc.jcajce.interfaces.XMSSPrivateKey;
 import org.bouncycastle.util.Exceptions;
 
 public class BCXMSSPrivateKey
-    implements PrivateKey, XMSSPrivateKey
+    implements PrivateKey, XMSSPrivateKey, Destroyable
 {
     private static final long serialVersionUID = 8568701712864512338L;
 

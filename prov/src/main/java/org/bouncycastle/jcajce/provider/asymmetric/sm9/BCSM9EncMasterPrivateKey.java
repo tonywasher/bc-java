@@ -5,6 +5,8 @@ import java.io.NotSerializableException;
 import java.io.ObjectStreamException;
 import java.security.KeyPair;
 
+import javax.security.auth.Destroyable;
+
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Exceptions;
 import org.bouncycastle.asn1.ASN1Encoding;
@@ -26,7 +28,7 @@ import org.bouncycastle.jcajce.interfaces.SM9EncMasterPrivateKey;
  * lightweight key-parameter class's {@code getEncoded()}.
  */
 class BCSM9EncMasterPrivateKey
-    implements SM9EncMasterPrivateKey
+    implements SM9EncMasterPrivateKey, Destroyable
 {
     private static final long serialVersionUID = 1L;
 
