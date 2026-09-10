@@ -13,6 +13,7 @@ public class RegressionTest
         new OpenPGPDecompressionLimitTest(),
         new OpenPGPCertificateTest(),
         new OpenPGPDetachedSignatureProcessorTest(),
+        new OpenPGPDocumentSignatureExpiryTest(),
         new OpenPGPKeyEditorTest(),
         new OpenPGPKeyReaderTest(),
         new OpenPGPMessageGeneratorTest(),
