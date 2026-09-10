@@ -98,7 +98,7 @@ public class HashBasedKeyDestructionTest
         kpg.initialize(spec, new SecureRandom());
         KeyPair kp = kpg.generateKeyPair();
 
-        LMSPrivateKey priv = (LMSPrivateKey)kp.getPrivate();
+        final LMSPrivateKey priv = (LMSPrivateKey)kp.getPrivate();
 
         // use the key once and split a shard off it, so the destroyed key has state behind it
         sign("LMS", BC, priv, kp);
@@ -137,9 +137,9 @@ public class HashBasedKeyDestructionTest
         kpGen.init(new LMSKeyGenerationParameters(lmsParams, new SecureRandom()));
         AsymmetricCipherKeyPair kp = kpGen.generateKeyPair();
 
-        LMSPrivateKeyParameters priv = (LMSPrivateKeyParameters)kp.getPrivate();
+        final LMSPrivateKeyParameters priv = (LMSPrivateKeyParameters)kp.getPrivate();
 
-        LMSSigner signer = new LMSSigner();
+        final LMSSigner signer = new LMSSigner();
         signer.init(true, priv);
         byte[] sig = signer.generateSignature(MSG);
 
@@ -193,12 +193,12 @@ public class HashBasedKeyDestructionTest
         kpGen.init(new HSSKeyGenerationParameters(new LMSParameters[]{ h5, h5 }, new SecureRandom()));
         AsymmetricCipherKeyPair kp = kpGen.generateKeyPair();
 
-        HSSPrivateKeyParameters priv = (HSSPrivateKeyParameters)kp.getPrivate();
+        final HSSPrivateKeyParameters priv = (HSSPrivateKeyParameters)kp.getPrivate();
 
         // a shard is a deep copy, so it must outlive the destruction of the key it came from
         HSSPrivateKeyParameters shard = priv.extractKeyShard(2);
 
-        HSSSigner signer = new HSSSigner();
+        final HSSSigner signer = new HSSSigner();
         signer.init(true, priv);
         byte[] sig = signer.generateSignature(MSG);
 
@@ -262,7 +262,7 @@ public class HashBasedKeyDestructionTest
         kpg.initialize(new XMSSParameterSpec(4, XMSSParameterSpec.SHA256), new SecureRandom());
         KeyPair kp = kpg.generateKeyPair();
 
-        XMSSPrivateKey priv = (XMSSPrivateKey)kp.getPrivate();
+        final XMSSPrivateKey priv = (XMSSPrivateKey)kp.getPrivate();
 
         sign("XMSS", BCPQC, priv, kp);
         XMSSPrivateKey shard = priv.extractKeyShard(2);
@@ -297,9 +297,9 @@ public class HashBasedKeyDestructionTest
         kpGen.init(new XMSSKeyGenerationParameters(new XMSSParameters(4, new SHA256Digest()), new SecureRandom()));
         AsymmetricCipherKeyPair kp = kpGen.generateKeyPair();
 
-        XMSSPrivateKeyParameters priv = (XMSSPrivateKeyParameters)kp.getPrivate();
+        final XMSSPrivateKeyParameters priv = (XMSSPrivateKeyParameters)kp.getPrivate();
 
-        XMSSSigner signer = new XMSSSigner();
+        final XMSSSigner signer = new XMSSSigner();
         signer.init(true, priv);
         byte[] sig = signer.generateSignature(MSG);
 
@@ -374,7 +374,7 @@ public class HashBasedKeyDestructionTest
         kpg.initialize(new XMSSMTParameterSpec(4, 2, XMSSMTParameterSpec.SHA256), new SecureRandom());
         KeyPair kp = kpg.generateKeyPair();
 
-        XMSSMTPrivateKey priv = (XMSSMTPrivateKey)kp.getPrivate();
+        final XMSSMTPrivateKey priv = (XMSSMTPrivateKey)kp.getPrivate();
 
         sign("XMSSMT", BCPQC, priv, kp);
         XMSSMTPrivateKey shard = priv.extractKeyShard(2);
@@ -409,9 +409,9 @@ public class HashBasedKeyDestructionTest
         kpGen.init(new XMSSMTKeyGenerationParameters(new XMSSMTParameters(4, 2, new SHA256Digest()), new SecureRandom()));
         AsymmetricCipherKeyPair kp = kpGen.generateKeyPair();
 
-        XMSSMTPrivateKeyParameters priv = (XMSSMTPrivateKeyParameters)kp.getPrivate();
+        final XMSSMTPrivateKeyParameters priv = (XMSSMTPrivateKeyParameters)kp.getPrivate();
 
-        XMSSMTSigner signer = new XMSSMTSigner();
+        final XMSSMTSigner signer = new XMSSMTSigner();
         signer.init(true, priv);
         byte[] sig = signer.generateSignature(MSG);
 
@@ -512,12 +512,17 @@ public class HashBasedKeyDestructionTest
      * flips, getEncoded() throws, hashCode() is stable, equality collapses to identity and
      * serialization fails cleanly.
      */
-    private void checkDestroy(String algorithm, String provider, PrivateKey priv)
+    private void checkDestroy(String algorithm, String provider, final PrivateKey priv)
         throws Exception
     {
         byte[] enc = priv.getEncoded();
         assertNotNull(algorithm + ": no encoding", enc);
-        assertFalse(algorithm + ": key reported destroyed before destroy()", priv.isDestroyed());
+
+        // through the interface rather than off PrivateKey: PrivateKey extends Destroyable only
+        // from Java 8, and this suite is compiled by the genuine 1.5 javac of the jdk15to18 build
+        final Destroyable dPriv = (Destroyable)priv;
+
+        assertFalse(algorithm + ": key reported destroyed before destroy()", dPriv.isDestroyed());
 
         int preHashCode = priv.hashCode();
 
@@ -525,9 +530,9 @@ public class HashBasedKeyDestructionTest
         assertEquals(algorithm + ": copy should equal original before destroy()", priv, copy);
 
         // must succeed without throwing DestroyFailedException
-        priv.destroy();
+        dPriv.destroy();
 
-        assertTrue(algorithm + ": key not reported destroyed after destroy()", priv.isDestroyed());
+        assertTrue(algorithm + ": key not reported destroyed after destroy()", dPriv.isDestroyed());
 
         checkThrowsDestroyed(algorithm + ": getEncoded()", new Callable()
         {
@@ -559,8 +564,8 @@ public class HashBasedKeyDestructionTest
         }
 
         // destroy() is idempotent - a second call must not throw
-        priv.destroy();
-        assertTrue(priv.isDestroyed());
+        dPriv.destroy();
+        assertTrue(dPriv.isDestroyed());
     }
 
     private void checkLightweightDestroy(String algorithm, Object params)

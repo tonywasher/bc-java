@@ -10,6 +10,8 @@ import java.security.PrivateKey;
 import java.security.Security;
 import java.security.spec.PKCS8EncodedKeySpec;
 
+import javax.security.auth.Destroyable;
+
 import junit.framework.TestCase;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.util.Arrays;
@@ -47,21 +49,26 @@ public class PQCKeyDestructionTest
         KeyPairGenerator kpg = KeyPairGenerator.getInstance(algorithm, BouncyCastleProvider.PROVIDER_NAME);
         KeyPair kp = kpg.generateKeyPair();
 
-        PrivateKey priv = kp.getPrivate();
+        final PrivateKey priv = kp.getPrivate();
 
         byte[] enc = priv.getEncoded();
         assertNotNull(algorithm + ": no encoding", enc);
         assertFalse(algorithm + ": encoding should not be all-zero", isAllZero(enc));
-        assertFalse(algorithm + ": key reported destroyed before destroy()", priv.isDestroyed());
+
+        // through the interface rather than off PrivateKey: PrivateKey extends Destroyable only
+        // from Java 8, and this suite is compiled by the genuine 1.5 javac of the jdk15to18 build
+        final Destroyable dPriv = (Destroyable)priv;
+
+        assertFalse(algorithm + ": key reported destroyed before destroy()", dPriv.isDestroyed());
 
         PrivateKey copy = KeyFactory.getInstance(algorithm, BouncyCastleProvider.PROVIDER_NAME)
             .generatePrivate(new PKCS8EncodedKeySpec(enc));
         assertEquals(algorithm + ": copy should equal original before destroy()", priv, copy);
 
         // must succeed without throwing DestroyFailedException
-        priv.destroy();
+        dPriv.destroy();
 
-        assertTrue(algorithm + ": key not reported destroyed after destroy()", priv.isDestroyed());
+        assertTrue(algorithm + ": key not reported destroyed after destroy()", dPriv.isDestroyed());
 
         try
         {
@@ -92,8 +99,8 @@ public class PQCKeyDestructionTest
         }
 
         // destroy() is idempotent - a second call must not throw
-        priv.destroy();
-        assertTrue(priv.isDestroyed());
+        dPriv.destroy();
+        assertTrue(dPriv.isDestroyed());
     }
 
     private static boolean isAllZero(byte[] data)

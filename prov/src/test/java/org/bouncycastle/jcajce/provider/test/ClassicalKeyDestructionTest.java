@@ -91,7 +91,7 @@ public class ClassicalKeyDestructionTest
     public void testDestroyErasesDSAPrivateKey()
         throws Exception
     {
-        DSAPrivateKey priv = (DSAPrivateKey)generate("DSA", DSA_PARAMS).getPrivate();
+        final DSAPrivateKey priv = (DSAPrivateKey)generate("DSA", DSA_PARAMS).getPrivate();
         BigInteger x = priv.getX();
 
         checkDestroy("DSA", priv);
@@ -106,7 +106,7 @@ public class ClassicalKeyDestructionTest
         assertNotNull("DSA: parameters should survive destroy()", priv.getParams());
 
         // the lightweight parameters underneath
-        DSAPrivateKeyParameters params = new DSAPrivateKeyParameters(x,
+        final DSAPrivateKeyParameters params = new DSAPrivateKeyParameters(x,
             new DSAParameters(DSA_PARAMS.getP(), DSA_PARAMS.getQ(), DSA_PARAMS.getG()));
 
         checkLightweightDestroy("DSA", params);
@@ -125,10 +125,10 @@ public class ClassicalKeyDestructionTest
         throws Exception
     {
         DHParameters group = DHStandardGroups.rfc3526_2048;
-        DHPrivateKey priv = (DHPrivateKey)generate("DH", new DHParameterSpec(group.getP(), group.getG())).getPrivate();
+        final DHPrivateKey priv = (DHPrivateKey)generate("DH", new DHParameterSpec(group.getP(), group.getG())).getPrivate();
         BigInteger x = priv.getX();
 
-        PrivateKey copy = checkDestroy("DH", priv);
+        final PrivateKey copy = checkDestroy("DH", priv);
 
         checkThrowsDestroyed("DH: getX()", new Callable()
         {
@@ -151,7 +151,7 @@ public class ClassicalKeyDestructionTest
         });
 
         // the lightweight parameters underneath - these carry their own hashCode/equals
-        DHPrivateKeyParameters params = new DHPrivateKeyParameters(x, group);
+        final DHPrivateKeyParameters params = new DHPrivateKeyParameters(x, group);
         DHPrivateKeyParameters twin = new DHPrivateKeyParameters(x, group);
         int preHashCode = params.hashCode();
 
@@ -177,7 +177,7 @@ public class ClassicalKeyDestructionTest
         throws Exception
     {
         DHParameters group = DHStandardGroups.rfc3526_2048;
-        ElGamalPrivateKey priv = (ElGamalPrivateKey)generate("ElGamal", new DHParameterSpec(group.getP(), group.getG())).getPrivate();
+        final ElGamalPrivateKey priv = (ElGamalPrivateKey)generate("ElGamal", new DHParameterSpec(group.getP(), group.getG())).getPrivate();
         BigInteger x = priv.getX();
 
         checkDestroy("ElGamal", priv);
@@ -193,7 +193,7 @@ public class ClassicalKeyDestructionTest
 
         // the lightweight parameters underneath - these carry their own hashCode/equals
         ElGamalParameters elParams = new ElGamalParameters(group.getP(), group.getG());
-        ElGamalPrivateKeyParameters params = new ElGamalPrivateKeyParameters(x, elParams);
+        final ElGamalPrivateKeyParameters params = new ElGamalPrivateKeyParameters(x, elParams);
         ElGamalPrivateKeyParameters twin = new ElGamalPrivateKeyParameters(x, elParams);
         int preHashCode = params.hashCode();
 
@@ -218,7 +218,7 @@ public class ClassicalKeyDestructionTest
     public void testDestroyErasesGOST3410PrivateKey()
         throws Exception
     {
-        GOST3410PrivateKey priv = (GOST3410PrivateKey)generate("GOST3410",
+        final GOST3410PrivateKey priv = (GOST3410PrivateKey)generate("GOST3410",
             new GOST3410ParameterSpec(CryptoProObjectIdentifiers.gostR3410_94_CryptoPro_A.getId())).getPrivate();
         BigInteger x = priv.getX();
         GOST3410PublicKeyParameterSetSpec setSpec = priv.getParameters().getPublicKeyParameters();
@@ -235,7 +235,7 @@ public class ClassicalKeyDestructionTest
         assertNotNull("GOST3410: parameters should survive destroy()", priv.getParameters());
 
         // the lightweight parameters underneath
-        GOST3410PrivateKeyParameters params = new GOST3410PrivateKeyParameters(x,
+        final GOST3410PrivateKeyParameters params = new GOST3410PrivateKeyParameters(x,
             new GOST3410Parameters(setSpec.getP(), setSpec.getQ(), setSpec.getA()));
 
         checkLightweightDestroy("GOST3410", params);
@@ -275,9 +275,9 @@ public class ClassicalKeyDestructionTest
     private void checkECStyleKey(String algorithm, AlgorithmParameterSpec spec)
         throws Exception
     {
-        PrivateKey priv = generate(algorithm, spec).getPrivate();
-        ECPrivateKey ecPriv = (ECPrivateKey)priv;
-        org.bouncycastle.jce.interfaces.ECPrivateKey bcPriv = (org.bouncycastle.jce.interfaces.ECPrivateKey)priv;
+        final PrivateKey priv = generate(algorithm, spec).getPrivate();
+        final ECPrivateKey ecPriv = (ECPrivateKey)priv;
+        final org.bouncycastle.jce.interfaces.ECPrivateKey bcPriv = (org.bouncycastle.jce.interfaces.ECPrivateKey)priv;
 
         assertNotNull(ecPriv.getS());
         assertEquals(ecPriv.getS(), bcPriv.getD());
@@ -319,7 +319,7 @@ public class ClassicalKeyDestructionTest
      *
      * @return a live copy of the key, decoded from its PKCS#8 encoding before destruction.
      */
-    private PrivateKey checkDestroy(String algorithm, PrivateKey priv)
+    private PrivateKey checkDestroy(String algorithm, final PrivateKey priv)
         throws Exception
     {
         byte[] enc = priv.getEncoded();
