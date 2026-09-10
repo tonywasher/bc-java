@@ -867,21 +867,16 @@ public class OpenPGPCertificate
             return false;
         }
 
-        OpenPGPSignature.OpenPGPSignatureSubpacket keyExpiration =
-            component.getApplyingSubpacket(evaluationTime, SignatureSubpacketTags.KEY_EXPIRE_TIME);
-        if (keyExpiration != null)
+        if (isExpired(component, evaluationTime))
         {
-            KeyExpirationTime kexp = (KeyExpirationTime)keyExpiration.getSubpacket();
-            if (kexp.getTime() != 0)
-            {
-                OpenPGPComponentKey key = component.getKeyComponent();
-                Date expirationDate = new Date(1000 * kexp.getTime() + key.getCreationTime().getTime());
-                if (expirationDate.before(evaluationTime))
-                {
-                    // Key is expired.
-                    return false;
-                }
-            }
+            return false;
+        }
+
+        // An expired primary key can no longer certify, so a longer-lived subkey it bound is not usable either.
+        OpenPGPComponentKey primaryKey = getPrimaryKey();
+        if (component != primaryKey && isExpired(primaryKey, evaluationTime))
+        {
+            return false;
         }
 
         try
@@ -908,6 +903,44 @@ public class OpenPGPCertificate
             // Signature verification failed (signature broken?)
             return false;
         }
+    }
+
+    /**
+     * Return true, if the {@link KeyExpirationTime} which - at evaluation time - applies to the key of the
+     * given component has passed.
+     * <p>
+     * RFC 9580, section 5.2.3.13 counts the validity period from the creation time of the key the carrying
+     * self-signature is made on: the primary key for a direct-key or certification self-signature, the subkey
+     * for a Subkey Binding signature. A subkey therefore never inherits the primary key's validity period -
+     * re-basing it on the subkey's own creation time would move the expiration date - and
+     * {@link OpenPGPCertificateComponent#getApplyingSubpacket(Date, int)} accordingly does not let a
+     * {@link KeyExpirationTime} shadow down onto a subkey. The primary key's expiration is instead applied to
+     * the whole certificate by {@link #isBoundBy(OpenPGPCertificateComponent, OpenPGPComponentKey, Date)},
+     * which is also what GnuPG and Sequoia do: an expired primary key can no longer certify, so the subkeys it
+     * bound cease to be usable with it.
+     *
+     * @param component      certificate component
+     * @param evaluationTime evaluation time
+     * @return true if the component's key is expired at evaluation time
+     */
+    private boolean isExpired(OpenPGPCertificateComponent component, Date evaluationTime)
+    {
+        OpenPGPSignature.OpenPGPSignatureSubpacket keyExpiration =
+            component.getApplyingSubpacket(evaluationTime, SignatureSubpacketTags.KEY_EXPIRE_TIME);
+        if (keyExpiration == null)
+        {
+            return false;
+        }
+
+        KeyExpirationTime kexp = (KeyExpirationTime)keyExpiration.getSubpacket();
+        if (kexp.getTime() == 0)
+        {
+            // Key does not expire.
+            return false;
+        }
+
+        OpenPGPComponentKey key = component.getKeyComponent();
+        return new Date(1000 * kexp.getTime() + key.getCreationTime().getTime()).before(evaluationTime);
     }
 
     /**
@@ -1814,6 +1847,12 @@ public class OpenPGPCertificate
                 if (subpacketType == SignatureSubpacketTags.KEY_FLAGS && this instanceof OpenPGPSubkey)
                 {
                     // Key Flags apply to the key their signature refers to (RFC9580, section 5.2.3.29) - not inherited
+                    return null;
+                }
+
+                if (subpacketType == SignatureSubpacketTags.KEY_EXPIRE_TIME && this instanceof OpenPGPSubkey)
+                {
+                    // Key Expiration Time is counted from the creation time of the key it is on (RFC9580, section 5.2.3.13) - not inherited
                     return null;
                 }
 
