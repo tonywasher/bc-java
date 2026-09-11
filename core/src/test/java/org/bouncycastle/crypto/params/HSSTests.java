@@ -1388,7 +1388,7 @@ public class HSSTests
         byte[] seed = Hex.decode("0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20");
 
         LMSPrivateKeyParameters root = new LMSPrivateKeyParameters(sigParams, otsParams, 0, I, twoToH, seed);
-        byte[][] child = LMSEngine.deriveChildKey(otsParams, I, seed, 0);
+        byte[][] child = root.deriveChildKey();
         GatedKey bottom = new GatedKey(sigParams, otsParams, 0, child[0], twoToH, child[1]);
 
         // the root signs the bottom key's public key, which advances the root's q to 1 - the
