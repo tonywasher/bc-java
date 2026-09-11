@@ -80,7 +80,6 @@ import org.bouncycastle.asn1.pkcs.PKCS12PBEParams;
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
 import org.bouncycastle.asn1.pkcs.Pfx;
 import org.bouncycastle.asn1.pkcs.SafeBag;
-import org.bouncycastle.asn1.util.ASN1Dump;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.AuthorityKeyIdentifier;
 import org.bouncycastle.asn1.x509.DigestInfo;
@@ -995,9 +994,7 @@ public class PKCS12PBMAC1KeyStoreSpi
                         }
                         else
                         {
-                            // -DM 2 System.out.println
-                            System.out.println("extra in data " + b.getBagId());
-                            System.out.println(ASN1Dump.dumpAsString(b));
+                            // NOTE: base reports the unrecognised bag through java.util.logging; this overlay also serves the jdk1.3 build, which has no such API
                         }
                     }
                 }
@@ -1026,17 +1023,13 @@ public class PKCS12PBMAC1KeyStoreSpi
                         }
                         else
                         {
-                            // -DM 2 System.out.println
-                            System.out.println("extra in encryptedData " + b.getBagId());
-                            System.out.println(ASN1Dump.dumpAsString(b));
+                            // NOTE: base reports the unrecognised bag through java.util.logging; this overlay also serves the jdk1.3 build, which has no such API
                         }
                     }
                 }
                 else
                 {
-                    // -DM 2 System.out.println
-                    System.out.println("extra " + c[i].getContentType().getId());
-                    System.out.println("extra " + ASN1Dump.dumpAsString(PKCS12Util.getContent(c[i])));
+                    // NOTE: base reports the unrecognised bag through java.util.logging; this overlay also serves the jdk1.3 build, which has no such API
                 }
             }
         }

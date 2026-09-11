@@ -36,6 +36,7 @@ import java.util.Hashtable;
 import java.util.Map;
 import java.util.Set;
 import java.util.Vector;
+import java.util.logging.Logger;
 
 import javax.crypto.Cipher;
 import javax.crypto.Mac;
@@ -106,6 +107,8 @@ public class PKCS12KeyStoreSpi
     implements PKCSObjectIdentifiers, X509ObjectIdentifiers, BCKeyStore
 {
     private final JcaJceHelper helper = new BCJcaJceHelper();
+
+    static final Logger LOG = Logger.getLogger(PKCS12KeyStoreSpi.class.getName());
 
     private static final int SALT_SIZE = 20;
 
@@ -961,8 +964,8 @@ public class PKCS12KeyStoreSpi
                         }
                         else
                         {
-                            System.out.println("extra in data " + b.getBagId());
-                            System.out.println(ASN1Dump.dumpAsString(b));
+                            LOG.info("extra in data " + b.getBagId());
+                            LOG.fine(ASN1Dump.dumpAsString(b));
                         }
                     }
                 }
@@ -1107,15 +1110,15 @@ public class PKCS12KeyStoreSpi
                         }
                         else
                         {
-                            System.out.println("extra in encryptedData " + b.getBagId());
-                            System.out.println(ASN1Dump.dumpAsString(b));
+                            LOG.info("extra in encrypted data " + b.getBagId());
+                            LOG.fine(ASN1Dump.dumpAsString(b));
                         }
                     }
                 }
                 else
                 {
-                    System.out.println("extra " + c[i].getContentType().getId());
-                    System.out.println("extra " + ASN1Dump.dumpAsString(PKCS12Util.getContent(c[i])));
+                    LOG.info("extra " + c[i].getContentType().getId());
+                    LOG.fine(ASN1Dump.dumpAsString(PKCS12Util.getContent(c[i])));
                 }
             }
         }
