@@ -30,6 +30,9 @@ public class LMSKeyPairGenerator
         byte[] rootSecret = new byte[sigParameter.getM()];
         source.nextBytes(rootSecret);
 
+        // TODO[lms] Use guarded style from HSSPrivateKeyParameters.generateKey (factor out); though
+        // the config above passes the guard, we want to avoid drift
+
         // RFC 8554 sec. 5.2, Algorithm 5: a fresh tree starts at q = 0 and has 2^h one-time keys.
         LMSPrivateKeyParameters privKey = new LMSPrivateKeyParameters(
             sigParameter, param.getParameters().getLMOTSParam(), 0, I, 1 << sigParameter.getH(), rootSecret);
