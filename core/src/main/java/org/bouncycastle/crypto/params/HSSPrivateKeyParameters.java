@@ -631,7 +631,7 @@ public class HSSPrivateKeyParameters
         //
         if (rootSeed == null || rootSeed.length < parameterSet.getM())
         {
-            throw new IllegalArgumentException("root seed is less than " + parameterSet.getM());
+            throw new IllegalArgumentException("root seed length is less than " + parameterSet.getM());
         }
 
         return new LMSPrivateKeyParameters(parameterSet, lmOtsParameters, q, I, 1 << parameterSet.getH(), rootSeed);
