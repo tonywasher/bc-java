@@ -52,7 +52,9 @@ public class LMSPrivateKeyParameters
     // (advanceRetainedPath). Consecutive signatures share most of their path, so a signature costs about
     // (h - 5) / 2 + 1 leaf derivations amortised, in place of the 2^(h - 5) it takes to rebuild the path
     // below the cached top every time. The worst case (crossing into the other half of the tree) is
-    // still that rebuild; only a scheduled traversal (BDS) would smooth it.
+    // still that rebuild; only a scheduled traversal (BDS) would smooth it. A tree built for the public
+    // key is built in path form (getPublicKey), so a freshly generated key already holds the path of
+    // its first signature; a decoded key holds none until it signs.
     //
     // The arrays of both tiers are handed out by reference to contexts and signatures and must never be
     // modified or wiped.
@@ -621,10 +623,30 @@ public class LMSPrivateKeyParameters
         {
             if (publicKey == null)
             {
+                //
+                // With no root cached the whole tree has to be built. Built as the authentication path
+                // of the current one-time key it costs exactly the same - every leaf and interior node
+                // once - but leaves that path retained, so the first signature does not rebuild the
+                // 2^(h - 5) leaves below the cached top that the build has just computed and dropped.
+                //
+                if (retained == null && peekRootT() == null && q >= 0 && q < (1 << parameters.getH()))
+                {
+                    advanceRetainedPath(parameters.getH(), q);
+                }
+
                 publicKey = new LMSPublicKeyParameters(parameters, otsParameters, this.findT(1), I);
             }
             return publicKey;
         }
+    }
+
+    /**
+     * Whether an authentication path is currently retained. Used by the regression tests that check
+     * a key built or signed with keeps the path its work produced.
+     */
+    synchronized boolean isPathRetained()
+    {
+        return retained != null;
     }
 
     byte[] findT(int r)
@@ -708,6 +730,33 @@ public class LMSPrivateKeyParameters
                 anc[i] = ((r >> (i - 1)) & 1) == 0
                     ? LMSEngine.computeNode(tDigest, I, r >> i, child, sibling)
                     : LMSEngine.computeNode(tDigest, I, r >> i, sibling, child);
+            }
+
+            //
+            // The fresh ancestors that fall within the pinned top are nodes the cache would otherwise
+            // compute again, so they are published now; the siblings already were, by findT. Built
+            // from nothing (fresh == h) this is the whole tree in path form, and the root is then one
+            // hash away - storing it is what lets getPublicKey come here in place of a plain build.
+            //
+            synchronized (tCache)
+            {
+                for (int i = 0; i < fresh; ++i)
+                {
+                    int node = r >> i;
+                    if (node < maxCacheR && tCache[node] == null)
+                    {
+                        tCache[node] = anc[i];
+                    }
+                }
+
+                if (tCache[1] == null)
+                {
+                    byte[] child = anc[h - 1], sibling = path[h - 1];
+
+                    tCache[1] = ((r >> (h - 1)) & 1) == 0
+                        ? LMSEngine.computeNode(tDigest, I, 1, child, sibling)
+                        : LMSEngine.computeNode(tDigest, I, 1, sibling, child);
+                }
             }
         }
 

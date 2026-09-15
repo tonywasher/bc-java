@@ -702,6 +702,47 @@ public class LMSTests
         }
     }
 
+    /**
+     * Building the tree for the public key computes every node on the current one-time key's path, so
+     * the key keeps that path rather than rebuilding it for the first signature. A decoded key has no
+     * such path until it signs, and one decoded from a legacy encoding with no tree cache gets its root
+     * from that first signature's path rather than from a second full build.
+     */
+    public void testTreeBuildRetainsFirstPath()
+        throws Exception
+    {
+        LMSigParameters sigParams = LMSigParameters.lms_sha256_n32_h5;
+        LMOtsParameters otsParams = LMOtsParameters.sha256_n32_w8;
+        byte[] I = Hex.decode("d08fabd4a2091ff0a8cb4ed834e74534");
+        byte[] seed = Hex.decode("558b8966c48ae9cb898b423c83443aae014a72f1b1ab5cc85cf1d892903b5439");
+        byte[] msg = Strings.toByteArray("first path");
+
+        LMSPrivateKeyParameters key = lmsKey(sigParams, otsParams, 0, I, seed);
+        assertFalse(key.isPathRetained());
+        LMSPublicKeyParameters pub = key.getPublicKey();
+        assertTrue("tree build should leave the first path retained", key.isPathRetained());
+        assertTrue(key.isTreeCachePrimed());
+        byte[] sig = sign(key, msg);
+        assertEquals(0, Pack.bigEndianToInt(sig, 0));
+        assertTrue(verify(pub, sig, msg));
+
+        LMSPrivateKeyParameters decoded = LMSPrivateKeyParameters.getInstance(key.getEncoded());
+        assertTrue(decoded.isTreeCachePrimed());
+        assertFalse("nothing to retain from a decode", decoded.isPathRetained());
+        sig = sign(decoded, msg);
+        assertEquals(1, Pack.bigEndianToInt(sig, 0));
+        assertTrue(verify(pub, sig, msg));
+        assertTrue(decoded.isPathRetained());
+
+        LMSPrivateKeyParameters legacy = LMSPrivateKeyParameters.getInstance(coreKey(sigParams, otsParams, I, seed, 2, 32));
+        assertFalse(legacy.isTreeCachePrimed());
+        sig = sign(legacy, msg);
+        assertEquals(2, Pack.bigEndianToInt(sig, 0));
+        assertTrue(verify(pub, sig, msg));
+        assertTrue("the first path should have supplied the root", legacy.isTreeCachePrimed());
+        assertEquals(pub, legacy.getPublicKey());
+    }
+
     private static LMSPrivateKeyParameters generateKey(LMSigParameters sigParams, LMOtsParameters otsParams)
     {
         SecureRandom random = new SecureRandom();
