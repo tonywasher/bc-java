@@ -17,6 +17,7 @@ import org.bouncycastle.tls.ProtocolVersion;
 import org.bouncycastle.tls.SignatureAndHashAlgorithm;
 import org.bouncycastle.tls.TlsUtils;
 import org.bouncycastle.tls.crypto.impl.jcajce.JcaTlsCrypto;
+import org.bouncycastle.util.Properties;
 
 final class ContextData
 {
@@ -80,7 +81,7 @@ final class ContextData
          * default in ProvSSLParameters; a value set on the connection's BCSSLParameters still wins.
          */
         this.defaultUseNamedGroupsOrder = PropertyUtils.getBooleanSystemProperty(
-            "org.bouncycastle.jsse.useNamedGroupsOrder", false);
+            Properties.JSSE_USE_NAMED_GROUPS_ORDER, false);
     }
 
     int[] getActiveCipherSuites(JcaTlsCrypto crypto, ProvSSLParameters sslParameters,

@@ -38,6 +38,7 @@ public class Properties
     public static final String PKCS12_ALLOW_SUN_SECRET_KEYS = "org.bouncycastle.pkcs12.allow_sun_secret_keys";
     public static final String PKCS1_STRICT_DIGESTINFO = "org.bouncycastle.pkcs1.strict_digestinfo";
     public static final String JSSE_HOSTNAME_CHECK_CN_FALLBACK = "org.bouncycastle.jsse.hostname_check_cn_fallback";
+    public static final String JSSE_USE_NAMED_GROUPS_ORDER = "org.bouncycastle.jsse.useNamedGroupsOrder";
     public static final String DRBG_EFFECTIVE_256BITS_ENTROPY = "org.bouncycastle.drbg.effective_256bits_entropy";
     public static final String DRBG_ENTROPY_SOURCE = "org.bouncycastle.drbg.entropysource";
     public static final String DRBG_ENTROPY_THREAD = "org.bouncycastle.drbg.entropy_thread";
