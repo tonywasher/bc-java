@@ -61,8 +61,21 @@ public final class Streams
     }
 
     /**
-     * Read exactly len bytes from inStr, growing the destination buffer as the bytes actually arrive
-     * rather than allocating byte[len] up front, so a large declared len cannot drive a large
+     * Chunk size for the incremental reader in readLenBytesFully: 64 KiB, a power of two with headroom
+     * under every collector's large-object line (mirrors the base Streams).
+     */
+    private static final int ROPE_CHUNK_SIZE = 1 << 16;
+
+    /**
+     * Safety fraction for the incremental reader, as a shift: a quarter of the data must arrive before the
+     * full-length allocation, which bounds the bytes allocated at five times the bytes delivered.
+     */
+    private static final int ROPE_SHIFT = 2;
+
+    /**
+     * Read exactly len bytes from inStr. Lengths up to 128 KiB are allocated up front; above that the
+     * first quarter of the data is read into a rope of 64 KiB chunks and the full-length array is
+     * allocated only once that much has actually arrived, so a large declared len cannot drive a large
      * allocation from a short input.
      *
      * @param inStr the stream to read from.
@@ -79,27 +92,59 @@ public final class Streams
             throw new IllegalArgumentException("len cannot be negative");
         }
 
-        byte[] bytes = new byte[Math.min(len, BUFFER_SIZE)];
-        int count = 0;
-        while (count < len)
+        // Small lengths are read directly: the up-front allocation is bounded by the cutoff, and a rope
+        // phase would cost an extra allocation and copy to defer at most that much.
+        if (len <= 2 * ROPE_CHUNK_SIZE)
         {
-            if (count == bytes.length)
-            {
-                int expandedLength = (int)Math.min((long)len, 8L * bytes.length);
-                byte[] expanded = new byte[expandedLength];
-                System.arraycopy(bytes, 0, expanded, 0, count);
-                bytes = expanded;
-            }
+            byte[] bytes = new byte[len];
+            readFullyOrThrow(inStr, bytes, 0, len);
+            return bytes;
+        }
 
-            int numRead = inStr.read(bytes, count, bytes.length - count);
+        // The chunk count is known up front (bounded at 8192 references for any int length), so the rope
+        // can be a plain array rather than a growing list.
+        int threshold = len >> ROPE_SHIFT;
+        byte[][] chunks = new byte[(threshold + ROPE_CHUNK_SIZE - 1) / ROPE_CHUNK_SIZE][];
+        int received = 0;
+        for (int i = 0; received < threshold; ++i)
+        {
+            // The last rope chunk is capped so that the rope phase ends exactly at the threshold; the total
+            // allocation is then (1 + 1/4) len for every length above the cutoff.
+            int chunkSize = Math.min(ROPE_CHUNK_SIZE, threshold - received);
+            byte[] chunk = new byte[chunkSize];
+            readFullyOrThrow(inStr, chunk, 0, chunkSize);
+            chunks[i] = chunk;
+            received += chunkSize;
+        }
+
+        byte[] result = new byte[len];
+
+        // Copy the chunks in first, while they are still cache-warm and before the remainder read can stall.
+        int pos = 0;
+        for (int i = 0; i < chunks.length; ++i)
+        {
+            byte[] chunk = chunks[i];
+            System.arraycopy(chunk, 0, result, pos, chunk.length);
+            pos += chunk.length;
+        }
+
+        readFullyOrThrow(inStr, result, received, len - received);
+        return result;
+    }
+
+    private static void readFullyOrThrow(InputStream inStr, byte[] buf, int off, int len)
+        throws IOException
+    {
+        while (len > 0)
+        {
+            int numRead = inStr.read(buf, off, len);
             if (numRead < 0)
             {
                 throw new EOFException("premature end of stream");
             }
-            count += numRead;
+            off += numRead;
+            len -= numRead;
         }
-
-        return bytes;
     }
 
     /**
