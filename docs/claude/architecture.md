@@ -67,6 +67,26 @@ unzip -l <module>/build/libs/bcprov-jdk18on-*.jar | grep '<Callee>.class'   # on
 Two entries at `versions/17` and `versions/25` for the callee, one at `versions/17` for the caller,
 is the broken shape.
 
+**The same trap runs the other way, and both directions are now machine-checked.** A *root* class
+compiled against the base copy of a hook can be paired at runtime with the hook's `versions/9` copy,
+so the two copies of a hook must agree on every member a root caller uses - name *and* descriptor,
+return type included. `tls`'s `SSLEngineUtil` had `create(ContextData)` returning `SSLEngine` in
+`src/main/jdk1.5` and `ProvSSLEngine` in `src/main/jdk1.9` from 2019 on, and every
+`SSLContext.createSSLEngine()` on JDK 9+ failed with `NoSuchMethodError` in the 1.86 jar
+(github #2448). It had never failed before because `compileJava9Java` reached the whole base tree
+through `options.sourcepath` and implicitly recompiled it into `versions/9` (447 classes in the 1.85
+bctls jar, `ProvSSLContextSpi` among them), which kept every descriptor consistent by accident; the
+`-implicit:none` added in 1.86 to stop that duplication exposed the mismatch. Now
+`gradle/multirelease.gradle` gives every distributed module a `multiReleaseCheck` task (on `check`,
+so `build` runs it) that reads the constant pool of every class in the built jar and fails when a
+member reference does not resolve against the copy of its target that a JDK would pair with the
+caller's copy - covering this direction, the `SpiUtil` direction above, and inherited members through
+in-jar supertypes. A failure reads `<caller> (root) -> <owner>.<name><descriptor> is absent from the
+versions/N copy paired with it on JDK N`; the fix is always to make the copies agree (or move the
+member to a class with no twin), never to widen the gate. Pair it with a test in the highest
+overlay's test tree (`tls/src/test/jdk25/.../SSLEngineMRTest` is the model for this case): the gate
+proves the jar links, the test proves the path runs.
+
 Crucially, the MR overlay's behaviour is **not covered by the normal test suite**. The `test11`/`test15`/`test17`/`test25` tasks run *only* the classes compiled from `src/test/jdk1.N` (their `testClassesDirs`), wired through the `AllTests11`/`AllTests15`/… suites — the base `src/test/java` tests are on the classpath but are **not executed** there. So a base test that would catch the drift never runs against the MR-jar, and the divergence ships undetected. When you touch (or find drift in) an MR-overlaid class, add a `src/test/jdk1.N` test that exercises the overlaid path against the multi-release jar and register it in the matching `AllTestsN` suite. A thin JUnit `TestCase` that runs the relevant base `SimpleTest` via `new XxxTest().perform()` / `assertTrue(result.isSuccessful())` reuses the existing vectors without duplication — see `prov/src/test/jdk1.11|jdk1.15/.../OpenSSHKeyFactoryMRTest.java`, added after the `edec` `KeyFactorySpi` OpenSSH path was found to have drifted (jdk1.11/jdk1.15 lacked passphrase support and threw the wrong exception type, uncaught because no `test11`/`test15` test covered it).
 
 **Which overlay's test tree, though?** Each `testN` task is the *only* one that puts a JDK N runtime

@@ -445,3 +445,9 @@ androidApiConfig.each { moduleName, cfg ->
         target.apply from: rootProject.file('gradle/animalsniffer.gradle')
     }
 }
+
+// Multi-release jar consistency gate - see gradle/multirelease.gradle (github #2448). Every
+// distributed jar is checked; one with no META-INF/versions entries passes trivially.
+distModules.each { name ->
+    project(":${name}").apply from: rootProject.file('gradle/multirelease.gradle')
+}

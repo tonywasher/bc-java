@@ -1,0 +1,247 @@
+// Multi-release jar consistency gate (github #2448).
+//
+// A multi-release jar resolves classes one class file at a time: on a JDK N runtime each
+// class loads from the highest META-INF/versions/<v> copy with v <= N, or from the jar root
+// when none applies. A class compiled in one source tree therefore runs against neighbours
+// taken from another, and javac never sees that combination - it compiles each overlay
+// against its own copies. If the copies of a class disagree about a member's name or
+// descriptor (a return type, say), a caller compiled against one copy hits the other at
+// runtime and fails with NoSuchMethodError / NoSuchFieldError on exactly the JDKs where
+// the two copies are paired. The 1.86 bctls jar shipped that way: the jdk1.5 and jdk1.9
+// copies of jsse.provider.SSLEngineUtil declared create(ContextData) with different return
+// types, the base ProvSSLContextSpi was compiled against the jdk1.5 one, and every
+// SSLContext.createSSLEngine() on JDK 9+ died (github #2448). For years the java9 compile
+// had masked it by implicitly recompiling the whole base tree into versions/9.
+//
+// This task reads the built jar and, for every member reference one class makes to another
+// class in the same jar, checks that the referenced member exists in the copy of the target
+// that a JDK would actually pair with the caller's copy. It walks each class's constant pool
+// directly (a class file's Fieldref / Methodref / InterfaceMethodref entries are the complete
+// set of members it can touch), resolves inherited members through superclasses and
+// interfaces within the jar, treats a hierarchy that leaves the jar as satisfied (it cannot
+// be checked here), and fails the build naming every unsatisfied pairing. Jars with no
+// versioned entries pass trivially.
+
+def multiReleaseCheck = tasks.register('multiReleaseCheck') {
+    group = 'verification'
+    description = 'Checks that every META-INF/versions overlay of the jar is member-compatible with the classes that call it'
+    dependsOn tasks.named('jar')
+
+    def jarFile = tasks.named('jar').flatMap { it.archiveFile }
+    def moduleName = project.name
+    def marker = layout.buildDirectory.file('multirelease/check.ok')
+
+    inputs.file(jarFile)
+    outputs.file(marker)
+
+    doLast {
+        // Parses one class file: its name, supertypes, declared members (name + descriptor)
+        // and every member reference it holds, all straight from the constant pool.
+        def parseClass = { byte[] bytes ->
+            def din = new DataInputStream(new ByteArrayInputStream(bytes))
+            din.readInt()             // magic
+            din.readUnsignedShort()   // minor
+            din.readUnsignedShort()   // major
+            int cpCount = din.readUnsignedShort()
+            int[] tags = new int[cpCount]
+            String[] utf = new String[cpCount]
+            int[] ref1 = new int[cpCount]
+            int[] ref2 = new int[cpCount]
+            for (int i = 1; i < cpCount; i++)
+            {
+                int tag = din.readUnsignedByte()
+                tags[i] = tag
+                switch (tag)
+                {
+                case 1:  utf[i] = din.readUTF(); break                                  // Utf8
+                case 3:  case 4: din.readInt(); break                                   // Integer, Float
+                case 5:  case 6: din.readLong(); i++; break                             // Long, Double (two slots)
+                case 7:  case 8: case 16: case 19: case 20:                             // Class, String, MethodType, Module, Package
+                    ref1[i] = din.readUnsignedShort(); break
+                case 9:  case 10: case 11: case 12: case 17: case 18:                   // Fieldref, Methodref, InterfaceMethodref, NameAndType, Dynamic, InvokeDynamic
+                    ref1[i] = din.readUnsignedShort(); ref2[i] = din.readUnsignedShort(); break
+                case 15: din.readUnsignedByte(); ref1[i] = din.readUnsignedShort(); break  // MethodHandle
+                default: throw new GradleException("unknown constant pool tag ${tag}")
+                }
+            }
+            din.readUnsignedShort()   // access flags
+            String thisName = utf[ref1[din.readUnsignedShort()]]
+            int superIdx = din.readUnsignedShort()
+            String superName = superIdx == 0 ? null : utf[ref1[superIdx]]
+            int ifaceCount = din.readUnsignedShort()
+            def supers = []
+            if (superName != null)
+            {
+                supers << superName
+            }
+            for (int i = 0; i < ifaceCount; i++)
+            {
+                supers << utf[ref1[din.readUnsignedShort()]]
+            }
+            def members = new HashSet<String>()
+            for (int pass = 0; pass < 2; pass++)      // fields, then methods - same layout
+            {
+                int n = din.readUnsignedShort()
+                for (int i = 0; i < n; i++)
+                {
+                    din.readUnsignedShort()           // access flags
+                    String name = utf[din.readUnsignedShort()]
+                    String desc = utf[din.readUnsignedShort()]
+                    members << (name + desc)
+                    int attrCount = din.readUnsignedShort()
+                    for (int a = 0; a < attrCount; a++)
+                    {
+                        din.readUnsignedShort()       // attribute name
+                        din.readFully(new byte[din.readInt()])
+                    }
+                }
+            }
+            def refs = new HashSet<List<String>>()
+            for (int i = 1; i < cpCount; i++)
+            {
+                if (tags[i] == 9 || tags[i] == 10 || tags[i] == 11)
+                {
+                    int nt = ref2[i]
+                    refs << [utf[ref1[ref1[i]]], utf[ref1[nt]] + utf[ref2[nt]]]
+                }
+            }
+            return [name: thisName, supers: supers, members: members, refs: refs]
+        }
+
+        // class name -> sorted map of (version -> parsed class); the root copy is version 8.
+        def classes = new HashMap<String, TreeMap<Integer, Object>>()
+        def versions = new TreeSet<Integer>([8])
+        new java.util.zip.ZipFile(jarFile.get().asFile).withCloseable { zip ->
+            zip.entries().each { entry ->
+                String n = entry.name
+                if (!n.endsWith('.class') || n.endsWith('module-info.class'))
+                {
+                    return
+                }
+                int ver = 8
+                def m = n =~ /^META-INF\/versions\/(\d+)\/(.*)$/
+                if (m.matches())
+                {
+                    ver = m.group(1) as int
+                    n = m.group(2)
+                }
+                else if (n.startsWith('META-INF/'))
+                {
+                    return
+                }
+                def parsed = parseClass(zip.getInputStream(entry).bytes)
+                classes.computeIfAbsent(parsed.name, { new TreeMap<Integer, Object>() }).put(ver, parsed)
+                versions << ver
+            }
+        }
+
+        def out = marker.get().asFile
+        out.parentFile.mkdirs()
+        if (versions.size() == 1)
+        {
+            out.text = "Multi-release check: no versioned entries\n"
+            return
+        }
+
+        // The copy of cls a JDK N runtime loads, or null when the class is not in this jar.
+        def copyAt = { String cls, int n ->
+            def vs = classes.get(cls)
+            if (vs == null)
+            {
+                return null
+            }
+            def e = vs.floorEntry(n)
+            return e == null ? null : e.value
+        }
+
+        // java.lang.Object is where every in-jar hierarchy ends; its members are fixed, so a
+        // reference that reaches it unresolved is known to be broken rather than unverifiable.
+        def objectMembers = ['<init>()V', 'getClass()Ljava/lang/Class;', 'hashCode()I', 'equals(Ljava/lang/Object;)Z',
+                             'clone()Ljava/lang/Object;', 'toString()Ljava/lang/String;', 'notify()V', 'notifyAll()V',
+                             'wait()V', 'wait(J)V', 'wait(JI)V', 'finalize()V'] as Set
+
+        // Whether owner (as loaded on JDK N) declares or inherits member. Returns true when
+        // the hierarchy leaves the jar into anything other than java.lang.Object before the
+        // member is found - a JDK or other-jar supertype cannot be checked here.
+        def resolves
+        resolves = { String owner, String member, int n, Set<String> seen ->
+            if (!seen.add(owner))
+            {
+                return false
+            }
+            if (owner == 'java/lang/Object')
+            {
+                return objectMembers.contains(member)
+            }
+            def c = copyAt(owner, n)
+            if (c == null)
+            {
+                return true
+            }
+            if (c.members.contains(member))
+            {
+                return true
+            }
+            return c.supers.any { s -> resolves(s, member, n, seen) }
+        }
+
+        // The JDK versions on which this copy of cls is the one loaded. An anonymous or local
+        // class ($ followed by a digit) can only be referenced from the classes compiled out
+        // of the same source file, so a copy of one is live only while the same-version copy
+        // of the class enclosing it is - a root Outer$1 never loads on a JDK that takes Outer
+        // from versions/9.
+        def liveVersions = { String cls, int cver ->
+            def vs = classes.get(cls)
+            def higher = vs.higherKey(cver)
+            def live = versions.findAll { n -> n >= cver && (higher == null || n < higher) }
+            def enclosing = cls
+            while (true)
+            {
+                def m = enclosing =~ /^(.*)\$\d[^$]*$/
+                if (!m.matches())
+                {
+                    break
+                }
+                enclosing = m.group(1)
+            }
+            if (enclosing != cls && classes.containsKey(enclosing))
+            {
+                def evs = classes.get(enclosing)
+                live = live.findAll { n -> evs.floorEntry(n)?.key == cver }
+            }
+            return live
+        }
+
+        def problems = new TreeSet<String>()
+        classes.each { cls, vs ->
+            vs.each { cver, c ->
+                def live = liveVersions(cls, cver)
+                c.refs.each { ref ->
+                    String owner = ref[0]
+                    String member = ref[1]
+                    if (!classes.containsKey(owner))
+                    {
+                        return
+                    }
+                    live.each { n ->
+                        if (!resolves(owner, member, n, new HashSet<String>()))
+                        {
+                            def tv = classes.get(owner).floorEntry(n).key
+                            problems << "${cls} (${cver == 8 ? 'root' : 'versions/' + cver}) -> ${owner}.${member} is absent from the ${tv == 8 ? 'root' : 'versions/' + tv} copy paired with it on JDK ${n}"
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!problems.isEmpty())
+        {
+            throw new GradleException(
+                "Multi-release jar ${jarFile.get().asFile.name} has ${problems.size()} member reference(s) that fail to resolve on some JDK:\n  " +
+                problems.take(60).join('\n  '))
+        }
+        out.text = "Multi-release check: ${classes.size()} classes, versions ${versions}: OK\n"
+    }
+}
+
+tasks.named('check') { dependsOn multiReleaseCheck }
