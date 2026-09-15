@@ -220,6 +220,98 @@ public class HSSTests
 
     }
 
+    /**
+     * RFC 9858 Appendix A.1, Test Case 1 - SHA-256/192 (LMS_SHA256_M24_H5 / LMOTS_SHA256_N24_W8).
+     * From https://www.rfc-editor.org/rfc/rfc9858#appendix-A.1
+     */
+    public void testRFC9858Vector_1()
+        throws Exception
+    {
+        checkRFC9858Vector("rfc9858_testcase_1.txt", LMSigParameters.lms_sha256_n24_h5, LMOtsParameters.sha256_n24_w8, true);
+    }
+
+    /**
+     * RFC 9858 Appendix A.2, Test Vector for SHAKE256/192 (LMS_SHAKE_N24_H5 / LMOTS_SHAKE_N24_W8).
+     * From https://www.rfc-editor.org/rfc/rfc9858#appendix-A.2
+     */
+    public void testRFC9858Vector_2()
+        throws Exception
+    {
+        checkRFC9858Vector("rfc9858_testcase_2.txt", LMSigParameters.lms_shake256_n24_h5, LMOtsParameters.shake256_n24_w8, true);
+    }
+
+    /**
+     * RFC 9858 Appendix A.3, Test Vector for SHAKE256/256 (LMS_SHAKE_N32_H5 / LMOTS_SHAKE_N32_W8); the
+     * RFC's section title says SHA-256/256, but the parameter sets and message are SHAKE256/256.
+     * From https://www.rfc-editor.org/rfc/rfc9858#appendix-A.3
+     */
+    public void testRFC9858Vector_3()
+        throws Exception
+    {
+        checkRFC9858Vector("rfc9858_testcase_3.txt", LMSigParameters.lms_shake256_n32_h5, LMOtsParameters.shake256_n32_w8, true);
+    }
+
+    /**
+     * RFC 9858 Appendix A.4, Test Vector for SHA-256/192, W=4 (LMS_SHA256_M24_H20 / LMOTS_SHA256_N24_W4).
+     * Verification only: regenerating the key means building the 2^20-leaf tree, which takes minutes
+     * (a little over five here), too long for a unit test.
+     * From https://www.rfc-editor.org/rfc/rfc9858#appendix-A.4
+     */
+    public void testRFC9858Vector_4()
+        throws Exception
+    {
+        checkRFC9858Vector("rfc9858_testcase_4.txt", LMSigParameters.lms_sha256_n24_h20, LMOtsParameters.sha256_n24_w4, false);
+    }
+
+    /**
+     * An RFC 9858 Appendix A vector is a single-level HSS key with its private SEED and I, a message and a
+     * signature, all produced with the RFC 8554 Appendix A key derivation. Three things are checked: the RFC
+     * signature verifies under the RFC public key; the key regenerated from SEED and I reproduces the RFC
+     * public key; and signing the message at the signature's q reproduces the RFC signature byte for byte.
+     *
+     * @param regenerate whether to do the SEED/I regeneration and re-signing (building the tree costs
+     *                   2^h OTS key generations, so it can be skipped for a tall tree).
+     */
+    private void checkRFC9858Vector(String vector, LMSigParameters sigParams, LMOtsParameters otsParams, boolean regenerate)
+        throws Exception
+    {
+        List<byte[]> blocks = loadVector(vector);
+
+        byte[] seed = blocks.get(0);
+        byte[] I = blocks.get(1);
+        HSSPublicKeyParameters publicKey = HSSPublicKeyParameters.getInstance(blocks.get(2));
+        byte[] message = blocks.get(3);
+        byte[] signature = blocks.get(4);
+
+        assertEquals(vector + ": levels", 1, publicKey.getL());
+        LMSPublicKeyParameters lmsPub = publicKey.getLMSPublicKey();
+        assertEquals(vector + ": LMS type", sigParams, lmsPub.getSigParameters());
+        assertEquals(vector + ": LM-OTS type", otsParams, lmsPub.getOtsParameters());
+        assertTrue(vector + ": I", Arrays.areEqual(I, lmsPub.getI()));
+        assertEquals(vector + ": SEED length", sigParams.getM(), seed.length);
+
+        assertTrue(vector + ": RFC signature verifies", verify(publicKey, signature, message));
+
+        // Nspk is 0, so the HSS signature is u32str(0) followed by the LMS signature, which opens with q.
+        assertEquals(vector + ": Nspk", 0, Pack.bigEndianToInt(signature, 0));
+        byte[] lmsSignature = Arrays.copyOfRange(signature, 4, signature.length);
+        assertTrue(vector + ": RFC LMS signature verifies", verifyLms(lmsPub, lmsSignature, message));
+
+        if (!regenerate)
+        {
+            return;
+        }
+
+        int q = Pack.bigEndianToInt(lmsSignature, 0);
+        LMSPrivateKeyParameters privateKey = lmsKey(sigParams, otsParams, q, I, seed);
+        assertTrue(vector + ": public key from SEED and I",
+            Arrays.areEqual(lmsPub.getEncoded(), privateKey.getPublicKey().getEncoded()));
+
+        LMSSigner signer = new LMSSigner();
+        signer.init(true, privateKey);
+        assertTrue(vector + ": signature at q from SEED and I",
+            Arrays.areEqual(lmsSignature, signer.generateSignature(message)));
+    }
 
     private List<byte[]> loadVector(String vector)
         throws Exception
