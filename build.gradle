@@ -447,7 +447,10 @@ androidApiConfig.each { moduleName, cfg ->
 }
 
 // Multi-release jar consistency gate - see gradle/multirelease.gradle (github #2448). Every
-// distributed jar is checked; one with no META-INF/versions entries passes trivially.
+// distributed jar is checked together with the sibling BC jars it depends on; one with no
+// META-INF/versions entries passes trivially. Applied to the root as well for the standalone
+// multiReleaseCheckJar task (-PmrJar / -PmrClasspath) that checks arbitrary, e.g. published, jars.
+apply from: rootProject.file('gradle/multirelease.gradle')
 distModules.each { name ->
     project(":${name}").apply from: rootProject.file('gradle/multirelease.gradle')
 }

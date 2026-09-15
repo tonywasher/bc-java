@@ -78,12 +78,21 @@ through `options.sourcepath` and implicitly recompiled it into `versions/9` (447
 bctls jar, `ProvSSLContextSpi` among them), which kept every descriptor consistent by accident; the
 `-implicit:none` added in 1.86 to stop that duplication exposed the mismatch. Now
 `gradle/multirelease.gradle` gives every distributed module a `multiReleaseCheck` task (on `check`,
-so `build` runs it) that reads the constant pool of every class in the built jar and fails when a
-member reference does not resolve against the copy of its target that a JDK would pair with the
-caller's copy - covering this direction, the `SpiUtil` direction above, and inherited members through
-in-jar supertypes. A failure reads `<caller> (root) -> <owner>.<name><descriptor> is absent from the
+so `build` runs it) that reads the constant pool of every class in the built jar **and in the sibling
+BC jars the module depends on**, loaded as one class universe the way a deployment's classpath is, and
+fails when a member reference does not resolve against the copy of its target that a JDK would pair
+with the caller's copy - covering this direction, the `SpiUtil` direction above, inherited members
+through in-universe supertypes, and a companion jar's calls into an overlaid `bcprov` class (`bcpkix`,
+`bcpg` and `bctls` all make such calls; `bccore` is left out of the universe because its classes ship
+inside `bcprov`). A failure reads `<caller> (root) -> <owner>.<name><descriptor> is absent from the
 versions/N copy paired with it on JDK N`; the fix is always to make the copies agree (or move the
-member to a class with no twin), never to widen the gate. Pair it with a test in the highest
+member to a class with no twin), never to widen the gate. The root project carries the same check as
+`multiReleaseCheckJar` for jars the build did not produce - a published release, say:
+`./gradlew multiReleaseCheckJar -PmrJar=<jar>[,<jar>]` checks each jar alone and
+`-PmrClasspath=<jar>,<jar>,...` loads several as one universe (first jar wins on a duplicate copy).
+Run against the published `bctls-jdk18on-1.86.jar` it reports exactly the two `SSLEngineUtil.create`
+pairings, which is the negative test to repeat after any change to the script. The BC-FJA tree carries
+the same script against its HMAC-stamped `checksumJar` output. Pair it with a test in the highest
 overlay's test tree (`tls/src/test/jdk25/.../SSLEngineMRTest` is the model for this case): the gate
 proves the jar links, the test proves the path runs.
 
