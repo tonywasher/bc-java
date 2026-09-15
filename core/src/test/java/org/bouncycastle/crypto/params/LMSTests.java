@@ -3,12 +3,16 @@ package org.bouncycastle.crypto.params;
 import java.io.IOException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import junit.framework.TestCase;
+import org.bouncycastle.crypto.ExhaustedPrivateKeyException;
 import org.bouncycastle.crypto.signers.lms.LMSSignature;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Pack;
+import org.bouncycastle.util.Strings;
 import org.bouncycastle.util.encoders.Hex;
 import org.bouncycastle.crypto.generators.LMSKeyPairGenerator;
 import org.bouncycastle.crypto.signers.LMSSigner;
@@ -543,6 +547,169 @@ public class LMSTests
                 coreKey(sigParams, otsParams, I, seed, good[i][0], good[i][1]));
             assertEquals(good[i][0], key.getIndex());
         }
+    }
+
+    /**
+     * The private key retains the authentication path of the last one-time key used and advances it to
+     * the next, sharing what the two have in common; the shared prefix and the swap at the divergence
+     * level are exercised at every level by signing a whole height-5 tree in order. A wrong node anywhere
+     * in a path makes the signature fail to verify. (A guard for the retained path rather than a
+     * regression test: a key that rebuilt every path from scratch would pass it too.)
+     */
+    public void testRetainedPathCoversEveryDivergenceDepth()
+        throws Exception
+    {
+        signInOrderAndVerify(LMSigParameters.lms_sha256_n32_h5, 1 << 5);
+        signInOrderAndVerify(LMSigParameters.lms_sha256_n32_h10, 70); // past the pinned top's level
+    }
+
+    private static void signInOrderAndVerify(LMSigParameters sigParams, int count)
+    {
+        LMSPrivateKeyParameters key = generateKey(sigParams, LMOtsParameters.sha256_n32_w8);
+        LMSPublicKeyParameters pub = key.getPublicKey();
+        byte[] msg = Strings.toByteArray("retained path");
+
+        for (int i = 0; i < count; ++i)
+        {
+            byte[] sig = sign(key, msg);
+            assertEquals(i, Pack.bigEndianToInt(sig, 0));
+            assertTrue("signature " + i + " of h=" + sigParams.getH() + " did not verify", verify(pub, sig, msg));
+        }
+    }
+
+    /**
+     * A shard inherits the retained path of its parent and the parent keeps signing after a jump over
+     * the shard's range; a later shard makes a jump into the other half of the tree.
+     */
+    public void testRetainedPathSurvivesShardsAndJumps()
+        throws Exception
+    {
+        LMSPrivateKeyParameters key = generateKey(LMSigParameters.lms_sha256_n32_h10, LMOtsParameters.sha256_n32_w8);
+        LMSPublicKeyParameters pub = key.getPublicKey();
+        byte[] msg = Strings.toByteArray("shards and jumps");
+        Set<Integer> seen = new HashSet<Integer>();
+
+        for (int i = 0; i < 4; ++i)
+        {
+            signVerifyAndRecord(key, pub, msg, seen);
+        }
+
+        LMSPrivateKeyParameters shard = key.extractKeyShard(4);
+        for (int i = 0; i < 4; ++i)
+        {
+            signVerifyAndRecord(shard, pub, msg, seen);
+        }
+        try
+        {
+            sign(shard, msg);
+            fail("exhausted shard signed");
+        }
+        catch (ExhaustedPrivateKeyException e)
+        {
+            // expected
+        }
+
+        for (int i = 0; i < 4; ++i)
+        {
+            signVerifyAndRecord(key, pub, msg, seen);
+        }
+
+        LMSPrivateKeyParameters skip = key.extractKeyShard(500); // jump past the midpoint
+        assertEquals(512, key.getIndex());
+        for (int i = 0; i < 3; ++i)
+        {
+            signVerifyAndRecord(key, pub, msg, seen);
+        }
+        for (int i = 0; i < 3; ++i)
+        {
+            signVerifyAndRecord(skip, pub, msg, seen);
+        }
+
+        assertEquals("a one-time key was used twice", 18, seen.size());
+    }
+
+    private static void signVerifyAndRecord(LMSPrivateKeyParameters key, LMSPublicKeyParameters pub, byte[] msg,
+                                            Set<Integer> seen)
+    {
+        int q = key.getIndex();
+        byte[] sig = sign(key, msg);
+        assertEquals(q, Pack.bigEndianToInt(sig, 0));
+        assertTrue("signature with q = " + q + " did not verify", verify(pub, sig, msg));
+        assertTrue(seen.add(Integer.valueOf(q)));
+    }
+
+    /**
+     * Several signers over one key share its retained path: every signature they produce verifies and
+     * no one-time key is used twice.
+     */
+    public void testParallelSignersShareOneKey()
+        throws Exception
+    {
+        final int threadCount = 4, perThread = 64;
+
+        final LMSPrivateKeyParameters key = generateKey(LMSigParameters.lms_sha256_n32_h10, LMOtsParameters.sha256_n32_w8);
+        LMSPublicKeyParameters pub = key.getPublicKey();
+        final byte[] msg = Strings.toByteArray("parallel signers");
+
+        final byte[][] sigs = new byte[threadCount * perThread][];
+        final Throwable[] failures = new Throwable[threadCount];
+        Thread[] threads = new Thread[threadCount];
+
+        for (int t = 0; t < threadCount; ++t)
+        {
+            final int thread = t;
+            threads[t] = new Thread(new Runnable()
+            {
+                public void run()
+                {
+                    try
+                    {
+                        LMSSigner signer = new LMSSigner();
+                        signer.init(true, key);
+                        for (int i = 0; i < perThread; ++i)
+                        {
+                            sigs[thread * perThread + i] = signer.generateSignature(msg);
+                        }
+                    }
+                    catch (Throwable e)
+                    {
+                        failures[thread] = e;
+                    }
+                }
+            });
+        }
+
+        for (int t = 0; t < threadCount; ++t)
+        {
+            threads[t].start();
+        }
+        for (int t = 0; t < threadCount; ++t)
+        {
+            threads[t].join();
+        }
+
+        for (int t = 0; t < threadCount; ++t)
+        {
+            assertNull("signer " + t + " failed: " + failures[t], failures[t]);
+        }
+        assertEquals(threadCount * perThread, key.getIndex());
+
+        Set<Integer> seen = new HashSet<Integer>();
+        for (int i = 0; i < sigs.length; ++i)
+        {
+            assertTrue(verify(pub, sigs[i], msg));
+            assertTrue("a one-time key was used twice", seen.add(Integer.valueOf(Pack.bigEndianToInt(sigs[i], 0))));
+        }
+    }
+
+    private static LMSPrivateKeyParameters generateKey(LMSigParameters sigParams, LMOtsParameters otsParams)
+    {
+        SecureRandom random = new SecureRandom();
+        byte[] I = new byte[16];
+        byte[] seed = new byte[32];
+        random.nextBytes(I);
+        random.nextBytes(seed);
+        return lmsKey(sigParams, otsParams, 0, I, seed);
     }
 
     private static byte[] coreKey(LMSigParameters sigParams, LMOtsParameters otsParams, byte[] I,

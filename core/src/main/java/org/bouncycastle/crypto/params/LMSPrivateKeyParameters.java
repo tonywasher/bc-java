@@ -5,8 +5,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Map;
-import java.util.WeakHashMap;
 
 import javax.security.auth.Destroyable;
 
@@ -17,6 +15,7 @@ import org.bouncycastle.crypto.signers.lms.LMSContext;
 import org.bouncycastle.crypto.signers.lms.LMSEngine;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Exceptions;
+import org.bouncycastle.util.Integers;
 import org.bouncycastle.util.Objects;
 import org.bouncycastle.util.io.Streams;
 
@@ -24,25 +23,62 @@ public class LMSPrivateKeyParameters
     extends LMSKeyParameters
     implements LMSContextBasedSigner, Destroyable
 {
-    private static CacheKey T1 = new CacheKey(1);
-    private static CacheKey[] internedKeys = new CacheKey[64];
-
-    static
-    {
-        internedKeys[1] = T1;
-        for (int i = 2; i < internedKeys.length; i++)
-        {
-            internedKeys[i] = new CacheKey(i);
-        }
-    }
+    /**
+     * The number of tree nodes eligible for the cache (nodes 1 .. CACHE_TOP_LIMIT - 1: the top six levels
+     * of the tree), in memory and in the persisted trailer alike. It defines the interchange format's
+     * cache-count limit, shared with bc-csharp.
+     */
+    private static final int CACHE_TOP_LIMIT = 64;
 
     private final byte[] I;
     private final LMSigParameters parameters;
     private final LMOtsParameters otsParameters;
     private final int maxQ;
     private final byte[] masterSecret;
-    private final Map<CacheKey, byte[]> tCache;
+
+    //
+    // Two tiers of Merkle tree nodes are kept, neither of them secret: every node is published in some
+    // signature or recomputed by every verifier.
+    //
+    // tCache holds nodes 1 .. maxCacheR - 1 (at most 63, about 2 KB), computed on demand and kept for the
+    // life of the key. It is the tier the encoding persists, so a decoded key resumes with it. Caching
+    // deeper nodes buys nothing that lasts: each leaf is consumed once by its parent, and an unbounded
+    // cache of every node reaches 2 GB at h = 25. (The WeakHashMap this replaced keyed the deeper nodes
+    // on objects nothing retained, so they were collectable on insertion and cost their allocation for
+    // a hit rate that depended on when the collector next ran.)
+    //
+    // retained holds the authentication path of the last one-time key signed with, together with the
+    // chain of its ancestors, and is advanced under the key's lock as q is allocated
+    // (advanceRetainedPath). Consecutive signatures share most of their path, so a signature costs about
+    // (h - 5) / 2 + 1 leaf derivations amortised, in place of the 2^(h - 5) it takes to rebuild the path
+    // below the cached top every time. The worst case (crossing into the other half of the tree) is
+    // still that rebuild; only a scheduled traversal (BDS) would smooth it.
+    //
+    // The arrays of both tiers are handed out by reference to contexts and signatures and must never be
+    // modified or wiped.
+    //
+    private final byte[][] tCache;
     private final int maxCacheR;
+    private RetainedPath retained;
+
+    /**
+     * The authentication path of one-time key q with the ancestors of its leaf, indexed by level from
+     * the leaf (0) up to just below the root (h - 1). Immutable: a key replaces it wholesale under its
+     * lock, and a shard or repositioned key inherits the parent's current instance by reference.
+     */
+    private static final class RetainedPath
+    {
+        final int q;
+        final byte[][] path; // path[i] is the sibling of anc[i]
+        final byte[][] anc;  // anc[0] is the leaf node of q itself
+
+        RetainedPath(int q, byte[][] path, byte[][] anc)
+        {
+            this.q = q;
+            this.path = path;
+            this.anc = anc;
+        }
+    }
 
     private int q;
 
@@ -86,8 +122,8 @@ public class LMSPrivateKeyParameters
         this.I = Arrays.clone(I);
         this.maxQ = maxQ;
         this.masterSecret = Arrays.clone(masterSecret);
-        this.maxCacheR = 1 << (parameters.getH() + 1);
-        this.tCache = new WeakHashMap<CacheKey, byte[]>();
+        this.maxCacheR = Math.min(CACHE_TOP_LIMIT, 1 << (parameters.getH() + 1));
+        this.tCache = new byte[maxCacheR][];
     }
 
     /**
@@ -106,15 +142,18 @@ public class LMSPrivateKeyParameters
         this.I = new byte[0];
         this.maxQ = maxQ;
         this.masterSecret = new byte[0];
-        this.maxCacheR = 1 << (lmsParameter.getH() + 1);
-        this.tCache = new WeakHashMap<CacheKey, byte[]>();
+        this.maxCacheR = Math.min(CACHE_TOP_LIMIT, 1 << (lmsParameter.getH() + 1));
+        this.tCache = new byte[maxCacheR][];
     }
 
     private LMSPrivateKeyParameters(LMSPrivateKeyParameters parent, int q, int maxQ)
     {
-        this(parent, q, maxQ, 1 << parent.parameters.getH());
+        this(parent, q, maxQ, Math.min(CACHE_TOP_LIMIT, 1 << parent.parameters.getH()));
     }
 
+    // Called under the parent's lock (extractKeyShard, repositionTo), which is what makes reading its
+    // retained path safe. I, masterSecret and tCache are shared by reference with the parent; the retained
+    // path too, but it is immutable and holds no secrets.
     private LMSPrivateKeyParameters(LMSPrivateKeyParameters parent, int q, int maxQ, int maxCacheR)
     {
         super(true);
@@ -126,6 +165,7 @@ public class LMSPrivateKeyParameters
         this.masterSecret = parent.masterSecret;
         this.maxCacheR = maxCacheR;
         this.tCache = parent.tCache;
+        this.retained = parent.retained;
         this.publicKey = parent.publicKey;
     }
 
@@ -329,7 +369,7 @@ public class LMSPrivateKeyParameters
         throws IOException
     {
         int cacheCount = dIn.readInt();
-        if (cacheCount < 0 || cacheCount >= internedKeys.length)
+        if (cacheCount < 0 || cacheCount >= CACHE_TOP_LIMIT)
         {
             throw new IOException("tree cache node count out of range: " + cacheCount);
         }
@@ -438,10 +478,12 @@ public class LMSPrivateKeyParameters
         // Step 2
         int h = lmsParameter.getH();
         int q;
+        byte[][] path;
 
         //
         // The index is claimed before the context is handed out, so a one-time key is never issued
-        // twice even if the caller then abandons the context.
+        // twice even if the caller then abandons the context. The path is built under the same lock
+        // so that the retained path advances in step with the index.
         //
         synchronized (this)
         {
@@ -452,18 +494,7 @@ public class LMSPrivateKeyParameters
                 throw new ExhaustedPrivateKeyException("ots private key exhausted");
             }
             q = this.q++;
-        }
-
-        int i = 0;
-        int r = (1 << h) + q;
-        byte[][] path = new byte[h][];
-
-        while (i < h)
-        {
-            int tmp = (r / (1 << i)) ^ 1;
-
-            path[i] = this.findT(tmp);
-            i++;
+            path = advanceRetainedPath(h, q);
         }
 
         return LMSEngine.generateSignContext(lmsParameter, otsParameters, I, q, masterSecret, path);
@@ -590,7 +621,7 @@ public class LMSPrivateKeyParameters
         {
             if (publicKey == null)
             {
-                publicKey = new LMSPublicKeyParameters(parameters, otsParameters, this.findT(T1), I);
+                publicKey = new LMSPublicKeyParameters(parameters, otsParameters, this.findT(1), I);
             }
             return publicKey;
         }
@@ -598,30 +629,90 @@ public class LMSPrivateKeyParameters
 
     byte[] findT(int r)
     {
-        if (r < maxCacheR)
+        if (r >= maxCacheR)
         {
-            return findT(r < internedKeys.length ? internedKeys[r] : new CacheKey(r));
+            return calcT(r);
         }
 
-        return calcT(r);
-    }
-
-    private byte[] findT(CacheKey key)
-    {
+        // The lock is held across the (recursive) computation, so a node is computed once and the
+        // array it is published in is safely visible to every thread that reads the slot.
         synchronized (tCache)
         {
-            byte[] t = tCache.get(key);
+            byte[] t = tCache[r];
 
-            if (t != null)
+            if (t == null)
             {
-                return t;
+                t = calcT(r);
+                tCache[r] = t;
             }
-
-            t = calcT(key.index);
-            tCache.put(key, t);
 
             return t;
         }
+    }
+
+    /**
+     * Build the authentication path of one-time key q, reusing whatever it shares with the path of the
+     * last one-time key signed with, and retain the result in its place. Called under the key's lock.
+     */
+    private byte[][] advanceRetainedPath(int h, int q)
+    {
+        int r = (1 << h) + q;
+
+        byte[][] path = new byte[h][];
+        byte[][] anc = new byte[h][];
+
+        // Levels below 'fresh' need computing; levels from 'fresh' up are shared with the retained path.
+        int fresh = h;
+
+        RetainedPath old = retained;
+        if (old != null)
+        {
+            // The paths of q and old.q agree above the highest bit in which the two differ. At that level
+            // the roles swap: the old ancestor (root of the subtree just left) becomes the new sibling,
+            // and the old sibling (root of the subtree now entered) becomes the new ancestor.
+            int b = Integers.bitLength(q ^ old.q);
+            if (b == 0)
+            {
+                return old.path;
+            }
+
+            for (int i = b; i < h; ++i)
+            {
+                path[i] = old.path[i];
+                anc[i] = old.anc[i];
+            }
+
+            path[b - 1] = old.anc[b - 1];
+            anc[b - 1] = old.path[b - 1];
+            fresh = b - 1;
+        }
+
+        // Below the divergence everything lies inside the subtree just entered: the siblings are subtrees
+        // that findT computes (caching only those within the pinned top), and the ancestors fold up from
+        // the new leaf.
+        for (int i = 0; i < fresh; ++i)
+        {
+            path[i] = findT((r >> i) ^ 1);
+        }
+
+        if (fresh > 0)
+        {
+            anc[0] = findT(r);
+
+            Digest tDigest = LMSEngine.createDigest(parameters);
+
+            for (int i = 1; i < fresh; ++i)
+            {
+                byte[] child = anc[i - 1], sibling = path[i - 1];
+
+                anc[i] = ((r >> (i - 1)) & 1) == 0
+                    ? LMSEngine.computeNode(tDigest, I, r >> i, child, sibling)
+                    : LMSEngine.computeNode(tDigest, I, r >> i, sibling, child);
+            }
+        }
+
+        retained = new RetainedPath(q, path, anc);
+        return path;
     }
 
     private byte[] calcT(int r)
@@ -655,9 +746,8 @@ public class LMSPrivateKeyParameters
 
     /**
      * Populate the node cache with the top-of-tree nodes recovered from the optional trailing
-     * cache in a version 0 encoding. Entries are keyed on the interned cache keys so they are not
-     * evicted, matching the state a freshly generated key reaches after its public key has been
-     * derived.
+     * cache in a version 0 encoding, matching the state a freshly generated key reaches after its
+     * public key has been derived.
      *
      * @param cachedT nodes indexed by tree node number; index 0 is unused, entries 1..n are cached.
      */
@@ -665,11 +755,11 @@ public class LMSPrivateKeyParameters
     {
         synchronized (tCache)
         {
-            for (int r = 1; r < cachedT.length; r++)
+            for (int r = 1; r < cachedT.length && r < tCache.length; r++)
             {
                 if (cachedT[r] != null)
                 {
-                    tCache.put(internedKeys[r], cachedT[r]);
+                    tCache[r] = cachedT[r];
                 }
             }
         }
@@ -684,7 +774,7 @@ public class LMSPrivateKeyParameters
     {
         synchronized (tCache)
         {
-            return (byte[])tCache.get(T1);
+            return tCache[1];
         }
     }
 
@@ -698,7 +788,7 @@ public class LMSPrivateKeyParameters
     {
         synchronized (tCache)
         {
-            return tCache.get(T1) != null;
+            return tCache[1] != null;
         }
     }
 
@@ -781,7 +871,9 @@ public class LMSPrivateKeyParameters
         // the master secret and never looks at the trailing bytes.
         //
 
-        int cacheTop = Math.min(internedKeys.length, maxCacheR);
+        // The whole of the in-memory cache is eligible, so a decoded key resumes with the cache it was
+        // encoded with; findT computes any node not yet there.
+        int cacheTop = maxCacheR;
 
         ByteArrayOutputStream bOut = new ByteArrayOutputStream();
 
@@ -803,28 +895,4 @@ public class LMSPrivateKeyParameters
         return bOut.toByteArray();
     }
 
-    private static class CacheKey
-    {
-        private final int index;
-
-        CacheKey(int index)
-        {
-            this.index = index;
-        }
-
-        public int hashCode()
-        {
-            return index;
-        }
-
-        public boolean equals(Object o)
-        {
-            if (o instanceof CacheKey)
-            {
-                return ((CacheKey)o).index == this.index;
-            }
-
-            return false;
-        }
-    }
 }
