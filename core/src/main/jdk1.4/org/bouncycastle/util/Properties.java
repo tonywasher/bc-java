@@ -52,6 +52,7 @@ public class Properties
     public static final String BCFKS_MAX_IT_COUNT = "org.bouncycastle.bcfks.max_it_count";
     public static final String BCFKS_MAX_SCRYPT_MEMORY = "org.bouncycastle.bcfks.max_scrypt_memory";
     public static final String BCFKS_STORE_IT_COUNT = "org.bouncycastle.bcfks.store_it_count";
+    public static final String BCFKS_SCRYPT_P_EQ_R = "org.bouncycastle.bcfks.scrypt_p_eq_r";
     public static final String PBE_MAX_ITERATION_COUNT = "org.bouncycastle.pbe.max_iteration_count";
     public static final String PBE_MAX_SCRYPT_MEMORY = "org.bouncycastle.pbe.max_scrypt_memory";
     public static final String PKMAC_MAX_ITERATION_COUNT = "org.bouncycastle.pkmac.max_iteration_count";
