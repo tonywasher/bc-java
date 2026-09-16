@@ -478,7 +478,6 @@ public class LMSPrivateKeyParameters
         LMSigParameters lmsParameter = this.getSigParameters();
 
         // Step 2
-        int h = lmsParameter.getH();
         int q;
         byte[][] path;
 
@@ -496,7 +495,7 @@ public class LMSPrivateKeyParameters
                 throw new ExhaustedPrivateKeyException("ots private key exhausted");
             }
             q = this.q++;
-            path = advanceRetainedPath(h, q);
+            path = advanceRetainedPath(q);
         }
 
         return LMSEngine.generateSignContext(lmsParameter, otsParameters, I, q, masterSecret, path);
@@ -631,7 +630,7 @@ public class LMSPrivateKeyParameters
                 //
                 if (retained == null && peekRootT() == null && q >= 0 && q < (1 << parameters.getH()))
                 {
-                    advanceRetainedPath(parameters.getH(), q);
+                    advanceRetainedPath(q);
                 }
 
                 publicKey = new LMSPublicKeyParameters(parameters, otsParameters, this.findT(1), I);
@@ -676,8 +675,9 @@ public class LMSPrivateKeyParameters
      * Build the authentication path of one-time key q, reusing whatever it shares with the path of the
      * last one-time key signed with, and retain the result in its place. Called under the key's lock.
      */
-    private byte[][] advanceRetainedPath(int h, int q)
+    private byte[][] advanceRetainedPath(int q)
     {
+        int h = parameters.getH();
         int r = (1 << h) + q;
 
         byte[][] path = new byte[h][];
