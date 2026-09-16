@@ -1493,6 +1493,8 @@ public class BCFKSStoreTest
     private void checkScryptParallelization(int expectedP)
         throws Exception
     {
+        ScryptConfig config = new ScryptConfig.Builder(1024, 8, 1).withSaltLength(20).build();
+
         KeyStore store1 = KeyStore.getInstance("BCFKS", "BC");
 
         store1.load(null, null);
@@ -1501,7 +1503,7 @@ public class BCFKSStoreTest
         ByteArrayOutputStream bOut = new ByteArrayOutputStream();
 
         store1.store(new BCFKSLoadStoreParameter.Builder(bOut, testPassword)
-            .withStorePBKDFConfig(new ScryptConfig.Builder(1024, 8, 1).withSaltLength(20).build()).build());
+            .withStorePBKDFConfig(config).build());
 
         byte[] enc = bOut.toByteArray();
 
@@ -1531,6 +1533,29 @@ public class BCFKSStoreTest
         store2.load(new ByteArrayInputStream(enc), testPassword);
 
         checkScryptStoreEntry(store2);
+
+        // the store has to come back under the configuration that wrote it, whatever p was encoded.
+        KeyStore store3 = KeyStore.getInstance("BCFKS", "BC");
+
+        store3.load(new BCFKSLoadStoreParameter.Builder(new ByteArrayInputStream(enc), testPassword)
+            .withStorePBKDFConfig(config).build());
+
+        checkScryptStoreEntry(store3);
+
+        // a configuration that differs other than in p is still refused.
+        try
+        {
+            KeyStore store4 = KeyStore.getInstance("BCFKS", "BC");
+
+            store4.load(new BCFKSLoadStoreParameter.Builder(new ByteArrayInputStream(enc), testPassword)
+                .withStorePBKDFConfig(new ScryptConfig.Builder(2048, 8, 1).withSaltLength(20).build()).build());
+
+            fail("mismatched scrypt configuration accepted");
+        }
+        catch (IOException e)
+        {
+            isEquals("configuration parameters do not match existing store", e.getMessage());
+        }
     }
 
     private byte[] recalculateMac(PbkdMacIntegrityCheck integrityCheck, byte[] content, ScryptParams params, int p)

@@ -1375,10 +1375,14 @@ class BcFKSKeyStoreSpi
             ScryptConfig scryptConfig = (ScryptConfig)storePBKDFConfig;
             ScryptParams sParams = ScryptParams.getInstance(hmacPkbdAlgorithm.getParameters());
 
+            int parallelization = sParams.getParallelizationParameter().intValue();
+
             if (scryptConfig.getSaltLength() != sParams.getSalt().length
                 || scryptConfig.getBlockSize() != sParams.getBlockSize().intValue()
                 || scryptConfig.getCostParameter() != sParams.getCostParameter().intValue()
-                || scryptConfig.getParallelizationParameter() != sParams.getParallelizationParameter().intValue())
+                // a store written with p equal to r carries the block size whatever p was configured - see Properties.BCFKS_SCRYPT_P_EQ_R.
+                || (parallelization != scryptConfig.getParallelizationParameter()
+                    && parallelization != sParams.getBlockSize().intValue()))
             {
                 return false;
             }
