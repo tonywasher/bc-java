@@ -47,62 +47,52 @@ class LM_OTS
     }
 
 
-    public static LMOtsPublicKey lms_ots_generatePublicKey(LMOtsPrivateKey privateKey)
-    {
-        byte[] K = lms_ots_generatePublicKey(privateKey.getParameter(), privateKey.getI(), privateKey.getQ(), privateKey.getMasterSecret());
-        return new LMOtsPublicKey(privateKey.getParameter(), privateKey.getI(), privateKey.getQ(), K);
-    }
-
     public static byte[] lms_ots_generatePublicKey(LMOtsParameters parameter, byte[] I, int q, byte[] masterSecret)
     {
         //
         // Start hash that computes the final value.
         //
-        Digest publicContext = DigestUtil.getDigest(parameter);
+        int p = parameter.getP();
+        int n = parameter.getN();
+        int maxDigit = (1 << parameter.getW()) - 1;
+
+        Digest publicKeyDigest = DigestUtil.getDigest(parameter);
         byte[] prehashPrefix = Composer.compose()
             .bytes(I)
             .u32str(q)
             .u16str(D_PBLC)
             .padUntil(0, 22)
             .build();
-        publicContext.update(prehashPrefix, 0, prehashPrefix.length);
+        publicKeyDigest.update(prehashPrefix, 0, prehashPrefix.length);
 
-        Digest ctx = DigestUtil.getDigest(parameter);
+        Digest chainDigest = DigestUtil.getDigest(parameter);
 
         byte[] buf = Composer.compose()
             .bytes(I)
             .u32str(q)
-            .padUntil(0, 23 + ctx.getDigestSize())
+            .padUntil(0, 23 + chainDigest.getDigestSize())
             .build();
-
 
         SeedDerive derive = new SeedDerive(I, masterSecret, DigestUtil.getDigest(parameter));
         derive.setQ(q);
         derive.setJ(0);
 
-        int p = parameter.getP();
-        int n = parameter.getN();
-        final int twoToWminus1 = (1 << parameter.getW()) - 1;
-
-
         for (int i = 0; i < p; i++)
         {
             derive.deriveSeed(buf, i < p - 1, ITER_PREV); // Private Key!
             Pack.shortToBigEndian((short)i, buf, ITER_K);
-            for (int j = 0; j < twoToWminus1; j++)
+            for (int j = 0; j < maxDigit; j++)
             {
                 buf[ITER_J] = (byte)j;
-                ctx.update(buf, 0, buf.length);
-                ctx.doFinal(buf, ITER_PREV);
+                chainDigest.update(buf, 0, buf.length);
+                chainDigest.doFinal(buf, ITER_PREV);
             }
-            publicContext.update(buf, ITER_PREV, n);
+            publicKeyDigest.update(buf, ITER_PREV, n);
         }
 
-        byte[] K = new byte[publicContext.getDigestSize()];
-        publicContext.doFinal(K, 0);
-
+        byte[] K = new byte[publicKeyDigest.getDigestSize()];
+        publicKeyDigest.doFinal(K, 0);
         return K;
-
     }
 
     public static LMOtsSignature lm_ots_generate_signature(LMSigParameters sigParams, LMOtsPrivateKey privateKey, byte[][] path, byte[] message, boolean preHashed)

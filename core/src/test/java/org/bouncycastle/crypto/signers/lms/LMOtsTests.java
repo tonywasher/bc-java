@@ -28,7 +28,7 @@ public class LMOtsTests
         byte[] I = Hex.decode("d08fabd4a2091ff0a8cb4ed834e74534");
 
         LMOtsPrivateKey privateKey = new LMOtsPrivateKey(parameter, I, 0, seed);
-        LMOtsPublicKey publicKey = LM_OTS.lms_ots_generatePublicKey(privateKey);
+        LMOtsPublicKey publicKey = privateKey.generatePublicKey();
 
         byte[] ms = new byte[32];
         for (int t = 0; t < ms.length; t++)
@@ -97,7 +97,7 @@ public class LMOtsTests
         byte[] I = Hex.decode("d08fabd4a2091ff0a8cb4ed834e74534");
 
         LMOtsPrivateKey privateKey = new LMOtsPrivateKey(parameter, I, 0, seed);
-        LMOtsPublicKey publicKey = LM_OTS.lms_ots_generatePublicKey(privateKey);
+        LMOtsPublicKey publicKey = privateKey.generatePublicKey();
 
         byte[] ms = new byte[32];
         for (int t = 0; t < ms.length; t++)

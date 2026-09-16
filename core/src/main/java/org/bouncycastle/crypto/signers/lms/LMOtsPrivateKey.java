@@ -47,6 +47,12 @@ class LMOtsPrivateKey
         return derive;
     }
 
+    public LMOtsPublicKey generatePublicKey()
+    {
+        byte[] K = LM_OTS.lms_ots_generatePublicKey(parameter, I, q, masterSecret);
+        return new LMOtsPublicKey(parameter, I, q, K);
+    }
+
 
     public LMOtsParameters getParameter()
     {
