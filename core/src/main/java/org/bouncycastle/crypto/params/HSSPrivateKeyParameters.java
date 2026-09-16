@@ -100,6 +100,24 @@ public class HSSPrivateKeyParameters
         {
             return keyList.contains(null) || sigList.contains(null);
         }
+
+        /**
+         * The component keys, each as a length-prefixed encoding, followed by the chaining
+         * signatures the same way.
+         */
+        void encodeTo(ByteArrayOutputStream out)
+            throws IOException
+        {
+            for (int i = 0; i < keys.length; i++)
+            {
+                bytes(keys[i].getEncoded(), out);
+            }
+
+            for (int i = 0; i < sig.length; i++)
+            {
+                bytes(sig[i].getEncoded(), out);
+            }
+        }
     }
 
     private final int l;
@@ -803,17 +821,7 @@ public class HSSPrivateKeyParameters
         u64str(indexLimit, bOut);
         bOut.write(isShard ? 1 : 0); // Depth
 
-        Hierarchy hierarchy = this.hierarchy;
-
-        for (LMSPrivateKeyParameters key : hierarchy.getKeyList())
-        {
-            bytes(key.getEncoded(), bOut);
-        }
-
-        for (LMSSignature s : hierarchy.getSigList())
-        {
-            bytes(s.getEncoded(), bOut);
-        }
+        hierarchy.encodeTo(bOut);
 
         return bOut.toByteArray();
     }
