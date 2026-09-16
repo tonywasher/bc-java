@@ -8,7 +8,6 @@ import org.bouncycastle.util.Pack;
 
 class LM_OTS
 {
-
     private static final short D_PBLC = (short)0x8080;
     private static final int ITER_K = 20;
     private static final int ITER_PREV = 23;
@@ -95,33 +94,24 @@ class LM_OTS
         return K;
     }
 
+    // TODO[lms] Remove as unused?
     public static LMOtsSignature lm_ots_generate_signature(LMSigParameters sigParams, LMOtsPrivateKey privateKey, byte[][] path, byte[] message, boolean preHashed)
     {
+        // The randomizer C is an input to Q and is carried in the signature for the verifier to reuse, so a
+        // caller supplying Q must supply the C it hashed into it; there is no parameter here to receive it.
+        if (preHashed)
+        {
+            throw new IllegalArgumentException("pre-hashed signing must use LMOtsGenerateSignature");
+        }
+
         //
         // Add the randomizer.
         //
+        LMSContext qCtx = privateKey.getSignatureContext(sigParams, path);
 
-        byte[] C;
-        byte[] Q = new byte[MAX_HASH + 2];
+        LmsUtils.byteArray(message, 0, message.length, qCtx);
 
-        if (!preHashed)
-        {
-            LMSContext qCtx = privateKey.getSignatureContext(sigParams, path);
-
-            LmsUtils.byteArray(message, 0, message.length, qCtx);
-
-            C = qCtx.getC();
-            Q = qCtx.getQ();
-        }
-        else
-        {
-            int n = privateKey.getParameter().getN();
-            
-            C = new byte[n];
-            System.arraycopy(message, 0, Q, 0, n);
-        }
-
-        return lm_ots_generate_signature(privateKey, Q, C);
+        return lm_ots_generate_signature(privateKey, qCtx.getQ(), qCtx.getC());
     }
 
     public static LMOtsSignature lm_ots_generate_signature(LMOtsPrivateKey privateKey, byte[] Q, byte[] C)
@@ -162,9 +152,16 @@ class LM_OTS
         return new LMOtsSignature(parameter, C, sigComposer);
     }
 
+    // TODO[lms] Remove as unused (and convert tests)?
     public static boolean lm_ots_validate_signature(LMOtsPublicKey publicKey, LMOtsSignature signature, byte[] message, boolean prehashed)
         throws LMSException
     {
+        // This entry point always hashes the message itself; a caller holding Q needs the context-based
+        // LMOtsValidateSignatureCalculate overload.
+        if (prehashed)
+        {
+            throw new IllegalArgumentException("pre-hashed verification must use an LMSContext");
+        }
         if (!signature.getType().equals(publicKey.getParameter()))
         {
             throw new LMSException("public key and signature ots types do not match");

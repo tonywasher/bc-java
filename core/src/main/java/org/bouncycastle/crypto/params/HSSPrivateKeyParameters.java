@@ -718,7 +718,8 @@ public class HSSPrivateKeyParameters
     /**
      * An LMS private key positioned at index q (RFC 8554 sec. 5.2, Algorithm 5).
      */
-    private static LMSPrivateKeyParameters generateKey(LMSigParameters parameterSet, LMOtsParameters lmOtsParameters, int q, byte[] I, byte[] masterSecret)
+    private static LMSPrivateKeyParameters generateKey(LMSigParameters parameterSet, LMOtsParameters lmOtsParameters,
+        int q, byte[] I, byte[] masterSecret)
     {
         //
         // RFC 8554 recommends that digest used in LMS and LMOTS be of the same strength to protect against

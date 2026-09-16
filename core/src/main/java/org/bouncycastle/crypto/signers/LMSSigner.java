@@ -121,6 +121,7 @@ public class LMSSigner
 
         context.update(message, 0, message.length);
 
+        // TODO[lms] Refactor to follow bc-csharp style (current limitation is  declared exceptions)
         byte[] signature = privKey.generateSignature(context);
 
         if (hssWrapped)
