@@ -718,18 +718,13 @@ public class HSSPrivateKeyParameters
     /**
      * An LMS private key positioned at index q (RFC 8554 sec. 5.2, Algorithm 5).
      */
-    private static LMSPrivateKeyParameters generateKey(LMSigParameters parameterSet, LMOtsParameters lmOtsParameters, int q, byte[] I, byte[] rootSeed)
+    private static LMSPrivateKeyParameters generateKey(LMSigParameters parameterSet, LMOtsParameters lmOtsParameters, int q, byte[] I, byte[] masterSecret)
     {
         //
         // RFC 8554 recommends that digest used in LMS and LMOTS be of the same strength to protect against
         // attackers going after the weaker of the two digests. This is not enforced here!
         //
-        if (rootSeed == null || rootSeed.length < parameterSet.getM())
-        {
-            throw new IllegalArgumentException("root seed length is less than " + parameterSet.getM());
-        }
-
-        return new LMSPrivateKeyParameters(parameterSet, lmOtsParameters, q, I, 1 << parameterSet.getH(), rootSeed);
+        return new LMSPrivateKeyParameters(parameterSet, lmOtsParameters, q, I, 1 << parameterSet.getH(), masterSecret);
     }
 
     /**
