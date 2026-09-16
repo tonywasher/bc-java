@@ -361,7 +361,7 @@ public class LMSTests
         expectBadArgument("LMS key identifier I must be 16 bytes", sigParams, otsParams, 0, new byte[17], twoToH, seed);
         expectBadArgument("LMS key identifier I must be 16 bytes", sigParams, otsParams, 0, null, twoToH, seed);
         expectBadArgument("LMS private key needs both parameter sets", sigParams, null, 0, I, twoToH, seed);
-        expectBadArgument("master secret is less than " + sigParams.getM(),
+        expectBadArgument("master secret length is less than " + sigParams.getM(),
             sigParams, otsParams, 0, I, twoToH, new byte[1]);
         expectBadArgument("LMS private key q/maxQ out of range: q=-1 maxQ=" + twoToH + " 2^h=" + twoToH,
             sigParams, otsParams, -1, I, twoToH, seed);

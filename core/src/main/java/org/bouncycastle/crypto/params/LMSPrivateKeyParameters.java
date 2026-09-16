@@ -108,7 +108,7 @@ public class LMSPrivateKeyParameters
         }
         if (masterSecret == null || masterSecret.length < lmsParameter.getM())
         {
-            throw new IllegalArgumentException("master secret is less than " + lmsParameter.getM());
+            throw new IllegalArgumentException("master secret length is less than " + lmsParameter.getM());
         }
 
         int twoToH = 1 << lmsParameter.getH();
