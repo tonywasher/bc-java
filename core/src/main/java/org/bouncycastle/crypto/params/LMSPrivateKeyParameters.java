@@ -835,10 +835,7 @@ public class LMSPrivateKeyParameters
      */
     boolean isTreeCachePrimed()
     {
-        synchronized (tCache)
-        {
-            return tCache[1] != null;
-        }
+        return peekRootT() != null;
     }
 
     @Override
