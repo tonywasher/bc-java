@@ -701,12 +701,12 @@ public class HSSPrivateKeyParameters
             // Each level below the first takes its parent from the level rebuilt on the previous pass
             byte[][] child = newKeys[d - 1].deriveChildKey();
             byte[] childI = child[0];
-            byte[] childRootSeed = child[1];
+            byte[] childSeed = child[1];
 
             // The replacement keeps the parameters of the key it replaces
             LMSPrivateKeyParameters oldKey = newKeys[d];
 
-            newKeys[d] = generateKey(oldKey.getSigParameters(), oldKey.getOtsParameters(), 0, childI, childRootSeed);
+            newKeys[d] = generateKey(oldKey.getSigParameters(), oldKey.getOtsParameters(), 0, childI, childSeed);
 
             newSig[d - 1] = signPublicKey(newKeys[d - 1], newKeys[d].getPublicKey());
         }
