@@ -1607,4 +1607,187 @@ public class HSSTests
             return super.generateLMSContext();
         }
     }
+
+    /**
+     * When more than one level of an HSS key is exhausted at once - the bottom tree's last
+     * one-time key was also the last the tree above it could sign for - every exhausted level is
+     * rebuilt, and the rebuild reaches readers as one hierarchy. The component keys and chaining
+     * signatures are read without the key's monitor, so a rebuild published one level at a time
+     * would expose a hierarchy in which the fresh tree at level i sits above the signature the
+     * tree it replaced made over the still-exhausted level i + 1: a chain that does not verify.
+     * <p>
+     * The rebuild is held open here with an exhausted bottom key that parks when the second pass
+     * asks it for the parameters its replacement inherits, which is after the first pass has
+     * replaced the level above it. A reader taking the hierarchy at that point must find every
+     * chaining signature verifying under the level above - which, published as one snapshot,
+     * means the whole exhausted hierarchy as it was.
+     */
+    public void testMultiLevelRebuildPublishedAsOneSnapshot()
+        throws Exception
+    {
+        LMSigParameters sigParams = LMSigParameters.lms_sha256_n32_h5;
+        LMOtsParameters otsParams = LMOtsParameters.sha256_n32_w8;
+        int twoToH = 1 << sigParams.getH();
+
+        byte[] I = Hex.decode("000102030405060708090a0b0c0d0e0f");
+        byte[] seed = Hex.decode("0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20");
+
+        // a three-level key one signature short of exhausting both lower trees: the root has
+        // signed the middle tree (q = 1), the middle tree is on its last one-time key (q = 31)
+        // when it signs the bottom tree, and the bottom tree is on its last one-time key too
+        LMSPrivateKeyParameters root = new LMSPrivateKeyParameters(sigParams, otsParams, 0, I, twoToH, seed);
+        byte[][] middleChild = root.deriveChildKey();
+        LMSPrivateKeyParameters middle = new LMSPrivateKeyParameters(
+            sigParams, otsParams, twoToH - 1, middleChild[0], twoToH, middleChild[1]);
+        byte[][] bottomChild = middle.deriveChildKey();
+        ParameterGatedKey bottom = new ParameterGatedKey(
+            sigParams, otsParams, twoToH - 1, bottomChild[0], twoToH, bottomChild[1]);
+
+        List<LMSPrivateKeyParameters> keys = new ArrayList<LMSPrivateKeyParameters>();
+        keys.add(root);
+        keys.add(middle);
+        keys.add(bottom);
+        List<LMSSignature> sigs = new ArrayList<LMSSignature>();
+        sigs.add(signPublicKey(root, middle));
+        sigs.add(signPublicKey(middle, bottom));
+
+        long indexLimit = (long)twoToH * twoToH * twoToH;
+        final HSSPrivateKeyParameters hss = new HSSPrivateKeyParameters(3, keys, sigs, indexLimit / twoToH - 1, indexLimit);
+
+        assertSame("the key was built one signature short, so the bottom key is kept as given",
+            bottom, hss.getKeys().get(2));
+        assertCoherent(hss.getKeys(), hss.getSig());
+
+        final byte[] msg = Hex.decode("48656c6c6f");
+
+        // the last signature of both lower trees; the next one has to replace them both
+        HSSSigner last = new HSSSigner();
+        last.init(true, hss);
+        byte[] lastSig = last.generateSignature(msg);
+        HSSSigner lastVerifier = new HSSSigner();
+        lastVerifier.init(false, hss.getPublicKey());
+        assertTrue(lastVerifier.verifySignature(msg, lastSig));
+        assertEquals(twoToH, bottom.getIndex());
+        assertEquals(twoToH, middle.getIndex());
+
+        // park the rebuild between replacing the middle tree and replacing the bottom one
+        bottom.gated = true;
+
+        final byte[][] nextSig = new byte[1][];
+        Thread signer = new Thread(new Runnable()
+        {
+            public void run()
+            {
+                HSSSigner s = new HSSSigner();
+                s.init(true, hss);
+                nextSig[0] = s.generateSignature(msg);
+            }
+        });
+        signer.start();
+        assertTrue("rebuild never reached the bottom key", bottom.entered.await(10, TimeUnit.SECONDS));
+
+        // the accessors take no monitor, so a reader is not held up by the rebuild in progress -
+        // and what it reads has to be a hierarchy whose chaining signatures all verify
+        final List<LMSPrivateKeyParameters>[] seenKeys = new List[1];
+        final List<LMSSignature>[] seenSig = new List[1];
+        Thread reader = new Thread(new Runnable()
+        {
+            public void run()
+            {
+                seenKeys[0] = hss.getKeys();
+                seenSig[0] = hss.getSig();
+            }
+        });
+        reader.start();
+        reader.join(5000);
+        assertFalse("reader was held up by the rebuild in progress", reader.isAlive());
+
+        try
+        {
+            assertCoherent(seenKeys[0], seenSig[0]);
+        }
+        finally
+        {
+            bottom.release.countDown();
+        }
+
+        signer.join(10000);
+        assertFalse("signer did not finish", signer.isAlive());
+
+        // the rebuilt key signs under the same public key, is coherent again and round-trips
+        HSSSigner nextVerifier = new HSSSigner();
+        nextVerifier.init(false, hss.getPublicKey());
+        assertTrue(nextVerifier.verifySignature(msg, nextSig[0]));
+        assertCoherent(hss.getKeys(), hss.getSig());
+        assertEquals(hss, HSSPrivateKeyParameters.getInstance(hss.getEncoded()));
+    }
+
+    /**
+     * The chaining signature of an HSS hierarchy: signer signs the public key of the tree below,
+     * advancing signer's one-time index.
+     */
+    private static LMSSignature signPublicKey(LMSPrivateKeyParameters signer, LMSPrivateKeyParameters below)
+        throws IOException
+    {
+        LMSSigner lmsSigner = new LMSSigner();
+        lmsSigner.init(true, signer);
+        return LMSSignature.getInstance(lmsSigner.generateSignature(below.getPublicKey().getEncoded()));
+    }
+
+    /**
+     * Every chaining signature verifies the public key of the level below it under the public
+     * key of the level that carries it.
+     */
+    private static void assertCoherent(List<LMSPrivateKeyParameters> keys, List<LMSSignature> sig)
+        throws IOException
+    {
+        assertEquals(keys.size() - 1, sig.size());
+
+        for (int i = 0; i < sig.size(); i++)
+        {
+            LMSSigner verifier = new LMSSigner();
+            verifier.init(false, keys.get(i).getPublicKey());
+            assertTrue("chaining signature at level " + i + " does not verify under the level above",
+                verifier.verifySignature(keys.get(i + 1).getPublicKey().getEncoded(), sig.get(i).getEncoded()));
+        }
+    }
+
+    /**
+     * An LMS key that parks on a latch when asked for its LM-OTS parameters, which the rebuild
+     * of an exhausted level asks its outgoing key for on that level's pass - after the pass for
+     * the level above has completed.
+     */
+    private static class ParameterGatedKey
+        extends LMSPrivateKeyParameters
+    {
+        final CountDownLatch entered = new CountDownLatch(1);
+        final CountDownLatch release = new CountDownLatch(1);
+
+        volatile boolean gated = false;
+
+        ParameterGatedKey(LMSigParameters sigParams, LMOtsParameters otsParams, int q, byte[] I, int maxQ, byte[] seed)
+        {
+            super(sigParams, otsParams, q, I, maxQ, seed);
+        }
+
+        public LMOtsParameters getOtsParameters()
+        {
+            if (gated)
+            {
+                gated = false;
+                entered.countDown();
+                try
+                {
+                    release.await();
+                }
+                catch (InterruptedException e)
+                {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("interrupted");
+                }
+            }
+
+            return super.getOtsParameters();
+        }
+    }
 }
