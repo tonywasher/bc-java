@@ -294,9 +294,10 @@ public class HSSPrivateKeyParameters
             }
             boolean limited = ((DataInputStream)src).readBoolean();
 
-            LMSPrivateKeyParameters[] keys = new LMSPrivateKeyParameters[d];
-            LMSSignature[] signatures = new LMSSignature[d - 1];
+            // Read once here, so every component key is held to the same limit
+            int maxSeedLength = LMSPrivateKeyParameters.getMaxSeedLength();
 
+            LMSPrivateKeyParameters[] keys = new LMSPrivateKeyParameters[d];
             for (int t = 0; t < d; t++)
             {
                 // The component keys share this stream with the keys and signatures that follow,
@@ -304,9 +305,10 @@ public class HSSPrivateKeyParameters
                 // stream having more data - the encoding version says: a version 0 encoding
                 // predates the tree cache and its component keys end at the master secret, a
                 // version 1 component always carries the cache field (github #2365).
-                keys[t] = LMSPrivateKeyParameters.readKey((DataInputStream)src, version != 0);
+                keys[t] = LMSPrivateKeyParameters.readComponentKey((DataInputStream)src, maxSeedLength, version != 0);
             }
 
+            LMSSignature[] signatures = new LMSSignature[d - 1];
             for (int t = 0; t < d - 1; t++)
             {
                 signatures[t] = LMSSignature.getInstance(src);

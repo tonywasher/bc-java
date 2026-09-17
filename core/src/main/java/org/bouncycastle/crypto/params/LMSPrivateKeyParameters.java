@@ -17,6 +17,7 @@ import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Exceptions;
 import org.bouncycastle.util.Integers;
 import org.bouncycastle.util.Objects;
+import org.bouncycastle.util.Properties;
 import org.bouncycastle.util.io.Streams;
 
 public class LMSPrivateKeyParameters
@@ -29,6 +30,12 @@ public class LMSPrivateKeyParameters
      * cache-count limit, shared with bc-csharp.
      */
     private static final int CACHE_TOP_LIMIT = 64;
+
+    /**
+     * The default ceiling on SEED, overridden by Properties.LMS_MAX_SEED_LENGTH. SP 800-208 sec. 6.1 makes SEED
+     * n bytes, so anything beyond the parameter set's m is interchange slack and 1KiB is generous.
+     */
+    private static final int DEFAULT_MAX_SEED_LENGTH = 1024;
 
     private final byte[] I;
     private final LMSigParameters parameters;
@@ -239,7 +246,7 @@ public class LMSPrivateKeyParameters
         {
             DataInputStream dIn = (DataInputStream)src;
 
-            LMSPrivateKeyParameters key = readCoreKey(dIn);
+            LMSPrivateKeyParameters key = readCoreKey(dIn, getMaxSeedLength());
 
             //
             // Anything after the master secret is a cache of the top of the Merkle tree (see
@@ -290,10 +297,10 @@ public class LMSPrivateKeyParameters
      * present is dictated by the caller - from the enclosing HSS encoding's version - rather
      * than inferred from the stream having more data, which is meaningless mid-stream.
      */
-    static LMSPrivateKeyParameters readKey(DataInputStream dIn, boolean withCache)
+    static LMSPrivateKeyParameters readComponentKey(DataInputStream dIn, int maxSeedLength, boolean withCache)
         throws IOException
     {
-        LMSPrivateKeyParameters key = readCoreKey(dIn);
+        LMSPrivateKeyParameters key = readCoreKey(dIn, maxSeedLength);
 
         if (withCache)
         {
@@ -303,7 +310,7 @@ public class LMSPrivateKeyParameters
         return key;
     }
 
-    private static LMSPrivateKeyParameters readCoreKey(DataInputStream dIn)
+    private static LMSPrivateKeyParameters readCoreKey(DataInputStream dIn, int maxSeedLength)
         throws IOException
     {
         /*
@@ -355,16 +362,34 @@ public class LMSPrivateKeyParameters
         if (l < parameter.getM())
         {
             // SP 800-208 sec. 6.1 requires SEED to be n bytes; generateKey has always required m
-            throw new IOException("secret length less than " + parameter.getM() + ": " + l);
+            throw new IOException("master secret length is less than " + parameter.getM() + ": " + l);
         }
-        if (l > dIn.available())
+
+        // SP 800-208 sec. 6.1 makes SEED n bytes, so anything beyond m is interchange slack, and the ceiling
+        // keeps what is committed on the strength of a length field finite where the stream has no known
+        // length for readLenBytesFully to refuse it against. A ceiling below m is ignored: SEED cannot be shorter
+        // than m, so it would refuse every key. The limit is the caller's, read once for the whole encoding.
+        if (l > Math.max(parameter.getM(), maxSeedLength))
         {
-            throw new IOException("secret length exceeded " + dIn.available());
+            throw new IOException("master secret length exceeds " + maxSeedLength + ": " + l);
         }
-        byte[] masterSecret = new byte[l];
-        dIn.readFully(masterSecret);
+
+        byte[] masterSecret = Streams.readLenBytesFully(dIn, l);
 
         return new LMSPrivateKeyParameters(parameter, otsParameter, q, I, maxQ, masterSecret);
+    }
+
+    /**
+     * The ceiling on SEED length the decoder holds every key in one encoding to: the configured
+     * Properties.LMS_MAX_SEED_LENGTH, or DEFAULT_MAX_SEED_LENGTH when none is set.
+     * <p>
+     * Read once by the top-level parse of the structure - a standalone key, or an HSS key with its component
+     * keys - and passed down, so the limit cannot shift between the keys of one encoding.
+     * </remarks>
+     */
+    static int getMaxSeedLength()
+    {
+        return Properties.asInteger(Properties.LMS_MAX_SEED_LENGTH, DEFAULT_MAX_SEED_LENGTH);
     }
 
     private static void readTreeCache(DataInputStream dIn, LMSPrivateKeyParameters key)
