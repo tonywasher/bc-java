@@ -7,6 +7,7 @@ import org.bouncycastle.crypto.params.HSSKeyGenerationParameters;
 import org.bouncycastle.crypto.params.HSSPrivateKeyParameters;
 import org.bouncycastle.crypto.params.HSSPublicKeyParameters;
 import org.bouncycastle.crypto.params.LMOtsParameters;
+import org.bouncycastle.crypto.params.LMSParameters;
 import org.bouncycastle.crypto.params.LMSPrivateKeyParameters;
 import org.bouncycastle.crypto.params.LMSPublicKeyParameters;
 import org.bouncycastle.crypto.params.LMSigParameters;
@@ -370,7 +371,10 @@ public final class LMSEngine
         LMSPrivateKeyParameters[] keys = new LMSPrivateKeyParameters[parameters.getDepth()];
         LMSSignature[] sig = new LMSSignature[parameters.getDepth() - 1];
 
-        byte[] rootSeed = new byte[parameters.getLmsParameters()[0].getLMSigParam().getM()];
+        LMSParameters rootLms = parameters.getLmsParameters()[0];
+        LMSigParameters rootSig = rootLms.getLMSigParam();
+
+        byte[] rootSeed = new byte[rootSig.getM()];
         parameters.getRandom().nextBytes(rootSeed);
 
         byte[] I = new byte[16];
@@ -382,32 +386,25 @@ public final class LMSEngine
         // index of zero. Rather than repeat the same reset-to-index logic in this static method.
         //
 
-        long hssKeyMaxIndex = 1;
-        for (int t = 0; t < keys.length; t++)
+        int rootMaxQ = 1 << rootSig.getH();
+
+        keys[0] = new LMSPrivateKeyParameters(rootSig, rootLms.getLMOTSParam(), 0, I, rootMaxQ, rootSeed);
+
+        long hssKeyMaxIndex = rootMaxQ;
+
+        for (int t = 1; t < keys.length; t++)
         {
-            if (t == 0)
-            {
-                keys[t] = new LMSPrivateKeyParameters(
-                    parameters.getLmsParameters()[t].getLMSigParam(),
-                    parameters.getLmsParameters()[t].getLMOTSParam(),
-                    0,
-                    I,
-                    1 << parameters.getLmsParameters()[t].getLMSigParam().getH(),
-                    rootSeed);
-            }
-            else
-            {
-                keys[t] = new PlaceholderLMSPrivateKey(
-                    parameters.getLmsParameters()[t].getLMSigParam(),
-                    parameters.getLmsParameters()[t].getLMOTSParam(),
-                    1 << parameters.getLmsParameters()[t].getLMSigParam().getH());
-            }
-            hssKeyMaxIndex *= 1 << parameters.getLmsParameters()[t].getLMSigParam().getH();
+            LMSParameters lms = parameters.getLmsParameters()[t];
+            int h = lms.getLMSigParam().getH();
+
+            keys[t] = new PlaceholderLMSPrivateKey(lms.getLMSigParam(), lms.getLMOTSParam(), 1 << h);
+
+            hssKeyMaxIndex <<= h;
         }
 
         // if this has happened we're trying to generate a really large key
         // we'll use MAX_VALUE so that it's at least usable until someone upgrades the structure.
-        if (hssKeyMaxIndex == 0)
+        if (hssKeyMaxIndex <= 0)
         {
             hssKeyMaxIndex = Long.MAX_VALUE;
         }
