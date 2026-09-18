@@ -59,7 +59,7 @@ public class LMSKeyPairGeneratorSpi
         {
             LMSKeyGenParameterSpec lmsParams = (LMSKeyGenParameterSpec)params;
 
-            param = new LMSKeyGenerationParameters(new LMSParameters(lmsParams.getLMSigParameters(), lmsParams.getLMOtsParameters()), random);
+            param = new LMSKeyGenerationParameters(LMSParameters.create(lmsParams.getLMSigParameters(), lmsParams.getLMOtsParameters()), random);
 
             engine = new LMSKeyPairGenerator();
             engine.init(param);
@@ -70,7 +70,7 @@ public class LMSKeyPairGeneratorSpi
             LMSParameters[] hssParams = new LMSParameters[lmsParams.length];
             for (int i = 0; i != lmsParams.length; i++)
             {
-                hssParams[i] = new LMSParameters(lmsParams[i].getLMSigParameters(), lmsParams[i].getLMOtsParameters());
+                hssParams[i] = LMSParameters.create(lmsParams[i].getLMSigParameters(), lmsParams[i].getLMOtsParameters());
             }
             param = new HSSKeyGenerationParameters(hssParams, random);
 
@@ -81,7 +81,7 @@ public class LMSKeyPairGeneratorSpi
         {
             LMSParameterSpec lmsParams = (LMSParameterSpec)params;
 
-            param = new LMSKeyGenerationParameters(new LMSParameters(lmsParams.getLMSigParameters(), lmsParams.getLMOtsParameters()), random);
+            param = new LMSKeyGenerationParameters(LMSParameters.create(lmsParams.getLMSigParameters(), lmsParams.getLMOtsParameters()), random);
 
             engine = new LMSKeyPairGenerator();
             engine.init(param);
@@ -92,7 +92,7 @@ public class LMSKeyPairGeneratorSpi
             LMSParameters[] hssParams = new LMSParameters[lmsParams.length];
             for (int i = 0; i != lmsParams.length; i++)
             {
-                hssParams[i] = new LMSParameters(lmsParams[i].getLMSigParameters(), lmsParams[i].getLMOtsParameters());
+                hssParams[i] = LMSParameters.create(lmsParams[i].getLMSigParameters(), lmsParams[i].getLMOtsParameters());
             }
             param = new HSSKeyGenerationParameters(hssParams, random);
 
@@ -111,7 +111,7 @@ public class LMSKeyPairGeneratorSpi
     {
         if (!initialised)
         {
-            param = new LMSKeyGenerationParameters(new LMSParameters(LMSigParameters.lms_sha256_n32_h10, LMOtsParameters.sha256_n32_w2), random);
+            param = new LMSKeyGenerationParameters(LMSParameters.create(LMSigParameters.lms_sha256_n32_h10, LMOtsParameters.sha256_n32_w2), random);
 
             engine.init(param);
             initialised = true;

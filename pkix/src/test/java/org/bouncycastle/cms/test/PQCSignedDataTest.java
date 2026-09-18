@@ -382,8 +382,8 @@ public class PQCSignedDataTest
         AsymmetricCipherKeyPairGenerator kpg = new HSSKeyPairGenerator();
 
         kpg.init(new HSSKeyGenerationParameters(
-            new LMSParameters[]{new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
-                new LMSParameters(LMSigParameters.lms_sha256_n24_h5, LMOtsParameters.sha256_n24_w4)}, new SecureRandom()));
+            new LMSParameters[]{LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
+                LMSParameters.create(LMSigParameters.lms_sha256_n24_h5, LMOtsParameters.sha256_n24_w4)}, new SecureRandom()));
 
         AsymmetricCipherKeyPair pair = kpg.generateKeyPair();
 
@@ -455,7 +455,7 @@ public class PQCSignedDataTest
         AsymmetricCipherKeyPairGenerator kpg = new LMSKeyPairGenerator();
 
         kpg.init(new LMSKeyGenerationParameters(
-            new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4), new SecureRandom()));
+            LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4), new SecureRandom()));
 
         AsymmetricCipherKeyPair pair = kpg.generateKeyPair();
 

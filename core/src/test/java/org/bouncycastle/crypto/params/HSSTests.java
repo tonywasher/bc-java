@@ -45,8 +45,8 @@ public class HSSTests
 
         HSSPrivateKeyParameters generatedPrivateKey = LMSEngine.generateHSSKeyPair(
             new HSSKeyGenerationParameters(new LMSParameters[]{
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
             }, rand)
         );
 
@@ -156,7 +156,7 @@ public class HSSTests
         LMSParameters[] lmsParameters = new LMSParameters[d];
         for (int t = 0; t < d; t++)
         {
-            lmsParameters[t] = new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4);
+            lmsParameters[t] = LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4);
         }
 
         return LMSEngine.generateHSSKeyPair(new HSSKeyGenerationParameters(lmsParameters, new SecureRandom()));
@@ -402,8 +402,8 @@ public class HSSTests
 
         HSSPrivateKeyParameters keyPair = LMSEngine.generateHSSKeyPair(
             new HSSKeyGenerationParameters(new LMSParameters[]{
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
             }, rand));
 
 
@@ -431,8 +431,8 @@ public class HSSTests
 
             HSSPrivateKeyParameters regenKeyPair = LMSEngine.generateHSSKeyPair(
                 new HSSKeyGenerationParameters(new LMSParameters[]{
-                    new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
-                    new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
+                    LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
+                    LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
                 }, rand1));
 
 
@@ -472,8 +472,8 @@ public class HSSTests
 
             HSSPrivateKeyParameters differentKey = LMSEngine.generateHSSKeyPair(
                 new HSSKeyGenerationParameters(new LMSParameters[]{
-                    new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
-                    new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
+                    LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
+                    LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
                 }, rand1)
             );
 
@@ -587,7 +587,7 @@ public class HSSTests
 
                 for (int i = 0; i != lmsParameters.size(); i++)
                 {
-                    lmsParams.add(new LMSParameters(lmsParameters.get(i), lmOtsParameters.get(i)));
+                    lmsParams.add(LMSParameters.create(lmsParameters.get(i), lmOtsParameters.get(i)));
                 }
 
                 //
@@ -732,7 +732,7 @@ public class HSSTests
 
         for (int i = 0; i != lmsParameters.size(); i++)
         {
-            lmsParams.add(new LMSParameters(lmsParameters.get(i), lmOtsParameters.get(i)));
+            lmsParams.add(LMSParameters.create(lmsParameters.get(i), lmOtsParameters.get(i)));
         }
 
         HSSPrivateKeyParameters keyPair = LMSEngine.generateHSSKeyPair(
@@ -819,8 +819,8 @@ public class HSSTests
     {
         HSSPrivateKeyParameters keyPair = LMSEngine.generateHSSKeyPair(
             new HSSKeyGenerationParameters(new LMSParameters[]{
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2)
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2)
             }, new SecureRandom())
         );
 
@@ -878,8 +878,8 @@ public class HSSTests
     {
         HSSPrivateKeyParameters keyPair = LMSEngine.generateHSSKeyPair(
             new HSSKeyGenerationParameters(new LMSParameters[]{
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2)
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2)
             }, new SecureRandom())
         );
 
@@ -959,8 +959,8 @@ public class HSSTests
 
         HSSPrivateKeyParameters keyPair = LMSEngine.generateHSSKeyPair(
             new HSSKeyGenerationParameters(new LMSParameters[]{
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h10, LMOtsParameters.sha256_n32_w1),
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h10, LMOtsParameters.sha256_n32_w1),
             }, rand)
         );
 
@@ -1270,8 +1270,8 @@ public class HSSTests
     {
         HSSKeyPairGenerator gen = new HSSKeyPairGenerator();
         gen.init(new HSSKeyGenerationParameters(new LMSParameters[]{
-            new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w1),
-            new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w1) },
+            LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w1),
+            LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w1) },
             new SecureRandom()));
         return (HSSPrivateKeyParameters)gen.generateKeyPair().getPrivate();
     }
@@ -1344,7 +1344,7 @@ public class HSSTests
 
         HSSKeyPairGenerator gen = new HSSKeyPairGenerator();
         gen.init(new HSSKeyGenerationParameters(
-            new LMSParameters[]{new LMSParameters(sigParams, otsParams), new LMSParameters(sigParams, otsParams)},
+            new LMSParameters[]{LMSParameters.create(sigParams, otsParams), LMSParameters.create(sigParams, otsParams)},
             new SecureRandom()));
         HSSPrivateKeyParameters hss = (HSSPrivateKeyParameters)gen.generateKeyPair().getPrivate();
 
@@ -1398,7 +1398,7 @@ public class HSSTests
         LMOtsParameters otsParams = LMOtsParameters.sha256_n32_w2;
 
         LMSKeyPairGenerator gen = new LMSKeyPairGenerator();
-        gen.init(new LMSKeyGenerationParameters(new LMSParameters(sigParams, otsParams), new SecureRandom()));
+        gen.init(new LMSKeyGenerationParameters(LMSParameters.create(sigParams, otsParams), new SecureRandom()));
         LMSPrivateKeyParameters lms = (LMSPrivateKeyParameters)gen.generateKeyPair().getPrivate();
 
         byte[] rootT1 = lms.getPublicKey().getT1();

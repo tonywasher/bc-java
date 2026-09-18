@@ -400,7 +400,7 @@ public class HSSPrivateKeyParameters
         {
             LMSPrivateKeyParameters lmsPrivateKey = hierarchy.getKey(i);
 
-            parms[i] = new LMSParameters(lmsPrivateKey.getSigParameters(), lmsPrivateKey.getOtsParameters());
+            parms[i] = LMSParameters.create(lmsPrivateKey.getSigParameters(), lmsPrivateKey.getOtsParameters());
         }
 
         return parms;

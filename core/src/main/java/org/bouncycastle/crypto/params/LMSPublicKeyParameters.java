@@ -110,7 +110,7 @@ public class LMSPublicKeyParameters
 
     public LMSParameters getLMSParameters()
     {
-        return new LMSParameters(this.getSigParameters(), this.getOtsParameters());
+        return LMSParameters.create(this.getSigParameters(), this.getOtsParameters());
     }
 
     public byte[] getT1()

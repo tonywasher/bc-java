@@ -122,7 +122,7 @@ public class VerifyContextTests
     private static AsymmetricCipherKeyPair keyPair()
     {
         LMSKeyPairGenerator gen = new LMSKeyPairGenerator();
-        gen.init(new LMSKeyGenerationParameters(new LMSParameters(
+        gen.init(new LMSKeyGenerationParameters(LMSParameters.create(
             LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w8), new SecureRandom()));
         return gen.generateKeyPair();
     }

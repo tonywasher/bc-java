@@ -204,7 +204,7 @@ public class LMSTests
         // the limit moves if that table is resized.
         //
         LMSKeyPairGenerator limitGen = new LMSKeyPairGenerator();
-        limitGen.init(new LMSKeyGenerationParameters(new LMSParameters(sigParams, otsParams), new SecureRandom()));
+        limitGen.init(new LMSKeyGenerationParameters(LMSParameters.create(sigParams, otsParams), new SecureRandom()));
         byte[] sampleEnc = ((LMSPrivateKeyParameters)limitGen.generateKeyPair().getPrivate()).getEncoded();
         int cacheCountLimit = Pack.bigEndianToInt(sampleEnc, 40 + m);
 
@@ -303,7 +303,7 @@ public class LMSTests
         int m = sigParams.getM();
 
         LMSKeyPairGenerator gen = new LMSKeyPairGenerator();
-        gen.init(new LMSKeyGenerationParameters(new LMSParameters(sigParams, otsParams), new SecureRandom()));
+        gen.init(new LMSKeyGenerationParameters(LMSParameters.create(sigParams, otsParams), new SecureRandom()));
         LMSPrivateKeyParameters priv = (LMSPrivateKeyParameters)gen.generateKeyPair().getPrivate();
         byte[] enc = priv.getEncoded();
 
@@ -434,7 +434,7 @@ public class LMSTests
         int m = sigParams.getM();
 
         LMSKeyPairGenerator gen = new LMSKeyPairGenerator();
-        gen.init(new LMSKeyGenerationParameters(new LMSParameters(sigParams, otsParams), new SecureRandom()));
+        gen.init(new LMSKeyGenerationParameters(LMSParameters.create(sigParams, otsParams), new SecureRandom()));
         LMSPrivateKeyParameters priv = (LMSPrivateKeyParameters)gen.generateKeyPair().getPrivate();
         byte[] enc = priv.getEncoded();
 
