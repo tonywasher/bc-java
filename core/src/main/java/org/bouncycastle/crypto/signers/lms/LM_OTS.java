@@ -13,7 +13,6 @@ class LM_OTS
     private static final int ITER_PREV = 23;
     private static final int ITER_J = 22;
     static final int SEED_RANDOMISER_INDEX = ~2;
-    static final int MAX_HASH = 32;
 
     static final short D_MESG = (short)0x8181;
 
@@ -44,6 +43,16 @@ class LM_OTS
             sum = sum + maxDigit - coef(S, i, w);
         }
         return sum << parameters.getLs();
+    }
+
+    /**
+     * Append the checksum of the first n bytes of Q to them, as the two bytes the chains after the
+     * message digest carry (RFC 8554 sec. 4.5).
+     */
+    private static void appendCksm(byte[] Q, int n, LMOtsParameters parameters)
+    {
+        int cs = cksm(Q, n, parameters);
+        Pack.shortToBigEndian((short)cs, Q, n);
     }
 
 
@@ -112,7 +121,7 @@ class LM_OTS
 
         LmsUtils.byteArray(message, 0, message.length, qCtx);
 
-        return lm_ots_generate_signature(privateKey, qCtx.getQ(), qCtx.getC());
+        return lm_ots_generate_signature(privateKey, qCtx.collectQ(privateKey.getParameter()), qCtx.getC());
     }
 
     public static LMOtsSignature lm_ots_generate_signature(LMOtsPrivateKey privateKey, byte[] Q, byte[] C)
@@ -129,9 +138,7 @@ class LM_OTS
 
         SeedDerive derive = privateKey.getDerivationFunction();
 
-        int cs = cksm(Q, n, parameter);
-        Q[n] = (byte)((cs >>> 8) & 0xFF);
-        Q[n + 1] = (byte)cs;
+        appendCksm(Q, n, parameter);
 
         byte[] tmp = Composer.compose().bytes(privateKey.getI()).u32str(privateKey.getQ()).padUntil(0, ITER_PREV + n).build();
 
@@ -176,32 +183,18 @@ class LM_OTS
 
         LmsUtils.byteArray(message, ctx);
 
-        return lm_ots_validate_signature_calculate(ctx);
+        return ctx.calculateKc();
     }
 
-    public static byte[] lm_ots_validate_signature_calculate(LMSContext context)
+    static byte[] calculateKc(LMOtsPublicKey publicKey, LMOtsSignature signature, byte[] Q)
     {
-        LMOtsPublicKey publicKey = context.getPublicKey();
         LMOtsParameters parameter = publicKey.getParameter();
-        Object sig = context.getSignature();
-        LMOtsSignature signature;
-        if (sig instanceof LMSSignature)
-        {
-            signature = ((LMSSignature)sig).getOtsSignature();
-        }
-        else
-        {
-            signature = (LMOtsSignature)sig;
-        }
 
         int n = parameter.getN();
         int w = parameter.getW();
         int p = parameter.getP();
-        byte[] Q = context.getQ();
 
-        int cs = cksm(Q, n, parameter);
-        Q[n] = (byte)((cs >>> 8) & 0xFF);
-        Q[n + 1] = (byte)cs;
+        appendCksm(Q, n, parameter);
 
         byte[] I = publicKey.getI();
         int    q = publicKey.getQ();

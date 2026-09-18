@@ -43,7 +43,10 @@ public class LMOtsTests
 
         ctx.update(ms, 0, ms.length);
 
-        LMOtsSignature sig = LM_OTS.lm_ots_generate_signature(privateKey, ctx.getQ(), ctx.getC());
+        byte[] Q = new byte[parameter.getN() + 2];
+        ctx.outputQ(Q, 0);
+
+        LMOtsSignature sig = LM_OTS.lm_ots_generate_signature(privateKey, Q, ctx.getC());
         assertTrue(LM_OTS.lm_ots_validate_signature(publicKey, sig, ms, false));
 
         // Recreate signature
@@ -112,7 +115,10 @@ public class LMOtsTests
 
         ctx.update(ms, 0, ms.length);
 
-        LMOtsSignature sig = LM_OTS.lm_ots_generate_signature(privateKey, ctx.getQ(), ctx.getC());
+        byte[] Q = new byte[parameter.getN() + 2];
+        ctx.outputQ(Q, 0);
+
+        LMOtsSignature sig = LM_OTS.lm_ots_generate_signature(privateKey, Q, ctx.getC());
         assertTrue(LM_OTS.lm_ots_validate_signature(publicKey, sig, ms, false));
 
         try
