@@ -575,7 +575,7 @@ public class HSSPrivateKeyParameters
         Hierarchy oldHierarchy = hierarchy;
 
         long[] qTreePath = new long[oldHierarchy.size()];
-        long q = getIndex();
+        long q = this.index;
 
         for (int t = oldHierarchy.size() - 1; t >= 0; t--)
         {
@@ -606,6 +606,8 @@ public class HSSPrivateKeyParameters
             // and cannot have changed - so this is the same tree at a different one-time key, and
             // the repositioned key keeps the tree the root has already built.
             //
+            checkNotRewound(0, rootKey.getIndex() - (qTreePath.length > 1 ? 1 : 0), qTreePath[0]);
+
             rootKey = rootKey.repositionTo((int)qTreePath[0]);
 
             keys[0] = rootKey;
@@ -653,7 +655,9 @@ public class HSSPrivateKeyParameters
                 // rebuild it. The public key is unchanged either way, so the chaining signature
                 // above it still stands and does not need making again.
                 //
-                keys[i] = keys[i].repositionTo((int)qTreePath[i]);
+                checkNotRewound(i, oldKey.getIndex() - (i < qTreePath.length - 1 ? 1 : 0), qTreePath[i]);
+
+                keys[i] = oldKey.repositionTo((int)qTreePath[i]);
                 changed = true;
             }
 
@@ -666,6 +670,28 @@ public class HSSPrivateKeyParameters
             hierarchy = new Hierarchy(keys, sig);
         }
 
+    }
+
+    /**
+     * A component key whose identifier and seed are unchanged is the same tree, and moving it back
+     * within that tree would hand out one-time keys it has already used; a signature made with one
+     * verifies, so nothing later would surface it. Every route here that the key controls moves
+     * forward or stays put - extractKeyShard advances the index, and a decoded key's index already
+     * agrees with its component keys - so a position behind the key can only be a stale index
+     * supplied to the public constructor, and it is refused rather than acted on.
+     *
+     * @param level    the level being repositioned, for the message.
+     * @param currentQ the one-time key the level has advanced to (its q, less the post-increment of a
+     *                 level that has signed the one beneath it).
+     * @param targetQ  the one-time key the index asks for.
+     */
+    private static void checkNotRewound(int level, long currentQ, long targetQ)
+    {
+        if (targetQ < currentQ)
+        {
+            throw new IllegalArgumentException("HSS private key index would move level " + level
+                + " back from one-time key " + currentQ + " to " + targetQ);
+        }
     }
 
     public synchronized HSSPublicKeyParameters getPublicKey()

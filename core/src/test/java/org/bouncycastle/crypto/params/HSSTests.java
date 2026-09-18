@@ -1411,11 +1411,12 @@ public class HSSTests
         assertSame("the wrap regenerated an advanced root key", lms, advanced.getRootKey());
         assertEquals("the wrap moved the index", 3, advanced.getIndex());
 
-        // the reset itself still works: asked for a different position, it does reposition
-        HSSPrivateKeyParameters moved = new HSSPrivateKeyParameters(lms, 1, 1 << sigParams.getH());
+        // the reset itself still works: asked for a different (later - see
+        // testResetKeyToIndexRefusesToRewind) position, it does reposition
+        HSSPrivateKeyParameters moved = new HSSPrivateKeyParameters(lms, 4, 1 << sigParams.getH());
 
         assertNotSame("the reset failed to reposition to a different index", lms, moved.getRootKey());
-        assertEquals(1, moved.getRootKey().getIndex());
+        assertEquals(4, moved.getRootKey().getIndex());
 
         // the Merkle tree is a function of I, the seed and the parameters and not of q, so the
         // repositioned key is entitled to the tree it was built from rather than a rebuild costing
@@ -1437,6 +1438,87 @@ public class HSSTests
         HSSSigner verifier = new HSSSigner();
         verifier.init(false, advanced.getPublicKey());
         assertTrue("wrapped key produced a signature that does not verify", verifier.verifySignature(msg, sig));
+    }
+
+    /**
+     * A component key whose identifier and seed are unchanged is the same tree; an index that would
+     * move it back within that tree asks for one-time keys already used, and is refused. Forward
+     * moves still reposition.
+     */
+    public void testResetKeyToIndexRefusesToRewind()
+        throws Exception
+    {
+        LMSigParameters sigParams = LMSigParameters.lms_sha256_n32_h5;
+        LMOtsParameters otsParams = LMOtsParameters.sha256_n32_w2;
+        int twoToH = 1 << sigParams.getH();
+        byte[] msg = Hex.decode("48656c6c6f");
+
+        // single level: the root is the last level and reads its q directly
+        LMSKeyPairGenerator gen = new LMSKeyPairGenerator();
+        gen.init(new LMSKeyGenerationParameters(LMSParameters.create(sigParams, otsParams), new SecureRandom()));
+        LMSPrivateKeyParameters lms = (LMSPrivateKeyParameters)gen.generateKeyPair().getPrivate();
+        LMSSigner lmsSigner = new LMSSigner();
+        lmsSigner.init(true, lms);
+        for (int i = 0; i < 3; ++i)
+        {
+            lmsSigner.generateSignature(msg);
+        }
+        assertEquals(3, lms.getIndex());
+
+        expectRewindRefused(lms, 2, twoToH);
+        assertEquals(3, new HSSPrivateKeyParameters(lms, 3, twoToH).getIndex());
+        assertEquals(4, new HSSPrivateKeyParameters(lms, 4, twoToH).getKeys().get(0).getIndex());
+
+        // two levels: the root is post-incremented past the child it signed, the bottom reads its q directly
+        HSSPrivateKeyParameters hss = HSSPrivateKeyParameters.generate(new HSSKeyGenerationParameters(
+            new LMSParameters[]{ LMSParameters.create(sigParams, otsParams), LMSParameters.create(sigParams, otsParams) },
+            new SecureRandom()));
+        for (int i = 0; i < twoToH + 1; ++i)
+        {
+            sign(hss, msg);
+        }
+        List<LMSPrivateKeyParameters> keys = hss.getKeys();
+        List<LMSSignature> sig = hss.getSig();
+        long limit = (long)twoToH * twoToH;
+        assertEquals(2, keys.get(0).getIndex());
+        assertEquals(1, keys.get(1).getIndex());
+
+        // back one leaf within the current bottom tree
+        expectRewindRefused(2, keys, sig, twoToH, limit);
+        // back into the previous bottom tree, which the root has already signed and moved past
+        expectRewindRefused(2, keys, sig, 5, limit);
+        // the position the keys are at, and one further on, are both fine
+        assertEquals(twoToH + 1, new HSSPrivateKeyParameters(2, keys, sig, twoToH + 1, limit).getIndex());
+        HSSPrivateKeyParameters forward = new HSSPrivateKeyParameters(2, keys, sig, twoToH + 8, limit);
+        assertEquals(8, forward.getKeys().get(1).getIndex());
+        assertTrue(verify(hss.getPublicKey(), sign(forward, msg), msg));
+    }
+
+    private static void expectRewindRefused(LMSPrivateKeyParameters lms, long index, long indexLimit)
+    {
+        try
+        {
+            new HSSPrivateKeyParameters(lms, index, indexLimit);
+            fail("index " + index + " rewound the key");
+        }
+        catch (IllegalArgumentException e)
+        {
+            assertTrue(e.getMessage(), e.getMessage().startsWith("HSS private key index would move level"));
+        }
+    }
+
+    private static void expectRewindRefused(int l, List<LMSPrivateKeyParameters> keys, List<LMSSignature> sig,
+        long index, long indexLimit)
+    {
+        try
+        {
+            new HSSPrivateKeyParameters(l, keys, sig, index, indexLimit);
+            fail("index " + index + " rewound the key");
+        }
+        catch (IllegalArgumentException e)
+        {
+            assertTrue(e.getMessage(), e.getMessage().startsWith("HSS private key index would move level"));
+        }
     }
 
     /**
