@@ -150,35 +150,32 @@ public final class LMSEngine
     //
 
     /**
-     * The context a message is absorbed into before verifying an encoded LMS signature against a
-     * public key. Consumed by {@link #verifySignature(LMSPublicKeyParameters, LMSContext)}.
-     *
-     * @throws IllegalStateException if the signature does not decode.
+     * @deprecated use {@link LMSPublicKeyParameters#generateLMSContext(byte[])} instead.
      */
+    @Deprecated
     public static LMSContext generateVerifyContext(LMSPublicKeyParameters publicKey, byte[] signature)
     {
-        try
-        {
-            return generateVerifyContext(publicKey, LMSSignature.getInstance(signature));
-        }
-        catch (IOException e)
-        {
-            throw Exceptions.illegalStateException("cannot parse signature", e);
-        }
+        return publicKey.generateLMSContext(signature);
     }
 
     /**
+     * The context a message is absorbed into before verifying a decoded LMS signature against a
+     * public key: the LM-OTS verification context of the leaf the signature names. Public only
+     * because {@link LMSPublicKeyParameters#generateLMSContext(byte[])} lives in another package;
+     * callers holding an encoded signature use that.
+     * <p>
      * The typecode and leaf-number checks RFC 8554 sec. 5.4.2 requires before a signature is
-     * processed: step 2g refuses a signature whose LMS typecode is not the one from the public key,
-     * and step 2i refuses a leaf number q outside the tree. Without the first, the path computation
-     * below took its height and tree digest from the parameter set the signature named rather than
-     * the key's, so a signature claiming h25 drove a 25-level computation against an h5 key; without
-     * the second, an out-of-range q flowed into the node arithmetic and was left to be caught by the
-     * candidate-root comparison. Neither was a forgery under a secure hash - the domain separation
-     * and the final comparison saw to that - but both are work the specification says to refuse up
-     * front.
+     * processed happen here: step 2g refuses a signature whose LMS typecode is not the one from the
+     * public key, and step 2i refuses a leaf number q outside the tree. Without the first, the path
+     * computation took its height and tree digest from the parameter set the signature named rather
+     * than the key's, so a signature claiming h25 drove a 25-level computation against an h5 key;
+     * without the second, an out-of-range q flowed into the node arithmetic and was left to be caught
+     * by the candidate-root comparison. Neither was a forgery under a secure hash - the domain
+     * separation and the final comparison saw to that - but both are work the specification says to
+     * refuse up front.
+     * </p>
      */
-    static LMSContext generateVerifyContext(LMSPublicKeyParameters publicKey, LMSSignature signature)
+    public static LMSContext generateVerifyContext(LMSPublicKeyParameters publicKey, LMSSignature signature)
     {
         LMSigParameters sigParameters = publicKey.getSigParameters();
         if (signature.getParameter().getType() != sigParameters.getType())
@@ -207,8 +204,8 @@ public final class LMSEngine
     }
 
     /**
-     * Verify the LMS signature a context from {@link #generateVerifyContext} carries over the
-     * message absorbed into it (RFC 8554 sec. 5.4.2, Algorithm 6).
+     * Verify the LMS signature a context from {@link LMSPublicKeyParameters#generateLMSContext(byte[])}
+     * carries over the message absorbed into it (RFC 8554 sec. 5.4.2, Algorithm 6).
      */
     public static boolean verifySignature(LMSPublicKeyParameters publicKey, LMSContext context)
     {

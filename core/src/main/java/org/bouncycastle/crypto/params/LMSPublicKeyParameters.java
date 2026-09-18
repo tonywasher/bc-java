@@ -9,7 +9,9 @@ import java.io.InputStream;
 import org.bouncycastle.crypto.signers.LMSContextBasedVerifier;
 import org.bouncycastle.crypto.signers.lms.LMSContext;
 import org.bouncycastle.crypto.signers.lms.LMSEngine;
+import org.bouncycastle.crypto.signers.lms.LMSSignature;
 import org.bouncycastle.util.Arrays;
+import org.bouncycastle.util.Exceptions;
 import org.bouncycastle.util.io.Streams;
 
 public class LMSPublicKeyParameters
@@ -182,9 +184,22 @@ public class LMSPublicKeyParameters
         return bOut.toByteArray();
     }
 
+    /**
+     * The context a message is absorbed into before verifying an encoded LMS signature against this
+     * key. Consumed by {@link #verify(LMSContext)}.
+     *
+     * @throws IllegalStateException if the signature does not decode.
+     */
     public LMSContext generateLMSContext(byte[] signature)
     {
-        return LMSEngine.generateVerifyContext(this, signature);
+        try
+        {
+            return LMSEngine.generateVerifyContext(this, LMSSignature.getInstance(signature));
+        }
+        catch (IOException e)
+        {
+            throw Exceptions.illegalStateException("cannot parse signature", e);
+        }
     }
 
     public boolean verify(LMSContext context)
