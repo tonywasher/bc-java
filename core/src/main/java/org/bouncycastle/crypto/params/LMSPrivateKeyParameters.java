@@ -96,7 +96,7 @@ public class LMSPrivateKeyParameters
     // These are not final because they can be generated.
     // They also do not need to be persisted.
     //
-    private LMSPublicKeyParameters publicKey;
+    private volatile LMSPublicKeyParameters publicKey;
 
     /**
      * A fresh LMS private key (RFC 8554 sec. 5.2, Algorithm 5): the SEED (m bytes) and then the identifier I
@@ -279,10 +279,7 @@ public class LMSPrivateKeyParameters
             throw new IOException("LMS private key tree cache does not match the public key");
         }
 
-        synchronized (pKey)
-        {
-            pKey.publicKey = pubKey;
-        }
+        pKey.publicKey = pubKey;
 
         return pKey;
     }
@@ -736,32 +733,69 @@ public class LMSPrivateKeyParameters
         return getIndexLimit() - getIndex();
     }
 
+    /**
+     * The public key of this tree, derived on first use and kept thereafter.
+     * <p>
+     * Deliberately not taken under the key's monitor: the root node is a function of the identifier,
+     * the master secret and the parameter sets and not of q, so nothing the monitor guards takes part
+     * in deriving it, and holding the monitor for a tree build (up to 2^h leaf derivations) would stall
+     * every one-time key claim on the key for its duration. Concurrent callers race harmlessly -
+     * {@link #findT(int)} already dedupes the expensive per-node work, so a second caller finds the
+     * tree built - and they publish equal keys.
+     * </p>
+     */
     public LMSPublicKeyParameters getPublicKey()
     {
+        LMSPublicKeyParameters pk = publicKey;
+        if (pk == null)
+        {
+            retainFirstPath();
+
+            pk = new LMSPublicKeyParameters(lmsParameters.getLMSigParam(), lmsParameters.getLMOTSParam(), findT(1), I);
+            publicKey = pk;
+        }
+        return pk;
+    }
+
+    /**
+     * Build the tree as the authentication path of the current one-time key, when it has to be built
+     * from nothing. It costs exactly the same - every leaf and interior node once - but leaves that
+     * path retained, so the first signature does not rebuild the 2^(h - 5) leaves below the cached top
+     * that the build has just computed and dropped.
+     * <p>
+     * Unlike the rest of {@link #getPublicKey()} this does take the key's monitor, since the retained
+     * path is the monitor's to advance. It does so only in the case where the first one-time key claim
+     * would take it for the same build anyway, and by the time that claim arrives the path is there
+     * for it: a key with the root cached, or one that has signed, returns here without contending for
+     * anything.
+     * </p>
+     */
+    private void retainFirstPath()
+    {
+        // retained is only ever set, never cleared, so a racy non-null read is a reliable "yes"
+        if (retained != null || peekRootT() != null)
+        {
+            return;
+        }
+
         synchronized (this)
         {
-            if (publicKey == null)
+            if (retained != null || peekRootT() != null)
             {
-                //
-                // With no root cached the whole tree has to be built. Built as the authentication path
-                // of the current one-time key it costs exactly the same - every leaf and interior node
-                // once - but leaves that path retained, so the first signature does not rebuild the
-                // 2^(h - 5) leaves below the cached top that the build has just computed and dropped.
-                //
-                if (retained == null && peekRootT() == null && q >= 0 && q < (1 << lmsParameters.getLMSigParam().getH()))
-                {
-                    advanceRetainedPath(q);
-                }
-
-                publicKey = new LMSPublicKeyParameters(lmsParameters.getLMSigParam(), lmsParameters.getLMOTSParam(), this.findT(1), I);
+                return;
             }
-            return publicKey;
+
+            // Not an exhausted key, whose q is one past the last leaf and names no path
+            if (q < (1 << lmsParameters.getLMSigParam().getH()))
+            {
+                advanceRetainedPath(q);
+            }
         }
     }
 
     /**
      * Whether an authentication path is currently retained. Used by the regression tests that check
-     * a key built or signed with keeps the path its work produced.
+     * that a key keeps the path produced by building its tree or by signing.
      */
     synchronized boolean isPathRetained()
     {
