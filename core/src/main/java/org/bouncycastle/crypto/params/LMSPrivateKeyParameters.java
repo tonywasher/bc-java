@@ -677,6 +677,14 @@ public class LMSPrivateKeyParameters
         return Arrays.clone(I);
     }
 
+    /**
+     * Return a copy of the master seed of this tree.
+     *
+     * @deprecated use {@link #getEncoded()} instead. A seed handed out alone is a second copy of the
+     * key with no index attached - the state duplication SP 800-208 rules out - whereas the encoding
+     * carries the index, usage limit and tree cache with it.
+     */
+    @Deprecated
     public byte[] getMasterSecret()
     {
         byte[] rv = Arrays.clone(masterSecret);

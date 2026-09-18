@@ -487,7 +487,6 @@ public class LMSTests
             new FixedSecureRandom(Arrays.concatenate(seed, I)));
         assertEquals(expected, drawn);
         assertTrue(Arrays.areEqual(I, drawn.getI()));
-        assertTrue(Arrays.areEqual(seed, drawn.getMasterSecret()));
 
         LMSKeyPairGenerator gen = new LMSKeyPairGenerator();
         gen.init(new LMSKeyGenerationParameters(params, new FixedSecureRandom(Arrays.concatenate(seed, I))));

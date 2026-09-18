@@ -94,21 +94,23 @@ public class HSSTests
     {
         HSSPrivateKeyParameters generated = generateKey(d);
 
+        // Rewrite the version 1 encoding into what a pre-tree-cache release wrote: version 0, each
+        // component key ending at its master secret, with the chaining signatures unchanged.
+        byte[] enc = generated.getEncoded();
         LMSVectorUtils.Encoder composer = LMSVectorUtils.compose()
             .u32str(0) // version 0: pre-tree-cache component keys
-            .u32str(generated.getL())
-            .u64str(generated.getIndex())
-            .u64str(generated.getIndexLimit())
-            .bool(false);
-
-        for (LMSPrivateKeyParameters key : generated.getKeys())
+            .bytes(enc, 4, 21); // l, index, indexLimit, isShard - unchanged
+        int pos = 25;
+        for (int t = 0; t < d; t++)
         {
-            composer.bytes(version0KeyEncoding(key));
+            int m = LMSigParameters.getParametersForType(Pack.bigEndianToInt(enc, pos + 4)).getM();
+            // up to and including the master secret
+            int keyCoreLength = 40 + Pack.bigEndianToInt(enc, pos + 36);
+            composer.bytes(enc, pos, keyCoreLength);
+            int cacheCount = Pack.bigEndianToInt(enc, pos + keyCoreLength);
+            pos += keyCoreLength + 4 + cacheCount * m; // skip the version 1 tree-cache field
         }
-        for (LMSSignature s : generated.getSig())
-        {
-            composer.bytes(s.getEncoded());
-        }
+        composer.bytes(enc, pos, enc.length - pos); // the chaining signatures
 
         HSSPrivateKeyParameters decoded = HSSPrivateKeyParameters.getInstance(composer.build());
 
@@ -160,24 +162,6 @@ public class HSSTests
 
         return HSSPrivateKeyParameters.generate(new HSSKeyGenerationParameters(lmsParameters, new SecureRandom()));
     }
-
-    // Exactly what LMSPrivateKeyParameters.getEncoded() produced before the tree-cache feature:
-    // version, type, otstype, I, q, maxQ, secret length, secret - no trailing cache.
-    private static byte[] version0KeyEncoding(LMSPrivateKeyParameters key)
-        throws Exception
-    {
-        return LMSVectorUtils.compose()
-            .u32str(0)
-            .u32str(key.getSigParameters().getType())
-            .u32str(key.getOtsParameters().getType())
-            .bytes(key.getI())
-            .u32str((int)key.getIndex())
-            .u32str((int)key.getIndexLimit())
-            .u32str(key.getMasterSecret().length)
-            .bytes(key.getMasterSecret())
-            .build();
-    }
-
 
     /**
      * Test Case 1 Signature

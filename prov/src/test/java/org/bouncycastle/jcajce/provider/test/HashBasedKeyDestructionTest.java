@@ -128,6 +128,7 @@ public class HashBasedKeyDestructionTest
         sign("LMS", BC, shard, kp);
     }
 
+    @SuppressWarnings("deprecation") // getMasterSecret is deprecated but must still refuse a destroyed key
     public void testLightweightLMSDestroy()
         throws Exception
     {
