@@ -387,6 +387,40 @@ public class LMSTests
 
         // the well-formed single-level case still builds
         assertNotNull(new HSSPrivateKeyParameters(1, one, none, 0, twoToH));
+
+        // HSS key generation parameters: the level list must be present, sized 1..8 and fully populated
+        LMSParameters level = LMSParameters.create(sigParams, otsParams);
+        LMSParameters[] levels = new LMSParameters[]{ level };
+        HSSKeyGenerationParameters genParams = new HSSKeyGenerationParameters(levels, new SecureRandom());
+
+        // the array is copied on the way in and on the way out
+        levels[0] = null;
+        assertSame(level, genParams.getLmsParameters()[0]);
+        genParams.getLmsParameters()[0] = null;
+        assertSame(level, genParams.getLmsParameters()[0]);
+
+        expectBadHssGenParams("lmsParameters cannot be null", null);
+        expectBadHssGenParams("lmsParameters length should be between 1 and 8 inclusive", new LMSParameters[0]);
+        expectBadHssGenParams("lmsParameters length should be between 1 and 8 inclusive", new LMSParameters[]{
+            level, level, level, level, level, level, level, level, level });
+        expectBadHssGenParams("HSS level 1 has no parameters", new LMSParameters[]{ level, null });
+    }
+
+    private static void expectBadHssGenParams(String message, LMSParameters[] lmsParameters)
+    {
+        try
+        {
+            new HSSKeyGenerationParameters(lmsParameters, new SecureRandom());
+            fail("no exception for: " + message);
+        }
+        catch (NullPointerException e)
+        {
+            assertEquals(message, e.getMessage());
+        }
+        catch (IllegalArgumentException e)
+        {
+            assertEquals(message, e.getMessage());
+        }
     }
 
     private static void expectBadArgument(String message, LMSigParameters sigParams, LMOtsParameters otsParams,
