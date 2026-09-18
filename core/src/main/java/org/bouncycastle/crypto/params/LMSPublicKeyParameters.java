@@ -41,8 +41,8 @@ public class LMSPublicKeyParameters
         else if (src instanceof DataInputStream)
         {
             int pubType = ((DataInputStream)src).readInt();
-            LMSigParameters lmsParameter = LMSigParameters.getParametersForType(pubType);
-            if (lmsParameter == null)
+            LMSigParameters sigParameters = LMSigParameters.getParametersForType(pubType);
+            if (sigParameters == null)
             {
                 throw new IOException("unknown LMS type code: " + pubType);
             }
@@ -57,9 +57,9 @@ public class LMSPublicKeyParameters
             byte[] I = new byte[16];
             ((DataInputStream)src).readFully(I);
 
-            byte[] T1 = new byte[lmsParameter.getM()];
+            byte[] T1 = new byte[sigParameters.getM()];
             ((DataInputStream)src).readFully(T1);
-            return new LMSPublicKeyParameters(lmsParameter, ostTypeCode, T1, I);
+            return new LMSPublicKeyParameters(sigParameters, ostTypeCode, T1, I);
         }
         else if (src instanceof byte[])
         {
