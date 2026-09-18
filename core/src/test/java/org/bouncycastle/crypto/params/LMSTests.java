@@ -9,6 +9,7 @@ import java.util.Set;
 
 import junit.framework.TestCase;
 import org.bouncycastle.crypto.ExhaustedPrivateKeyException;
+import org.bouncycastle.crypto.prng.FixedSecureRandom;
 import org.bouncycastle.crypto.signers.lms.LMSSignature;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Pack;
@@ -360,7 +361,9 @@ public class LMSTests
         expectBadArgument("LMS key identifier I must be 16 bytes", sigParams, otsParams, 0, new byte[15], twoToH, seed);
         expectBadArgument("LMS key identifier I must be 16 bytes", sigParams, otsParams, 0, new byte[17], twoToH, seed);
         expectBadArgument("LMS key identifier I must be 16 bytes", sigParams, otsParams, 0, null, twoToH, seed);
-        expectBadArgument("LMS private key needs both parameter sets", sigParams, null, 0, I, twoToH, seed);
+        // a missing parameter set is refused by the LMSParameters pairing itself
+        expectNullParameter("lmSigParam cannot be null", null, otsParams, 0, I, twoToH, seed);
+        expectNullParameter("lmOTSParam cannot be null", sigParams, null, 0, I, twoToH, seed);
         expectBadArgument("master secret length is less than " + sigParams.getM(),
             sigParams, otsParams, 0, I, twoToH, new byte[1]);
         expectBadArgument("LMS private key q/maxQ out of range: q=-1 maxQ=" + twoToH + " 2^h=" + twoToH,
@@ -423,6 +426,79 @@ public class LMSTests
         }
     }
 
+    /**
+     * The public constructor copies I and the master secret, so the caller keeps its arrays and can wipe or
+     * reuse them without disturbing the key - including the tree it builds later from its own copies.
+     */
+    public void testPublicConstructorCopiesCallerArrays()
+        throws Exception
+    {
+        LMSigParameters sigParams = LMSigParameters.lms_sha256_n32_h5;
+        LMOtsParameters otsParams = LMOtsParameters.sha256_n32_w1;
+        int twoToH = 1 << sigParams.getH();
+
+        byte[] I = Hex.decode("d08fabd4a2091ff0a8cb4ed834e74534");
+        byte[] seed = Hex.decode("558b8966c48ae9cb898b423c83443aae014a72f1b1ab5cc85cf1d892903b5439");
+
+        LMSPrivateKeyParameters expected = new LMSPrivateKeyParameters(sigParams, otsParams, 0, Arrays.clone(I),
+            twoToH, Arrays.clone(seed));
+        byte[] expectedEncoding = expected.getEncoded();
+        byte[] expectedPublicKey = expected.getPublicKey().getEncoded();
+
+        LMSPrivateKeyParameters key = new LMSPrivateKeyParameters(sigParams, otsParams, 0, I, twoToH, seed);
+
+        // the arrays the constructor was given now belong to the caller alone
+        Arrays.fill(I, (byte)0xFF);
+        Arrays.fill(seed, (byte)0xFF);
+
+        assertTrue(Arrays.areEqual(expected.getI(), key.getI()));
+        assertTrue(Arrays.areEqual(expectedEncoding, key.getEncoded()));
+
+        // the tree is built after the mutation, from the key's own copies
+        assertTrue(Arrays.areEqual(expectedPublicKey, key.getPublicKey().getEncoded()));
+    }
+
+    /**
+     * The random-drawing constructor consumes SEED (m bytes) then I (16 bytes), the reference implementation's
+     * order that the HSS vectors in bc-test-data pin, and yields the key the explicit constructor builds from
+     * those bytes at q = 0 with 2^h one-time keys. The key pair generator is a thin wrapper over it.
+     */
+    public void testRandomConstructorDrawOrder()
+        throws Exception
+    {
+        LMSParameters params = LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2);
+        int m = params.getLMSigParam().getM();
+
+        byte[] seed = new byte[m];
+        byte[] I = new byte[16];
+        for (int i = 0; i != seed.length; i++)
+        {
+            seed[i] = (byte)(0x40 + i);
+        }
+        for (int i = 0; i != I.length; i++)
+        {
+            I[i] = (byte)(0x80 + i);
+        }
+
+        LMSPrivateKeyParameters expected = new LMSPrivateKeyParameters(params.getLMSigParam(), params.getLMOTSParam(),
+            0, I, 1 << params.getLMSigParam().getH(), seed);
+
+        LMSPrivateKeyParameters drawn = LMSPrivateKeyParameters.generate(params,
+            new FixedSecureRandom(Arrays.concatenate(seed, I)));
+        assertEquals(expected, drawn);
+        assertTrue(Arrays.areEqual(I, drawn.getI()));
+        assertTrue(Arrays.areEqual(seed, drawn.getMasterSecret()));
+
+        LMSKeyPairGenerator gen = new LMSKeyPairGenerator();
+        gen.init(new LMSKeyGenerationParameters(params, new FixedSecureRandom(Arrays.concatenate(seed, I))));
+        assertEquals(expected, gen.generateKeyPair().getPrivate());
+
+        // the other order is a different key
+        LMSPrivateKeyParameters swapped = LMSPrivateKeyParameters.generate(params,
+            new FixedSecureRandom(Arrays.concatenate(I, seed)));
+        assertFalse(expected.equals(swapped));
+    }
+
     private static void expectBadArgument(String message, LMSigParameters sigParams, LMOtsParameters otsParams,
         int q, byte[] I, int maxQ, byte[] seed)
     {
@@ -432,6 +508,20 @@ public class LMSTests
             fail("no exception for: " + message);
         }
         catch (IllegalArgumentException e)
+        {
+            assertEquals(message, e.getMessage());
+        }
+    }
+
+    private static void expectNullParameter(String message, LMSigParameters sigParams, LMOtsParameters otsParams,
+        int q, byte[] I, int maxQ, byte[] seed)
+    {
+        try
+        {
+            new LMSPrivateKeyParameters(sigParams, otsParams, q, I, maxQ, seed);
+            fail("no exception for: " + message);
+        }
+        catch (NullPointerException e)
         {
             assertEquals(message, e.getMessage());
         }

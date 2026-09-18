@@ -129,6 +129,54 @@ public class HSSPrivateKeyParameters
 
     private volatile boolean destroyed;
 
+    /**
+     * Generate an HSS private key: a root LMS key drawn from the parameters' random source, with
+     * the lower trees derived from it when the key is first positioned at index 0.
+     */
+    public static HSSPrivateKeyParameters generate(HSSKeyGenerationParameters parameters)
+    {
+        //
+        // LmsPrivateKey can derive and hold the public key so we just use an array of those.
+        //
+        LMSPrivateKeyParameters[] keys = new LMSPrivateKeyParameters[parameters.getDepth()];
+        LMSSignature[] sig = new LMSSignature[parameters.getDepth() - 1];
+
+        LMSParameters rootLms = parameters.getLmsParameters(0);
+
+        //
+        // Set the HSS key up with a valid root LMSPrivateKeyParameters and placeholders for the remaining LMS keys.
+        // The placeholders pass enough information to allow the HSSPrivateKeyParameters to be properly reset to an
+        // index of zero. Rather than repeat the same reset-to-index logic in this static method.
+        //
+
+        keys[0] = LMSPrivateKeyParameters.generate(rootLms, parameters.getRandom());
+
+        long hssKeyMaxIndex = 1L << rootLms.getLMSigParam().getH();
+
+        for (int t = 1; t < keys.length; t++)
+        {
+            LMSParameters lms = parameters.getLmsParameters(t);
+            int h = lms.getLMSigParam().getH();
+
+            keys[t] = LMSPrivateKeyParameters.createPlaceholder(lms, 1 << h);
+
+            hssKeyMaxIndex <<= h;
+        }
+
+        // if this has happened we're trying to generate a really large key
+        // we'll use MAX_VALUE so that it's at least usable until someone upgrades the structure.
+        if (hssKeyMaxIndex <= 0)
+        {
+            hssKeyMaxIndex = Long.MAX_VALUE;
+        }
+
+        return new HSSPrivateKeyParameters(
+            parameters.getDepth(),
+            Arrays.asList(keys),
+            Arrays.asList(sig),
+            0, hssKeyMaxIndex);
+    }
+
     public HSSPrivateKeyParameters(LMSPrivateKeyParameters key, long index, long indexLimit)
     {
         super(true);
@@ -400,7 +448,7 @@ public class HSSPrivateKeyParameters
         {
             LMSPrivateKeyParameters lmsPrivateKey = hierarchy.getKey(i);
 
-            parms[i] = LMSParameters.create(lmsPrivateKey.getSigParameters(), lmsPrivateKey.getOtsParameters());
+            parms[i] = lmsPrivateKey.getLMSParameters();
         }
 
         return parms;
@@ -526,7 +574,6 @@ public class HSSPrivateKeyParameters
         // Extract the original keys
         Hierarchy oldHierarchy = hierarchy;
 
-
         long[] qTreePath = new long[oldHierarchy.size()];
         long q = getIndex();
 
@@ -542,16 +589,15 @@ public class HSSPrivateKeyParameters
         LMSPrivateKeyParameters[] keys = oldHierarchy.copyKeys();
         LMSSignature[] sig = oldHierarchy.copySig();
 
-        LMSPrivateKeyParameters originalRootKey = keys[0];
-
+        LMSPrivateKeyParameters rootKey = keys[0];
 
         //
         // We need to replace the root key to a new q value; the last level reads the derived
         // value itself, which for a single level hierarchy is the root.
         //
         boolean rootQMatch = (qTreePath.length > 1)
-            ? qTreePath[0] == keys[0].getIndex() - 1
-            : qTreePath[0] == keys[0].getIndex();
+            ? qTreePath[0] == rootKey.getIndex() - 1
+            : qTreePath[0] == rootKey.getIndex();
 
         if (!rootQMatch)
         {
@@ -560,23 +606,25 @@ public class HSSPrivateKeyParameters
             // and cannot have changed - so this is the same tree at a different one-time key, and
             // the repositioned key keeps the tree the root has already built.
             //
-            keys[0] = originalRootKey.repositionTo((int)qTreePath[0]);
+            rootKey = rootKey.repositionTo((int)qTreePath[0]);
+
+            keys[0] = rootKey;
             changed = true;
         }
 
-
         for (int i = 1; i < qTreePath.length; i++)
         {
-
-            LMSPrivateKeyParameters intermediateKey = keys[i - 1];
+            LMSPrivateKeyParameters parentKey = keys[i - 1];
 
             byte[][] child = LMSEngine.deriveChildKey(
-                intermediateKey.getOtsParameters(),
-                intermediateKey.getI(),
-                intermediateKey.getMasterSecret(),
+                parentKey.getOtsParameters(),
+                parentKey.getI(),
+                parentKey.getMasterSecret(),
                 (int)qTreePath[i - 1]);
             byte[] childI = child[0];
             byte[] childSeed = child[1];
+
+            LMSPrivateKeyParameters oldKey = keys[i];
 
             //
             // Q values in LMS keys post increment after they are used.
@@ -584,14 +632,14 @@ public class HSSPrivateKeyParameters
             // For the end key its value will match so no correction is required.
             //
             boolean lmsQMatch =
-                (i < qTreePath.length - 1) ? qTreePath[i] == keys[i].getIndex() - 1 : qTreePath[i] == keys[i].getIndex();
+                (i < qTreePath.length - 1) ? qTreePath[i] == oldKey.getIndex() - 1 : qTreePath[i] == oldKey.getIndex();
 
             //
             // Equality is I and seed being equal and the lmsQMath.
             // I and seed are derived from this nodes parent and will change if the parent q, I, seed changes.
             //
-            boolean seedEquals = org.bouncycastle.util.Arrays.areEqual(childI, keys[i].getI())
-                && org.bouncycastle.util.Arrays.constantTimeAreEqual(childSeed, keys[i].getMasterSecret());
+            boolean seedEquals = org.bouncycastle.util.Arrays.areEqual(childI, oldKey.getI())
+                && org.bouncycastle.util.Arrays.constantTimeAreEqual(childSeed, oldKey.getMasterSecret());
 
 
             if (!seedEquals)
@@ -599,15 +647,7 @@ public class HSSPrivateKeyParameters
                 //
                 // This means the parent has changed.
                 //
-                keys[i] = generateKey(
-                    oldHierarchy.getKey(i).getSigParameters(),
-                    oldHierarchy.getKey(i).getOtsParameters(),
-                    (int)qTreePath[i], childI, childSeed);
-
-                //
-                // Ensure post increment occurs on parent and the new public key is signed.
-                //
-                sig[i - 1] = signPublicKey(keys[i - 1], keys[i].getPublicKey());
+                replaceLevel(keys, sig, i, oldKey.getLMSParameters(), (int)qTreePath[i], childI, childSeed);
                 changed = true;
             }
             else if (!lmsQMatch)
@@ -708,9 +748,7 @@ public class HSSPrivateKeyParameters
             // The replacement keeps the parameters of the key it replaces
             LMSPrivateKeyParameters oldKey = newKeys[d];
 
-            newKeys[d] = generateKey(oldKey.getSigParameters(), oldKey.getOtsParameters(), 0, childI, childSeed);
-
-            newSig[d - 1] = signPublicKey(newKeys[d - 1], newKeys[d].getPublicKey());
+            replaceLevel(newKeys, newSig, d, oldKey.getLMSParameters(), 0, childI, childSeed);
         }
 
         // The replaced keys and the signatures over them reach readers together
@@ -718,30 +756,28 @@ public class HSSPrivateKeyParameters
     }
 
     /**
-     * An LMS private key positioned at index q (RFC 8554 sec. 5.2, Algorithm 5).
+     * Replace level d of a hierarchy: an LMS private key positioned at index q (RFC 8554 sec. 5.2, Algorithm 5)
+     * built from the identifier and seed the level above derived for it, together with the chaining signature
+     * over its public key, which the level above makes by consuming one of its one-time keys (sec. 6.1).
+     * Writes keys[d] and sig[d - 1]; keys[d - 1] must already be the level above.
      */
-    private static LMSPrivateKeyParameters generateKey(LMSigParameters parameterSet, LMOtsParameters lmOtsParameters,
-        int q, byte[] I, byte[] masterSecret)
+    private static void replaceLevel(LMSPrivateKeyParameters[] keys, LMSSignature[] sig, int d,
+        LMSParameters lmsParameters, int q, byte[] I, byte[] masterSecret)
     {
         //
-        // RFC 8554 recommends that digest used in LMS and LMOTS be of the same strength to protect against
+        // RFC 8554 recommends the digest used in LMS and LMOTS be of the same strength to protect against
         // attackers going after the weaker of the two digests. This is not enforced here!
         //
-        return new LMSPrivateKeyParameters(parameterSet, lmOtsParameters, q, I, 1 << parameterSet.getH(), masterSecret);
-    }
+        LMSPrivateKeyParameters key = new LMSPrivateKeyParameters(lmsParameters, q, I,
+            1 << lmsParameters.getLMSigParam().getH(), masterSecret);
 
-    /**
-     * The chaining signature of an HSS hierarchy: a tree signs the public key of the tree below
-     * it, consuming one of its one-time keys.
-     */
-    private static LMSSignature signPublicKey(LMSPrivateKeyParameters signer, LMSPublicKeyParameters publicKey)
-    {
-        LMSContext context = signer.generateLMSContext();
+        LMSContext context = keys[d - 1].generateLMSContext();
 
-        byte[] encoded = publicKey.toByteArray();
+        byte[] encoded = key.getPublicKey().toByteArray();
         context.update(encoded, 0, encoded.length);
 
-        return LMSEngine.generateSign(context);
+        keys[d] = key;
+        sig[d - 1] = LMSEngine.generateSign(context);
     }
 
     @Override

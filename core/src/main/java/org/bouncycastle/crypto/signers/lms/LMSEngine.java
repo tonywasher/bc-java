@@ -7,8 +7,6 @@ import org.bouncycastle.crypto.params.HSSKeyGenerationParameters;
 import org.bouncycastle.crypto.params.HSSPrivateKeyParameters;
 import org.bouncycastle.crypto.params.HSSPublicKeyParameters;
 import org.bouncycastle.crypto.params.LMOtsParameters;
-import org.bouncycastle.crypto.params.LMSParameters;
-import org.bouncycastle.crypto.params.LMSPrivateKeyParameters;
 import org.bouncycastle.crypto.params.LMSPublicKeyParameters;
 import org.bouncycastle.crypto.params.LMSigParameters;
 import org.bouncycastle.util.Arrays;
@@ -216,8 +214,8 @@ public final class LMSEngine
     public static boolean verifySignature(LMSPublicKeyParameters publicKey, LMSContext context)
     {
         LMSSignature S = (LMSSignature)context.getSignature();
-        LMSigParameters lmsParameter = S.getParameter();
-        int h = lmsParameter.getH();
+        LMSigParameters sigParameters = S.getParameter();
+        int h = sigParameters.getH();
         byte[][] path = S.getY();
         byte[] Kc = LM_OTS.lm_ots_validate_signature_calculate(context);
         // Step 4
@@ -226,7 +224,7 @@ public final class LMSEngine
 
         // tmp = H(I || u32str(node_num) || u16str(D_LEAF) || Kc)
         byte[] I = publicKey.getI();
-        Digest H = DigestUtil.getDigest(lmsParameter);
+        Digest H = DigestUtil.getDigest(sigParameters);
         byte[] tmp = new byte[H.getDigestSize()];
 
         H.update(I, 0, I.length);
@@ -343,6 +341,19 @@ public final class LMSEngine
         return passed & verifySignature(key, context);
     }
 
+    //
+    // HSS key management (RFC 8554 sec. 6.1).
+    //
+
+    /**
+     * @deprecated Use {@link HSSPrivateKeyParameters#generate(HSSKeyGenerationParameters)}.
+     */
+    @Deprecated
+    public static HSSPrivateKeyParameters generateHSSKeyPair(HSSKeyGenerationParameters parameters)
+    {
+        return HSSPrivateKeyParameters.generate(parameters);
+    }
+
     private static byte[] encodePublicKey(LMSPublicKeyParameters publicKey)
     {
         try
@@ -353,67 +364,6 @@ public final class LMSEngine
         {
             throw Exceptions.illegalStateException("unable to encode public key", e);
         }
-    }
-
-    //
-    // HSS key management (RFC 8554 sec. 6.1).
-    //
-
-    /**
-     * Generate an HSS private key: a root LMS key drawn from the parameters' random source, with
-     * the lower trees derived from it when the key is first positioned at index 0.
-     */
-    public static HSSPrivateKeyParameters generateHSSKeyPair(HSSKeyGenerationParameters parameters)
-    {
-        //
-        // LmsPrivateKey can derive and hold the public key so we just use an array of those.
-        //
-        LMSPrivateKeyParameters[] keys = new LMSPrivateKeyParameters[parameters.getDepth()];
-        LMSSignature[] sig = new LMSSignature[parameters.getDepth() - 1];
-
-        LMSParameters rootLms = parameters.getLmsParameters()[0];
-        LMSigParameters rootSig = rootLms.getLMSigParam();
-
-        byte[] rootSeed = new byte[rootSig.getM()];
-        parameters.getRandom().nextBytes(rootSeed);
-
-        byte[] I = new byte[16];
-        parameters.getRandom().nextBytes(I);
-
-        //
-        // Set the HSS key up with a valid root LMSPrivateKeyParameters and placeholders for the remaining LMS keys.
-        // The placeholders pass enough information to allow the HSSPrivateKeyParameters to be properly reset to an
-        // index of zero. Rather than repeat the same reset-to-index logic in this static method.
-        //
-
-        int rootMaxQ = 1 << rootSig.getH();
-
-        keys[0] = new LMSPrivateKeyParameters(rootSig, rootLms.getLMOTSParam(), 0, I, rootMaxQ, rootSeed);
-
-        long hssKeyMaxIndex = rootMaxQ;
-
-        for (int t = 1; t < keys.length; t++)
-        {
-            LMSParameters lms = parameters.getLmsParameters()[t];
-            int h = lms.getLMSigParam().getH();
-
-            keys[t] = new PlaceholderLMSPrivateKey(lms.getLMSigParam(), lms.getLMOTSParam(), 1 << h);
-
-            hssKeyMaxIndex <<= h;
-        }
-
-        // if this has happened we're trying to generate a really large key
-        // we'll use MAX_VALUE so that it's at least usable until someone upgrades the structure.
-        if (hssKeyMaxIndex <= 0)
-        {
-            hssKeyMaxIndex = Long.MAX_VALUE;
-        }
-
-        return new HSSPrivateKeyParameters(
-            parameters.getDepth(),
-            java.util.Arrays.asList(keys),
-            java.util.Arrays.asList(sig),
-            0, hssKeyMaxIndex);
     }
 
     /**
@@ -438,24 +388,5 @@ public final class LMSEngine
         System.arraycopy(postImage, 0, childI, 0, childI.length);
 
         return new byte[][]{ childI, childSeed };
-    }
-
-    private static class PlaceholderLMSPrivateKey
-        extends LMSPrivateKeyParameters
-    {
-        PlaceholderLMSPrivateKey(LMSigParameters lmsParameter, LMOtsParameters otsParameters, int maxQ)
-        {
-            super(lmsParameter, otsParameters, maxQ);
-        }
-
-        public LMSContext generateLMSContext()
-        {
-            throw new RuntimeException("placeholder only");
-        }
-
-        public LMSPublicKeyParameters getPublicKey()
-        {
-            throw new RuntimeException("placeholder only");
-        }
     }
 }

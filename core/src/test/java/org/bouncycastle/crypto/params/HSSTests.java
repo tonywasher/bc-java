@@ -24,7 +24,6 @@ import org.bouncycastle.crypto.generators.LMSKeyPairGenerator;
 import org.bouncycastle.crypto.signers.HSSSigner;
 import org.bouncycastle.crypto.signers.LMSSigner;
 import org.bouncycastle.crypto.signers.lms.LMSContext;
-import org.bouncycastle.crypto.signers.lms.LMSEngine;
 import org.bouncycastle.crypto.signers.lms.LMSSignature;
 
 public class HSSTests
@@ -43,7 +42,7 @@ public class HSSTests
         SecureRandom rand = new FixedSecureRandom(fixedSource);
 
 
-        HSSPrivateKeyParameters generatedPrivateKey = LMSEngine.generateHSSKeyPair(
+        HSSPrivateKeyParameters generatedPrivateKey = HSSPrivateKeyParameters.generate(
             new HSSKeyGenerationParameters(new LMSParameters[]{
                 LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
                 LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
@@ -159,7 +158,7 @@ public class HSSTests
             lmsParameters[t] = LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4);
         }
 
-        return LMSEngine.generateHSSKeyPair(new HSSKeyGenerationParameters(lmsParameters, new SecureRandom()));
+        return HSSPrivateKeyParameters.generate(new HSSKeyGenerationParameters(lmsParameters, new SecureRandom()));
     }
 
     // Exactly what LMSPrivateKeyParameters.getEncoded() produced before the tree-cache feature:
@@ -400,7 +399,7 @@ public class HSSTests
 
         SecureRandom rand = new FixedSecureRandom(fixedSource);
 
-        HSSPrivateKeyParameters keyPair = LMSEngine.generateHSSKeyPair(
+        HSSPrivateKeyParameters keyPair = HSSPrivateKeyParameters.generate(
             new HSSKeyGenerationParameters(new LMSParameters[]{
                 LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
                 LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
@@ -429,7 +428,7 @@ public class HSSTests
         {
             SecureRandom rand1 = new FixedSecureRandom(fixedSource);
 
-            HSSPrivateKeyParameters regenKeyPair = LMSEngine.generateHSSKeyPair(
+            HSSPrivateKeyParameters regenKeyPair = HSSPrivateKeyParameters.generate(
                 new HSSKeyGenerationParameters(new LMSParameters[]{
                     LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
                     LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
@@ -470,7 +469,7 @@ public class HSSTests
             // Use a real secure random this time.
             SecureRandom rand1 = new SecureRandom();
 
-            HSSPrivateKeyParameters differentKey = LMSEngine.generateHSSKeyPair(
+            HSSPrivateKeyParameters differentKey = HSSPrivateKeyParameters.generate(
                 new HSSKeyGenerationParameters(new LMSParameters[]{
                     LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
                     LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
@@ -595,7 +594,7 @@ public class HSSTests
                 //
 
 
-                HSSPrivateKeyParameters keyPair = LMSEngine.generateHSSKeyPair(
+                HSSPrivateKeyParameters keyPair = HSSPrivateKeyParameters.generate(
                     new HSSKeyGenerationParameters(
                         lmsParams.toArray(new LMSParameters[lmsParams.size()]), fixRnd)
                 );
@@ -735,7 +734,7 @@ public class HSSTests
             lmsParams.add(LMSParameters.create(lmsParameters.get(i), lmOtsParameters.get(i)));
         }
 
-        HSSPrivateKeyParameters keyPair = LMSEngine.generateHSSKeyPair(
+        HSSPrivateKeyParameters keyPair = HSSPrivateKeyParameters.generate(
             new HSSKeyGenerationParameters(
                 lmsParams.toArray(new LMSParameters[lmsParams.size()]), fixRnd)
         );
@@ -817,7 +816,7 @@ public class HSSTests
     public void testRemaining()
         throws Exception
     {
-        HSSPrivateKeyParameters keyPair = LMSEngine.generateHSSKeyPair(
+        HSSPrivateKeyParameters keyPair = HSSPrivateKeyParameters.generate(
             new HSSKeyGenerationParameters(new LMSParameters[]{
                 LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
                 LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2)
@@ -876,7 +875,7 @@ public class HSSTests
     public void testSharding()
         throws Exception
     {
-        HSSPrivateKeyParameters keyPair = LMSEngine.generateHSSKeyPair(
+        HSSPrivateKeyParameters keyPair = HSSPrivateKeyParameters.generate(
             new HSSKeyGenerationParameters(new LMSParameters[]{
                 LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
                 LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2)
@@ -957,7 +956,7 @@ public class HSSTests
             }
         };
 
-        HSSPrivateKeyParameters keyPair = LMSEngine.generateHSSKeyPair(
+        HSSPrivateKeyParameters keyPair = HSSPrivateKeyParameters.generate(
             new HSSKeyGenerationParameters(new LMSParameters[]{
                 LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
                 LMSParameters.create(LMSigParameters.lms_sha256_n32_h10, LMOtsParameters.sha256_n32_w1),
@@ -1753,7 +1752,7 @@ public class HSSTests
     }
 
     /**
-     * An LMS key that parks on a latch when asked for its LM-OTS parameters, which the rebuild
+     * An LMS key that parks on a latch when asked for its parameter set, which the rebuild
      * of an exhausted level asks its outgoing key for on that level's pass - after the pass for
      * the level above has completed.
      */
@@ -1770,7 +1769,7 @@ public class HSSTests
             super(sigParams, otsParams, q, I, maxQ, seed);
         }
 
-        public LMOtsParameters getOtsParameters()
+        public LMSParameters getLMSParameters()
         {
             if (gated)
             {
@@ -1787,7 +1786,7 @@ public class HSSTests
                 }
             }
 
-            return super.getOtsParameters();
+            return super.getLMSParameters();
         }
     }
 }
