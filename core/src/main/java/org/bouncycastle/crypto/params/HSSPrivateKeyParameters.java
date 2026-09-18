@@ -616,11 +616,7 @@ public class HSSPrivateKeyParameters
         {
             LMSPrivateKeyParameters parentKey = keys[i - 1];
 
-            byte[][] child = LMSEngine.deriveChildKey(
-                parentKey.getOtsParameters(),
-                parentKey.getI(),
-                parentKey.getMasterSecret(),
-                (int)qTreePath[i - 1]);
+            byte[][] child = parentKey.deriveChildKey((int)qTreePath[i - 1]);
             byte[] childI = child[0];
             byte[] childSeed = child[1];
 
@@ -638,9 +634,7 @@ public class HSSPrivateKeyParameters
             // Equality is I and seed being equal and the lmsQMath.
             // I and seed are derived from this nodes parent and will change if the parent q, I, seed changes.
             //
-            boolean seedEquals = org.bouncycastle.util.Arrays.areEqual(childI, oldKey.getI())
-                && org.bouncycastle.util.Arrays.constantTimeAreEqual(childSeed, oldKey.getMasterSecret());
-
+            boolean seedEquals = oldKey.hasIdentity(childI, childSeed);
 
             if (!seedEquals)
             {

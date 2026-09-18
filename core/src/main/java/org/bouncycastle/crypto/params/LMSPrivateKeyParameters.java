@@ -122,6 +122,15 @@ public class LMSPrivateKeyParameters
     }
 
     /**
+     * The stand-in an HSS hierarchy holds for a level below the root while a fresh key is built: it carries
+     * the level's parameter set and size so that resetKeyToIndex can replace it, and refuses to act as a key.
+     */
+    static LMSPrivateKeyParameters createPlaceholder(LMSParameters lmsParameters, int maxQ)
+    {
+        return new PlaceholderLMSPrivateKey(lmsParameters, maxQ);
+    }
+
+    /**
      * An LMS private key positioned at one-time key q of the tree named by I (RFC 8554 sec. 5.2, Algorithm 5).
      * The identifier and master secret are copied, so the caller keeps its arrays.
      */
@@ -197,15 +206,6 @@ public class LMSPrivateKeyParameters
         this.masterSecret = new byte[0];
         this.maxCacheR = Math.min(CACHE_TOP_LIMIT, 1 << (lmsParameters.getLMSigParam().getH() + 1));
         this.tCache = new byte[maxCacheR][];
-    }
-
-    /**
-     * The stand-in an HSS hierarchy holds for a level below the root while a fresh key is built: it carries
-     * the level's parameter set and size so that resetKeyToIndex can replace it, and refuses to act as a key.
-     */
-    static LMSPrivateKeyParameters createPlaceholder(LMSParameters lmsParameters, int maxQ)
-    {
-        return new PlaceholderLMSPrivateKey(lmsParameters, maxQ);
     }
 
     private LMSPrivateKeyParameters(LMSPrivateKeyParameters parent, int q, int maxQ)
@@ -520,18 +520,56 @@ public class LMSPrivateKeyParameters
      */
     byte[][] deriveChildKey()
     {
-        int q;
         synchronized (this)
         {
             checkDestroyed();
 
-            q = this.q;
             if (q >= maxQ)
             {
                 throw new ExhaustedPrivateKeyException("ots private key exhausted");
             }
+
+            return LMSEngine.deriveChildKey(lmsParameters.getLMOTSParam(), I, masterSecret, q);
         }
-        return LMSEngine.deriveChildKey(lmsParameters.getLMOTSParam(), I, masterSecret, q);
+    }
+
+    /**
+     * Derive the identifier and master seed of the tree below one-time key q of this key, which need
+     * not be the current one: HSS repositioning asks for the child at the leaf its index names. The
+     * index is not advanced. The derivation runs under the lock so that the secret is read whole.
+     *
+     * @return { I of the child tree, master seed of the child tree }.
+     */
+    byte[][] deriveChildKey(int q)
+    {
+        // maxQ rather than 2^h: the two coincide for a whole key, but a leaf beyond a shard's usage limit
+        // belongs to some other holder's range, and deriving its child is a misconfiguration to refuse.
+        if (q < 0 || q >= maxQ)
+        {
+            throw new IllegalArgumentException("q out of range");
+        }
+
+        synchronized (this)
+        {
+            checkDestroyed();
+
+            return LMSEngine.deriveChildKey(lmsParameters.getLMOTSParam(), I, masterSecret, q);
+        }
+    }
+
+    /**
+     * Whether this key is the tree with the given identifier and master seed. A Merkle tree is a
+     * function of those and the parameter sets, so two keys agreeing on them are the same tree at
+     * (possibly) different one-time keys.
+     */
+    boolean hasIdentity(byte[] I, byte[] masterSecret)
+    {
+        synchronized (this)
+        {
+            checkDestroyed();
+
+            return Arrays.areEqual(this.I, I) && Arrays.constantTimeAreEqual(this.masterSecret, masterSecret);
+        }
     }
 
     /**
