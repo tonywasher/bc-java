@@ -9,14 +9,14 @@ public class LMSParameters
     /**
      * Pair LMS tree parameters with the LM-OTS parameters of its one-time keys.
      *
-     * @param lmSigParam the LMS tree parameters.
-     * @param lmOTSParam the LM-OTS one-time signature parameters.
+     * @param sigParameters the LMS tree parameters.
+     * @param otsParameters the LM-OTS one-time signature parameters.
      * @return the parameter set.
      * @throws NullPointerException if either argument is null.
      */
-    public static LMSParameters create(LMSigParameters lmSigParam, LMOtsParameters lmOTSParam)
+    public static LMSParameters create(LMSigParameters sigParameters, LMOtsParameters otsParameters)
     {
-        return new LMSParameters(lmSigParam, lmOTSParam);
+        return new LMSParameters(sigParameters, otsParameters);
     }
 
     private final LMSigParameters lmSigParam;
