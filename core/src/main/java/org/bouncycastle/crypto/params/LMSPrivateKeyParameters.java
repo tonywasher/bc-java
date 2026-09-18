@@ -759,7 +759,8 @@ public class LMSPrivateKeyParameters
         {
             retainFirstPath();
 
-            pk = new LMSPublicKeyParameters(lmsParameters.getLMSigParam(), lmsParameters.getLMOTSParam(), findT(1), I);
+            // Tree nodes and I are immutable once published, so the public key shares them rather than copying.
+            pk = new LMSPublicKeyParameters(lmsParameters, findT(1), I);
             publicKey = pk;
         }
         return pk;

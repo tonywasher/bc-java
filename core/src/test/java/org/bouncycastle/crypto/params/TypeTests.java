@@ -25,7 +25,7 @@ public class TypeTests
         }
 
         {
-            Object o = new HSSPublicKeyParameters(0, new LMSPublicKeyParameters(null, null, null, null));
+            Object o = new HSSPublicKeyParameters(0, lmsPublicKey());
             assertTrue(o == HSSPublicKeyParameters.getInstance(o));
         }
 
@@ -35,7 +35,7 @@ public class TypeTests
         }
 
         {
-            Object o = new LMSPublicKeyParameters(null, null, null, null);
+            Object o = lmsPublicKey();
             assertTrue(o == LMSPublicKeyParameters.getInstance(o));
         }
     }
@@ -44,6 +44,12 @@ public class TypeTests
      * The key parameter constructors validate their arguments, so these are real - the point of the
      * test is only that getInstance() hands back an object of its own type unchanged.
      */
+    private static LMSPublicKeyParameters lmsPublicKey()
+    {
+        return new LMSPublicKeyParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w1,
+            null, null);
+    }
+
     private static LMSPrivateKeyParameters lmsKey()
     {
         return new LMSPrivateKeyParameters(LMSigParameters.lms_sha256_n32_h5,

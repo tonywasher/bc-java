@@ -18,19 +18,25 @@ public class LMSPublicKeyParameters
     extends LMSKeyParameters
     implements LMSContextBasedVerifier
 {
-    private final LMSigParameters parameterSet;
-    private final LMOtsParameters lmOtsType;
+    private final LMSParameters lmsParameters;
     private final byte[] I;
     private final byte[] T1;
 
     public LMSPublicKeyParameters(LMSigParameters parameterSet, LMOtsParameters lmOtsType, byte[] T1, byte[] I)
     {
+        this(LMSParameters.create(parameterSet, lmOtsType), Arrays.clone(T1), Arrays.clone(I));
+    }
+
+    /**
+     * Takes ownership of T1 and I: the caller must not modify them afterwards.
+     */
+    LMSPublicKeyParameters(LMSParameters lmsParameters, byte[] T1, byte[] I)
+    {
         super(false);
 
-        this.parameterSet = parameterSet;
-        this.lmOtsType = lmOtsType;
-        this.I = Arrays.clone(I);
-        this.T1 = Arrays.clone(T1);
+        this.lmsParameters = lmsParameters;
+        this.T1 = T1;
+        this.I = I;
     }
 
     public static LMSPublicKeyParameters getInstance(Object src)
@@ -61,7 +67,7 @@ public class LMSPublicKeyParameters
 
             byte[] T1 = new byte[sigParameters.getM()];
             ((DataInputStream)src).readFully(T1);
-            return new LMSPublicKeyParameters(sigParameters, ostTypeCode, T1, I);
+            return new LMSPublicKeyParameters(LMSParameters.create(sigParameters, ostTypeCode), T1, I);
         }
         else if (src instanceof byte[])
         {
@@ -102,17 +108,17 @@ public class LMSPublicKeyParameters
 
     public LMSigParameters getSigParameters()
     {
-        return parameterSet;
+        return lmsParameters.getLMSigParam();
     }
 
     public LMOtsParameters getOtsParameters()
     {
-        return lmOtsType;
+        return lmsParameters.getLMOTSParam();
     }
 
     public LMSParameters getLMSParameters()
     {
-        return LMSParameters.create(this.getSigParameters(), this.getOtsParameters());
+        return lmsParameters;
     }
 
     public byte[] getT1()
@@ -144,11 +150,7 @@ public class LMSPublicKeyParameters
 
         LMSPublicKeyParameters publicKey = (LMSPublicKeyParameters)o;
 
-        if (!parameterSet.equals(publicKey.parameterSet))
-        {
-            return false;
-        }
-        if (!lmOtsType.equals(publicKey.lmOtsType))
+        if (!lmsParameters.equals(publicKey.lmsParameters))
         {
             return false;
         }
@@ -162,8 +164,7 @@ public class LMSPublicKeyParameters
     @Override
     public int hashCode()
     {
-        int result = parameterSet.hashCode();
-        result = 31 * result + lmOtsType.hashCode();
+        int result = lmsParameters.hashCode();
         result = 31 * result + Arrays.hashCode(I);
         result = 31 * result + Arrays.hashCode(T1);
         return result;
@@ -176,8 +177,8 @@ public class LMSPublicKeyParameters
     {
         ByteArrayOutputStream bOut = new ByteArrayOutputStream();
 
-        u32str(parameterSet.getType(), bOut);
-        u32str(lmOtsType.getType(), bOut);
+        u32str(getSigParameters().getType(), bOut);
+        u32str(getOtsParameters().getType(), bOut);
         bytes(I, bOut);
         bytes(T1, bOut);
 
