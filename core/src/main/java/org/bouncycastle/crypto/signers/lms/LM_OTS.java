@@ -36,11 +36,12 @@ class LM_OTS
         int w = parameters.getW();
 
         // NB assumption about size of "w" not overflowing integer.
-        int twoWpow = (1 << w) - 1;
+        int maxDigit = (1 << w) - 1;
+        int digitCount = sLen * 8 / w;
 
-        for (int i = 0; i < (sLen * 8 / parameters.getW()); i++)
+        for (int i = 0; i < digitCount; i++)
         {
-            sum = sum + twoWpow - coef(S, i, parameters.getW());
+            sum = sum + maxDigit - coef(S, i, w);
         }
         return sum << parameters.getLs();
     }
