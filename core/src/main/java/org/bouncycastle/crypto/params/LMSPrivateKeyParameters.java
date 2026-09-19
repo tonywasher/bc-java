@@ -46,7 +46,7 @@ public class LMSPrivateKeyParameters
     // Two tiers of Merkle tree nodes are kept, neither of them secret: every node is published in some
     // signature or recomputed by every verifier.
     //
-    // tCache holds nodes 1 .. maxCacheR - 1 (at most 63, about 2 KB), computed on demand and kept for the
+    // tCache holds nodes 1 .. tCache.length - 1 (at most 63, about 2 KB), computed on demand and kept for the
     // life of the key. It is the tier the encoding persists, so a decoded key resumes with it. Caching
     // deeper nodes buys nothing that lasts: each leaf is consumed once by its parent, and an unbounded
     // cache of every node reaches 2 GB at h = 25. (The WeakHashMap this replaced keyed the deeper nodes
@@ -66,7 +66,6 @@ public class LMSPrivateKeyParameters
     // modified or wiped.
     //
     private final byte[][] tCache;
-    private final int maxCacheR;
     private RetainedPath retained;
 
     /**
@@ -127,7 +126,18 @@ public class LMSPrivateKeyParameters
      */
     static LMSPrivateKeyParameters createPlaceholder(LMSParameters lmsParameters, int maxQ)
     {
-        return new PlaceholderLMSPrivateKey(lmsParameters, maxQ);
+        return new LMSPrivateKeyParameters(lmsParameters, maxQ);
+    }
+
+    /**
+     * The node cache for a tree of the given height: room for nodes 1 .. length - 1, where length is
+     * the whole tree (2^(h + 1) nodes) or CACHE_TOP_LIMIT, whichever is smaller.
+     */
+    private static byte[][] createCache(LMSigParameters sigParameters)
+    {
+        int length = Math.min(CACHE_TOP_LIMIT, 1 << (sigParameters.getH() + 1));
+
+        return new byte[length][];
     }
 
     /**
@@ -174,8 +184,7 @@ public class LMSPrivateKeyParameters
         this.I = I;
         this.maxQ = maxQ;
         this.masterSecret = masterSecret;
-        this.maxCacheR = Math.min(CACHE_TOP_LIMIT, 1 << (sigParameters.getH() + 1));
-        this.tCache = new byte[maxCacheR][];
+        this.tCache = createCache(sigParameters);
     }
 
     /**
@@ -183,7 +192,7 @@ public class LMSPrivateKeyParameters
      * built with for the levels below the root, each of which resetKeyToIndex replaces from the
      * level above before the key is used. The sentinel values are deliberately ones the public
      * constructor refuses, so a placeholder can never be mistaken for a key that was merely built
-     * carelessly; a subclass using this must not present the result as a usable key.
+     * carelessly, and the key itself refuses to sign, publish, encode or derive from itself.
      *
      * @deprecated This class is not intended to be subclassed; the constructor will be removed.
      */
@@ -204,19 +213,16 @@ public class LMSPrivateKeyParameters
         this.I = new byte[0];
         this.maxQ = maxQ;
         this.masterSecret = new byte[0];
-        this.maxCacheR = Math.min(CACHE_TOP_LIMIT, 1 << (lmsParameters.getLMSigParam().getH() + 1));
-        this.tCache = new byte[maxCacheR][];
-    }
-
-    private LMSPrivateKeyParameters(LMSPrivateKeyParameters parent, int q, int maxQ)
-    {
-        this(parent, q, maxQ, Math.min(CACHE_TOP_LIMIT, 1 << parent.lmsParameters.getLMSigParam().getH()));
+        // No tree to cache: resetKeyToIndex replaces a placeholder before anything reaches its nodes. The
+        // absent cache is also what marks the key as a placeholder (checkNotPlaceholder), so one that leaked
+        // past the reset fails at its first use rather than encoding a bogus key.
+        this.tCache = null;
     }
 
     // Called under the parent's lock (extractKeyShard, repositionTo), which is what makes reading its
-    // retained path safe. I, masterSecret and tCache are shared by reference with the parent; the retained
-    // path too, but it is immutable and holds no secrets.
-    private LMSPrivateKeyParameters(LMSPrivateKeyParameters parent, int q, int maxQ, int maxCacheR)
+    // retained path and destroyed flag safe. I, masterSecret and tCache are shared by reference with the
+    // parent; the retained path too, but it is immutable and holds no secrets.
+    private LMSPrivateKeyParameters(LMSPrivateKeyParameters parent, int q, int maxQ)
     {
         super(true);
         this.lmsParameters = parent.lmsParameters;
@@ -224,7 +230,9 @@ public class LMSPrivateKeyParameters
         this.I = parent.I;
         this.maxQ = maxQ;
         this.masterSecret = parent.masterSecret;
-        this.maxCacheR = maxCacheR;
+        // the flag travels with the array it describes: a copy of a destroyed key must not present the
+        // zeroed seed as a live one
+        this.destroyed = parent.destroyed;
         this.tCache = parent.tCache;
         this.retained = parent.retained;
         this.publicKey = parent.publicKey;
@@ -254,7 +262,7 @@ public class LMSPrivateKeyParameters
                 "LMS private key q out of range: q=" + q + " 2^h=" + twoToH);
         }
 
-        return new LMSPrivateKeyParameters(this, q, twoToH, maxCacheR);
+        return new LMSPrivateKeyParameters(this, q, twoToH);
     }
 
     public static LMSPrivateKeyParameters getInstance(byte[] privEnc, byte[] pubEnc)
@@ -519,7 +527,7 @@ public class LMSPrivateKeyParameters
     {
         synchronized (this)
         {
-            checkDestroyed();
+            checkUsable();
 
             if (q >= maxQ)
             {
@@ -548,7 +556,7 @@ public class LMSPrivateKeyParameters
 
         synchronized (this)
         {
-            checkDestroyed();
+            checkUsable();
 
             return LMSEngine.deriveChildKey(lmsParameters.getLMOTSParam(), I, masterSecret, q);
         }
@@ -563,6 +571,7 @@ public class LMSPrivateKeyParameters
     {
         synchronized (this)
         {
+            // not checkUsable: resetKeyToIndex asks a placeholder this, and its empty I answers no
             checkDestroyed();
 
             return Arrays.areEqual(this.I, I) && Arrays.constantTimeAreEqual(this.masterSecret, masterSecret);
@@ -586,10 +595,6 @@ public class LMSPrivateKeyParameters
 
     public LMSContext generateLMSContext()
     {
-        // Step 1.
-        LMSigParameters sigParameters = this.getSigParameters();
-
-        // Step 2
         int q;
         byte[][] path;
 
@@ -600,7 +605,7 @@ public class LMSPrivateKeyParameters
         //
         synchronized (this)
         {
-            checkDestroyed();
+            checkUsable();
 
             if (this.q >= maxQ)
             {
@@ -610,7 +615,7 @@ public class LMSPrivateKeyParameters
             path = advanceRetainedPath(q);
         }
 
-        return LMSEngine.generateSignContext(sigParameters, lmsParameters.getLMOTSParam(), I, q, masterSecret, path);
+        return LMSEngine.generateSignContext(getSigParameters(), getOtsParameters(), I, q, masterSecret, path);
     }
 
     public byte[] generateSignature(LMSContext context)
@@ -691,7 +696,7 @@ public class LMSPrivateKeyParameters
 
         // clone first, check second: a destroy() that lands in between has set the flag before
         // it clears the array, so a stale copy is never handed out.
-        checkDestroyed();
+        checkUsable();
 
         return rv;
     }
@@ -722,11 +727,29 @@ public class LMSPrivateKeyParameters
         return destroyed;
     }
 
+    /**
+     * Refuses a key that cannot act as one: a destroyed key, or the placeholder an HSS hierarchy holds for
+     * a level not yet built (marked by having no node cache).
+     */
+    private void checkUsable()
+    {
+        checkDestroyed();
+        checkNotPlaceholder();
+    }
+
     private void checkDestroyed()
     {
         if (destroyed)
         {
             throw new IllegalStateException("key destroyed");
+        }
+    }
+
+    private void checkNotPlaceholder()
+    {
+        if (tCache == null)
+        {
+            throw new IllegalStateException("placeholder only");
         }
     }
 
@@ -757,6 +780,9 @@ public class LMSPrivateKeyParameters
         LMSPublicKeyParameters pk = publicKey;
         if (pk == null)
         {
+            // not checkUsable: a destroyed key still publishes its root where it is cached
+            checkNotPlaceholder();
+
             retainFirstPath();
 
             // Tree nodes and I are immutable once published, so the public key shares them rather than copying.
@@ -813,7 +839,7 @@ public class LMSPrivateKeyParameters
 
     byte[] findT(int r)
     {
-        if (r >= maxCacheR)
+        if (r >= tCache.length)
         {
             return calcT(r);
         }
@@ -906,7 +932,7 @@ public class LMSPrivateKeyParameters
                 for (int i = 0; i < fresh; ++i)
                 {
                     int node = r >> i;
-                    if (node < maxCacheR && tCache[node] == null)
+                    if (node < tCache.length && tCache[node] == null)
                     {
                         tCache[node] = anc[i];
                     }
@@ -945,9 +971,10 @@ public class LMSPrivateKeyParameters
             // These can be pre generated at the time of key generation and held within the private key.
             // However it will cost memory to have them stick around.
             //
-            checkDestroyed();
 
-            return LMSEngine.computeLeaf(tDigest, lmsParameters.getLMOTSParam(), I, r, r - twoToh, masterSecret);
+            checkUsable();
+
+            return LMSEngine.computeLeaf(tDigest, getOtsParameters(), I, r, r - twoToh, masterSecret);
         }
 
         byte[] t2r = findT(2 * r);
@@ -967,7 +994,9 @@ public class LMSPrivateKeyParameters
     {
         synchronized (tCache)
         {
-            for (int r = 1; r < cachedT.length && r < tCache.length; r++)
+            int limit = Math.min(cachedT.length, tCache.length);
+
+            for (int r = 1; r < limit; r++)
             {
                 if (cachedT[r] != null)
                 {
@@ -1048,7 +1077,7 @@ public class LMSPrivateKeyParameters
     public byte[] getEncoded()
         throws IOException
     {
-        checkDestroyed();
+        checkUsable();
 
         int q = getIndex();
 
@@ -1080,7 +1109,7 @@ public class LMSPrivateKeyParameters
 
         // The whole of the in-memory cache is eligible, so a decoded key resumes with the cache it was
         // encoded with; findT computes any node not yet there.
-        int cacheTop = maxCacheR;
+        int cacheTop = tCache.length;
 
         ByteArrayOutputStream bOut = new ByteArrayOutputStream();
 
@@ -1100,24 +1129,5 @@ public class LMSPrivateKeyParameters
         }
 
         return bOut.toByteArray();
-    }
-
-    private static class PlaceholderLMSPrivateKey
-        extends LMSPrivateKeyParameters
-    {
-        PlaceholderLMSPrivateKey(LMSParameters lmsParameters, int maxQ)
-        {
-            super(lmsParameters, maxQ);
-        }
-
-        public LMSContext generateLMSContext()
-        {
-            throw new RuntimeException("placeholder only");
-        }
-
-        public LMSPublicKeyParameters getPublicKey()
-        {
-            throw new RuntimeException("placeholder only");
-        }
     }
 }
