@@ -20,12 +20,12 @@ import org.bouncycastle.math.ec.ECCurve;
  * RFC 9380 defines optimized sqrt_ratio formulas for certain curves where the field prime p
  * satisfies special congruences (e.g. p ≡ 3 mod 4 or p ≡ 5 mod 8). However, those optimizations are
  * curve-specific and do not apply to all hash-to-curve suites. This implementation instead follows
- * the fully generic algorithm from Section 5.6.3 of RFC 9380, which is valid for any elliptic curve
+ * the fully generic algorithm from Appendix F.2.1.1 of RFC 9380, which is valid for any elliptic curve
  * defined over a prime field Fp.
  * </p>
  *
  * <p>
- * This generic version supports all curves used in the RFC 9830 test vectors, including the NIST
+ * This generic version supports all curves used in the RFC 9380 test vectors, including the NIST
  * P-256 / P-384 / P-521 curves, Curve25519, Edwards25519 (Ristretto255), Curve448, and Edwards448
  * (Decaf448). It provides a single uniform implementation suitable for all supported hash-to-curve
  * suites.
@@ -62,8 +62,10 @@ public class GenericSqrtRatioCalculator implements SqrtRatioCalculator
         this.c3 = this.c2.subtract(BigInteger.ONE).divide(BigInteger.valueOf(2));
         this.c4 = BigInteger.valueOf(2).pow(this.c1).subtract(BigInteger.ONE);
         this.c5 = BigInteger.valueOf(2).pow(this.c1 - 1);
-        this.c6 = z.modPow(this.c2, this.q);
-        this.c7 = z.modPow(this.c2.add(BigInteger.ONE).divide(BigInteger.valueOf(2)), q);
+        // c2 = 2*c3 + 1: share z^c3 between the two constants (RFC 9380, F.2.1.1).
+        BigInteger zToC3 = z.modPow(this.c3, this.q);
+        this.c7 = zToC3.multiply(z).mod(this.q);
+        this.c6 = zToC3.multiply(this.c7).mod(this.q);
     }
 
     private int calculateC1()
