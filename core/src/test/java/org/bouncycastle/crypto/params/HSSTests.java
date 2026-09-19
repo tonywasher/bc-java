@@ -1522,6 +1522,75 @@ public class HSSTests
     }
 
     /**
+     * A component key given a usage limit narrower than its tree keeps it. rangeTestKeys judges a
+     * level exhausted by the whole tree (2^h), not by the key's own maxQ: once the bottom key has
+     * given its one signature, the range test still passes the level and the bottom key's own claim
+     * refuses, leaving the HSS index where it was. A maxQ test would instead replace the level with
+     * a fresh full tree - lifting a limit the caller set, and spending a root one-time key to sign
+     * it. The bc-csharp IndexAndComponentIndexClaimedTogether test carries the same case.
+     */
+    public void testNarrowedComponentKeyIsNotReplaced()
+        throws Exception
+    {
+        LMSigParameters sigParams = LMSigParameters.lms_sha256_n32_h5;
+        LMOtsParameters otsParams = LMOtsParameters.sha256_n32_w8;
+        int twoToH = 1 << sigParams.getH();
+        byte[] msg = Hex.decode("48656c6c6f");
+
+        byte[] I = Hex.decode("000102030405060708090a0b0c0d0e0f");
+        byte[] seed = Hex.decode("0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20");
+
+        LMSPrivateKeyParameters root = new LMSPrivateKeyParameters(sigParams, otsParams, 0, I, twoToH, seed);
+        byte[][] child = root.deriveChildKey();
+        // one one-time key allowed, in a tree of 2^h
+        LMSPrivateKeyParameters bottom = new LMSPrivateKeyParameters(sigParams, otsParams, 0, child[0], 1, child[1]);
+
+        // the root signs the bottom key's public key, which advances the root's q to 1 - the
+        // position resetKeyToIndex expects of an intermediate level, so the key is kept as built
+        LMSSigner rootSigner = new LMSSigner();
+        rootSigner.init(true, root);
+        LMSSignature chain = LMSSignature.getInstance(
+            rootSigner.generateSignature(bottom.getPublicKey().getEncoded()));
+
+        List<LMSPrivateKeyParameters> keys = new ArrayList<LMSPrivateKeyParameters>();
+        keys.add(root);
+        keys.add(bottom);
+        List<LMSSignature> sigs = new ArrayList<LMSSignature>();
+        sigs.add(chain);
+
+        HSSPrivateKeyParameters hss = new HSSPrivateKeyParameters(2, keys, sigs, 0, (long)twoToH * twoToH);
+
+        assertSame("the bottom key was regenerated, so its usage limit is gone", bottom, hss.getKeys().get(1));
+
+        // the one signature the bottom key can give
+        HSSSigner signer = new HSSSigner();
+        signer.init(true, hss);
+        byte[] first = signer.generateSignature(msg);
+        HSSSigner verifier = new HSSSigner();
+        verifier.init(false, hss.getPublicKey());
+        assertTrue(verifier.verifySignature(msg, first));
+        assertEquals(1, hss.getIndex());
+
+        // the next passes the range test but is refused by the bottom key's own claim
+        try
+        {
+            signer.generateSignature(msg);
+            fail("a narrowed bottom key was replaced rather than refused");
+        }
+        catch (ExhaustedPrivateKeyException e)
+        {
+            assertEquals("ots private key exhausted", e.getMessage());
+        }
+        assertEquals("a refused claim moved the HSS index", 1, hss.getIndex());
+        assertSame("the refused level was replaced", bottom, hss.getKeys().get(1));
+        assertEquals(1, bottom.getIndex());
+
+        // and the key still encodes to something its own decoder accepts
+        HSSPrivateKeyParameters decoded = HSSPrivateKeyParameters.getInstance(hss.getEncoded());
+        assertEquals(1, decoded.getIndex());
+    }
+
+    /**
      * The HSS index and the bottom key's one-time index q are claimed together. They are two
      * records of the same position - checkIndexAgainstKeys requires them to agree at decode - and
      * they used to be claimed under two different monitors: incIndex() under the HSS key's, then

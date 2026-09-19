@@ -86,6 +86,18 @@ public class HSSPrivateKeyParameters
             return sigList;
         }
 
+        LMSParameters[] getLMSParameters()
+        {
+            LMSParameters[] parms = new LMSParameters[keys.length];
+
+            for (int i = 0; i < keys.length; i++)
+            {
+                parms[i] = keys[i].getLMSParameters();
+            }
+
+            return parms;
+        }
+
         LMSPrivateKeyParameters[] copyKeys()
         {
             return (LMSPrivateKeyParameters[])keys.clone();
@@ -439,19 +451,7 @@ public class HSSPrivateKeyParameters
 
     public LMSParameters[] getLMSParameters()
     {
-        Hierarchy hierarchy = this.hierarchy;
-        int len = hierarchy.size();
-
-        LMSParameters[] parms = new LMSParameters[len];
-
-        for (int i = 0; i < len; i++)
-        {
-            LMSPrivateKeyParameters lmsPrivateKey = hierarchy.getKey(i);
-
-            parms[i] = lmsPrivateKey.getLMSParameters();
-        }
-
-        return parms;
+        return hierarchy.getLMSParameters();
     }
 
     synchronized void incIndex()
@@ -709,30 +709,36 @@ public class HSSPrivateKeyParameters
         {
             if (index >= indexLimit)
             {
-                throw new ExhaustedPrivateKeyException(
-                    "hss private key" +
-                        ((isShard) ? " shard" : "") +
-                        " is exhausted");
+                throw new ExhaustedPrivateKeyException("hss private key" + (isShard ? " shard" : "") +
+                    " is exhausted");
             }
-
 
             int L = l;
             int d = L;
-            Hierarchy prv = hierarchy;
-            // >= rather than ==: an index above 2^h steps straight over an equality test
-            // (github #2414). Decode now rejects such a q, so this is belt and braces.
-            while (prv.getKey(d - 1).getIndex() >= 1 << (prv.getKey(d - 1).getSigParameters().getH()))
+            Hierarchy currentHierarchy = this.hierarchy;
+            while (true)
             {
-                d = d - 1;
-                if (d == 0)
+                LMSPrivateKeyParameters key = currentHierarchy.getKey(d - 1);
+
+                // The whole tree, not the key's own maxQ: a component key given a narrower usage limit is
+                // left to refuse for itself once it reaches it. Judging it by maxQ would replace the level
+                // with a fresh full tree, lifting a limit the caller set and spending a one-time key of the
+                // level above to sign it (testNarrowedComponentKeyIsNotReplaced).
+                int keyIndexLimit = 1 << key.getSigParameters().getH();
+
+                // < rather than !=: an index above 2^h steps straight over an equality test
+                // (github #2414). Decode now rejects such a q, so this is belt and braces.
+                if (key.getIndex() < keyIndexLimit)
                 {
-                    throw new ExhaustedPrivateKeyException(
-                        "hss private key" +
-                            ((isShard) ? " shard" : "") +
-                            " is exhausted the maximum limit for this HSS private key");
+                    break;
+                }
+
+                if (--d == 0)
+                {
+                    throw new ExhaustedPrivateKeyException("hss private key" + (isShard ? " shard" : "") +
+                        " has no one-time keys left at any level");
                 }
             }
-
 
             if (d < L)
             {
