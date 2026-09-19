@@ -150,7 +150,7 @@ public class PqcMalformedInputTest
         // LMS (stateful, variable structure decode).
         LMSKeyPairGenerator lmsGen = new LMSKeyPairGenerator();
         lmsGen.init(new LMSKeyGenerationParameters(
-            new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4), new SecureRandom()));
+            LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4), new SecureRandom()));
         AsymmetricCipherKeyPair lmsKp = lmsGen.generateKeyPair();
         LMSSigner lms = new LMSSigner();
         lms.init(false, lmsKp.getPublic());
@@ -160,7 +160,7 @@ public class PqcMalformedInputTest
         // HSS (stateful, variable structure decode).
         HSSKeyPairGenerator hssGen = new HSSKeyPairGenerator();
         hssGen.init(new HSSKeyGenerationParameters(
-            new LMSParameters[]{ new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4) },
+            new LMSParameters[]{ LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4) },
             new SecureRandom()));
         AsymmetricCipherKeyPair hssKp = hssGen.generateKeyPair();
         HSSSigner hss = new HSSSigner();

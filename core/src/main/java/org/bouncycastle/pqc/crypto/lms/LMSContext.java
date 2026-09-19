@@ -5,7 +5,7 @@ import org.bouncycastle.crypto.Digest;
 import static org.bouncycastle.pqc.crypto.lms.LM_OTS.MAX_HASH;
 
 /**
- * @deprecated use {@link org.bouncycastle.crypto.signers.LMSContext} instead.
+ * @deprecated use {@link org.bouncycastle.crypto.signers.lms.LMSContext} instead.
  */
 @Deprecated
 public class LMSContext

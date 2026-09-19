@@ -128,10 +128,11 @@ public class HashBasedKeyDestructionTest
         sign("LMS", BC, shard, kp);
     }
 
+    @SuppressWarnings("deprecation") // getMasterSecret is deprecated but must still refuse a destroyed key
     public void testLightweightLMSDestroy()
         throws Exception
     {
-        LMSParameters lmsParams = new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4);
+        LMSParameters lmsParams = LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4);
 
         LMSKeyPairGenerator kpGen = new LMSKeyPairGenerator();
         kpGen.init(new LMSKeyGenerationParameters(lmsParams, new SecureRandom()));
@@ -187,7 +188,7 @@ public class HashBasedKeyDestructionTest
     public void testLightweightHSSDestroy()
         throws Exception
     {
-        LMSParameters h5 = new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4);
+        LMSParameters h5 = LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4);
 
         HSSKeyPairGenerator kpGen = new HSSKeyPairGenerator();
         kpGen.init(new HSSKeyGenerationParameters(new LMSParameters[]{ h5, h5 }, new SecureRandom()));

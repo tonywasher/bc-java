@@ -31,7 +31,7 @@ public class HSSTest
 
         kpGen.init(new HSSKeyGenerationParameters(
             new LMSParameters[]{
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4)
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4)
             }, new SecureRandom()));
 
         AsymmetricCipherKeyPair kp = kpGen.generateKeyPair();
@@ -59,8 +59,8 @@ public class HSSTest
 
         kpGen.init(new HSSKeyGenerationParameters(
             new LMSParameters[]{
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4)
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4)
             }, new SecureRandom()));
 
         AsymmetricCipherKeyPair kp = kpGen.generateKeyPair();
@@ -84,8 +84,8 @@ public class HSSTest
 
         kpGen.init(new HSSKeyGenerationParameters(
             new LMSParameters[]{
-                new LMSParameters(LMSigParameters.lms_sha256_n24_h5, LMOtsParameters.sha256_n24_w4),
-                new LMSParameters(LMSigParameters.lms_sha256_n24_h5, LMOtsParameters.sha256_n24_w4)
+                LMSParameters.create(LMSigParameters.lms_sha256_n24_h5, LMOtsParameters.sha256_n24_w4),
+                LMSParameters.create(LMSigParameters.lms_sha256_n24_h5, LMOtsParameters.sha256_n24_w4)
             }, new SecureRandom()));
 
         AsymmetricCipherKeyPair kp = kpGen.generateKeyPair();
@@ -109,8 +109,8 @@ public class HSSTest
 
         kpGen.init(new HSSKeyGenerationParameters(
             new LMSParameters[]{
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4)
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4)
             }, new SecureRandom()));
 
         AsymmetricCipherKeyPair kp = kpGen.generateKeyPair();
@@ -150,8 +150,8 @@ public class HSSTest
 
         kpGen.init(new HSSKeyGenerationParameters(
             new LMSParameters[]{
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4)
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4)
             }, new SecureRandom()));
         
         AsymmetricCipherKeyPair kp = kpGen.generateKeyPair();
@@ -225,7 +225,7 @@ public class HSSTest
         AsymmetricCipherKeyPairGenerator kpGen = new HSSKeyPairGenerator();
         kpGen.init(new HSSKeyGenerationParameters(
             new LMSParameters[]{
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4)
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4)
             }, new SecureRandom()));
         HSSPublicKeyParameters pubKey = (HSSPublicKeyParameters)kpGen.generateKeyPair().getPublic();
 
@@ -264,8 +264,8 @@ public class HSSTest
 
         kpGen.init(new HSSKeyGenerationParameters(
             new LMSParameters[]{
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4)
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4)
             }, new SecureRandom()));
 
         AsymmetricCipherKeyPair kp = kpGen.generateKeyPair();

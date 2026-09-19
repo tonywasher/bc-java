@@ -33,8 +33,8 @@ public class HSSPrivateKeyInfoExample
     {
         // 1. Generate an HSS key pair.
         LMSParameters[] hssLevels = new LMSParameters[]{
-            new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w8),
-            new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w8)
+            LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w8),
+            LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w8)
         };
 
         HSSKeyPairGenerator kpg = new HSSKeyPairGenerator();

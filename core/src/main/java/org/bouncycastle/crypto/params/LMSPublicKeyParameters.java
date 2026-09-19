@@ -9,26 +9,34 @@ import java.io.InputStream;
 import org.bouncycastle.crypto.signers.LMSContextBasedVerifier;
 import org.bouncycastle.crypto.signers.lms.LMSContext;
 import org.bouncycastle.crypto.signers.lms.LMSEngine;
+import org.bouncycastle.crypto.signers.lms.LMSSignature;
 import org.bouncycastle.util.Arrays;
+import org.bouncycastle.util.Exceptions;
 import org.bouncycastle.util.io.Streams;
 
 public class LMSPublicKeyParameters
     extends LMSKeyParameters
     implements LMSContextBasedVerifier
 {
-    private final LMSigParameters parameterSet;
-    private final LMOtsParameters lmOtsType;
+    private final LMSParameters lmsParameters;
     private final byte[] I;
     private final byte[] T1;
 
     public LMSPublicKeyParameters(LMSigParameters parameterSet, LMOtsParameters lmOtsType, byte[] T1, byte[] I)
     {
+        this(LMSParameters.create(parameterSet, lmOtsType), Arrays.clone(T1), Arrays.clone(I));
+    }
+
+    /**
+     * Takes ownership of T1 and I: the caller must not modify them afterwards.
+     */
+    LMSPublicKeyParameters(LMSParameters lmsParameters, byte[] T1, byte[] I)
+    {
         super(false);
 
-        this.parameterSet = parameterSet;
-        this.lmOtsType = lmOtsType;
-        this.I = Arrays.clone(I);
-        this.T1 = Arrays.clone(T1);
+        this.lmsParameters = lmsParameters;
+        this.T1 = T1;
+        this.I = I;
     }
 
     public static LMSPublicKeyParameters getInstance(Object src)
@@ -41,8 +49,8 @@ public class LMSPublicKeyParameters
         else if (src instanceof DataInputStream)
         {
             int pubType = ((DataInputStream)src).readInt();
-            LMSigParameters lmsParameter = LMSigParameters.getParametersForType(pubType);
-            if (lmsParameter == null)
+            LMSigParameters sigParameters = LMSigParameters.getParametersForType(pubType);
+            if (sigParameters == null)
             {
                 throw new IOException("unknown LMS type code: " + pubType);
             }
@@ -57,9 +65,9 @@ public class LMSPublicKeyParameters
             byte[] I = new byte[16];
             ((DataInputStream)src).readFully(I);
 
-            byte[] T1 = new byte[lmsParameter.getM()];
+            byte[] T1 = new byte[sigParameters.getM()];
             ((DataInputStream)src).readFully(T1);
-            return new LMSPublicKeyParameters(lmsParameter, ostTypeCode, T1, I);
+            return new LMSPublicKeyParameters(LMSParameters.create(sigParameters, ostTypeCode), T1, I);
         }
         else if (src instanceof byte[])
         {
@@ -100,17 +108,17 @@ public class LMSPublicKeyParameters
 
     public LMSigParameters getSigParameters()
     {
-        return parameterSet;
+        return lmsParameters.getLMSigParam();
     }
 
     public LMOtsParameters getOtsParameters()
     {
-        return lmOtsType;
+        return lmsParameters.getLMOTSParam();
     }
 
     public LMSParameters getLMSParameters()
     {
-        return new LMSParameters(this.getSigParameters(), this.getOtsParameters());
+        return lmsParameters;
     }
 
     public byte[] getT1()
@@ -142,11 +150,7 @@ public class LMSPublicKeyParameters
 
         LMSPublicKeyParameters publicKey = (LMSPublicKeyParameters)o;
 
-        if (!parameterSet.equals(publicKey.parameterSet))
-        {
-            return false;
-        }
-        if (!lmOtsType.equals(publicKey.lmOtsType))
+        if (!lmsParameters.equals(publicKey.lmsParameters))
         {
             return false;
         }
@@ -160,8 +164,7 @@ public class LMSPublicKeyParameters
     @Override
     public int hashCode()
     {
-        int result = parameterSet.hashCode();
-        result = 31 * result + lmOtsType.hashCode();
+        int result = lmsParameters.hashCode();
         result = 31 * result + Arrays.hashCode(I);
         result = 31 * result + Arrays.hashCode(T1);
         return result;
@@ -174,17 +177,30 @@ public class LMSPublicKeyParameters
     {
         ByteArrayOutputStream bOut = new ByteArrayOutputStream();
 
-        u32str(parameterSet.getType(), bOut);
-        u32str(lmOtsType.getType(), bOut);
+        u32str(getSigParameters().getType(), bOut);
+        u32str(getOtsParameters().getType(), bOut);
         bytes(I, bOut);
         bytes(T1, bOut);
 
         return bOut.toByteArray();
     }
 
+    /**
+     * The context a message is absorbed into before verifying an encoded LMS signature against this
+     * key. Consumed by {@link #verify(LMSContext)}.
+     *
+     * @throws IllegalStateException if the signature does not decode.
+     */
     public LMSContext generateLMSContext(byte[] signature)
     {
-        return LMSEngine.generateVerifyContext(this, signature);
+        try
+        {
+            return LMSEngine.generateVerifyContext(this, LMSSignature.getInstance(signature));
+        }
+        catch (IOException e)
+        {
+            throw Exceptions.illegalStateException("cannot parse signature", e);
+        }
     }
 
     public boolean verify(LMSContext context)

@@ -8,13 +8,11 @@ import org.bouncycastle.util.Pack;
 
 class LM_OTS
 {
-
     private static final short D_PBLC = (short)0x8080;
     private static final int ITER_K = 20;
     private static final int ITER_PREV = 23;
     private static final int ITER_J = 22;
     static final int SEED_RANDOMISER_INDEX = ~2;
-    static final int MAX_HASH = 32;
 
     static final short D_MESG = (short)0x8181;
 
@@ -37,101 +35,93 @@ class LM_OTS
         int w = parameters.getW();
 
         // NB assumption about size of "w" not overflowing integer.
-        int twoWpow = (1 << w) - 1;
+        int maxDigit = (1 << w) - 1;
+        int digitCount = sLen * 8 / w;
 
-        for (int i = 0; i < (sLen * 8 / parameters.getW()); i++)
+        for (int i = 0; i < digitCount; i++)
         {
-            sum = sum + twoWpow - coef(S, i, parameters.getW());
+            sum = sum + maxDigit - coef(S, i, w);
         }
         return sum << parameters.getLs();
     }
 
-
-    public static LMOtsPublicKey lms_ots_generatePublicKey(LMOtsPrivateKey privateKey)
+    /**
+     * Append the checksum of the first n bytes of Q to them, as the two bytes the chains after the
+     * message digest carry (RFC 8554 sec. 4.5).
+     */
+    private static void appendCksm(byte[] Q, int n, LMOtsParameters parameters)
     {
-        byte[] K = lms_ots_generatePublicKey(privateKey.getParameter(), privateKey.getI(), privateKey.getQ(), privateKey.getMasterSecret());
-        return new LMOtsPublicKey(privateKey.getParameter(), privateKey.getI(), privateKey.getQ(), K);
+        int cs = cksm(Q, n, parameters);
+        Pack.shortToBigEndian((short)cs, Q, n);
     }
+
 
     public static byte[] lms_ots_generatePublicKey(LMOtsParameters parameter, byte[] I, int q, byte[] masterSecret)
     {
         //
         // Start hash that computes the final value.
         //
-        Digest publicContext = DigestUtil.getDigest(parameter);
+        int p = parameter.getP();
+        int n = parameter.getN();
+        int maxDigit = (1 << parameter.getW()) - 1;
+
+        Digest publicKeyDigest = DigestUtil.getDigest(parameter);
         byte[] prehashPrefix = Composer.compose()
             .bytes(I)
             .u32str(q)
             .u16str(D_PBLC)
             .padUntil(0, 22)
             .build();
-        publicContext.update(prehashPrefix, 0, prehashPrefix.length);
+        publicKeyDigest.update(prehashPrefix, 0, prehashPrefix.length);
 
-        Digest ctx = DigestUtil.getDigest(parameter);
+        Digest chainDigest = DigestUtil.getDigest(parameter);
 
         byte[] buf = Composer.compose()
             .bytes(I)
             .u32str(q)
-            .padUntil(0, 23 + ctx.getDigestSize())
+            .padUntil(0, 23 + chainDigest.getDigestSize())
             .build();
-
 
         SeedDerive derive = new SeedDerive(I, masterSecret, DigestUtil.getDigest(parameter));
         derive.setQ(q);
         derive.setJ(0);
 
-        int p = parameter.getP();
-        int n = parameter.getN();
-        final int twoToWminus1 = (1 << parameter.getW()) - 1;
-
-
         for (int i = 0; i < p; i++)
         {
             derive.deriveSeed(buf, i < p - 1, ITER_PREV); // Private Key!
             Pack.shortToBigEndian((short)i, buf, ITER_K);
-            for (int j = 0; j < twoToWminus1; j++)
+            for (int j = 0; j < maxDigit; j++)
             {
                 buf[ITER_J] = (byte)j;
-                ctx.update(buf, 0, buf.length);
-                ctx.doFinal(buf, ITER_PREV);
+                chainDigest.update(buf, 0, buf.length);
+                chainDigest.doFinal(buf, ITER_PREV);
             }
-            publicContext.update(buf, ITER_PREV, n);
+            publicKeyDigest.update(buf, ITER_PREV, n);
         }
 
-        byte[] K = new byte[publicContext.getDigestSize()];
-        publicContext.doFinal(K, 0);
-
+        byte[] K = new byte[publicKeyDigest.getDigestSize()];
+        publicKeyDigest.doFinal(K, 0);
         return K;
-
     }
 
+    // TODO[lms] Remove as unused?
     public static LMOtsSignature lm_ots_generate_signature(LMSigParameters sigParams, LMOtsPrivateKey privateKey, byte[][] path, byte[] message, boolean preHashed)
     {
+        // The randomizer C is an input to Q and is carried in the signature for the verifier to reuse, so a
+        // caller supplying Q must supply the C it hashed into it; there is no parameter here to receive it.
+        if (preHashed)
+        {
+            throw new IllegalArgumentException("pre-hashed signing must use LMOtsGenerateSignature");
+        }
+
         //
         // Add the randomizer.
         //
+        LMSContext qCtx = privateKey.getSignatureContext(sigParams, path);
 
-        byte[] C;
-        byte[] Q = new byte[MAX_HASH + 2];
+        LmsUtils.byteArray(message, 0, message.length, qCtx);
 
-        if (!preHashed)
-        {
-            LMSContext qCtx = privateKey.getSignatureContext(sigParams, path);
-
-            LmsUtils.byteArray(message, 0, message.length, qCtx);
-
-            C = qCtx.getC();
-            Q = qCtx.getQ();
-        }
-        else
-        {
-            int n = privateKey.getParameter().getN();
-            
-            C = new byte[n];
-            System.arraycopy(message, 0, Q, 0, n);
-        }
-
-        return lm_ots_generate_signature(privateKey, Q, C);
+        return lm_ots_generate_signature(privateKey, qCtx.collectQ(privateKey.getParameter()), qCtx.getC());
     }
 
     public static LMOtsSignature lm_ots_generate_signature(LMOtsPrivateKey privateKey, byte[] Q, byte[] C)
@@ -148,9 +138,7 @@ class LM_OTS
 
         SeedDerive derive = privateKey.getDerivationFunction();
 
-        int cs = cksm(Q, n, parameter);
-        Q[n] = (byte)((cs >>> 8) & 0xFF);
-        Q[n + 1] = (byte)cs;
+        appendCksm(Q, n, parameter);
 
         byte[] tmp = Composer.compose().bytes(privateKey.getI()).u32str(privateKey.getQ()).padUntil(0, ITER_PREV + n).build();
 
@@ -172,9 +160,16 @@ class LM_OTS
         return new LMOtsSignature(parameter, C, sigComposer);
     }
 
+    // TODO[lms] Remove as unused (and convert tests)?
     public static boolean lm_ots_validate_signature(LMOtsPublicKey publicKey, LMOtsSignature signature, byte[] message, boolean prehashed)
         throws LMSException
     {
+        // This entry point always hashes the message itself; a caller holding Q needs the context-based
+        // LMOtsValidateSignatureCalculate overload.
+        if (prehashed)
+        {
+            throw new IllegalArgumentException("pre-hashed verification must use an LMSContext");
+        }
         if (!signature.getType().equals(publicKey.getParameter()))
         {
             throw new LMSException("public key and signature ots types do not match");
@@ -188,32 +183,18 @@ class LM_OTS
 
         LmsUtils.byteArray(message, ctx);
 
-        return lm_ots_validate_signature_calculate(ctx);
+        return ctx.calculateKc();
     }
 
-    public static byte[] lm_ots_validate_signature_calculate(LMSContext context)
+    static byte[] calculateKc(LMOtsPublicKey publicKey, LMOtsSignature signature, byte[] Q)
     {
-        LMOtsPublicKey publicKey = context.getPublicKey();
         LMOtsParameters parameter = publicKey.getParameter();
-        Object sig = context.getSignature();
-        LMOtsSignature signature;
-        if (sig instanceof LMSSignature)
-        {
-            signature = ((LMSSignature)sig).getOtsSignature();
-        }
-        else
-        {
-            signature = (LMOtsSignature)sig;
-        }
 
         int n = parameter.getN();
         int w = parameter.getW();
         int p = parameter.getP();
-        byte[] Q = context.getQ();
 
-        int cs = cksm(Q, n, parameter);
-        Q[n] = (byte)((cs >>> 8) & 0xFF);
-        Q[n + 1] = (byte)cs;
+        appendCksm(Q, n, parameter);
 
         byte[] I = publicKey.getI();
         int    q = publicKey.getQ();

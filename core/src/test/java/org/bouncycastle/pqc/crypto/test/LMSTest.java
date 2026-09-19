@@ -38,7 +38,7 @@ public class LMSTest
         AsymmetricCipherKeyPairGenerator kpGen = new LMSKeyPairGenerator();
 
         kpGen.init(new LMSKeyGenerationParameters(
-            new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4), new SecureRandom()));
+            LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4), new SecureRandom()));
 
         AsymmetricCipherKeyPair kp = kpGen.generateKeyPair();
 
@@ -60,7 +60,7 @@ public class LMSTest
         AsymmetricCipherKeyPairGenerator kpGen = new LMSKeyPairGenerator();
 
         kpGen.init(new LMSKeyGenerationParameters(
-            new LMSParameters(LMSigParameters.lms_sha256_n24_h5, LMOtsParameters.sha256_n24_w4), new SecureRandom()));
+            LMSParameters.create(LMSigParameters.lms_sha256_n24_h5, LMOtsParameters.sha256_n24_w4), new SecureRandom()));
 
         AsymmetricCipherKeyPair kp = kpGen.generateKeyPair();
 
@@ -82,7 +82,7 @@ public class LMSTest
         AsymmetricCipherKeyPairGenerator kpGen = new LMSKeyPairGenerator();
 
         kpGen.init(new LMSKeyGenerationParameters(
-            new LMSParameters(LMSigParameters.lms_shake256_n24_h5, LMOtsParameters.shake256_n24_w4), new SecureRandom()));
+            LMSParameters.create(LMSigParameters.lms_shake256_n24_h5, LMOtsParameters.shake256_n24_w4), new SecureRandom()));
 
         AsymmetricCipherKeyPair kp = kpGen.generateKeyPair();
 
@@ -106,7 +106,7 @@ public class LMSTest
         AsymmetricCipherKeyPairGenerator kpGen = new LMSKeyPairGenerator();
 
         kpGen.init(new LMSKeyGenerationParameters(
-            new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4), new SecureRandom()));
+            LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4), new SecureRandom()));
 
         AsymmetricCipherKeyPair kp = kpGen.generateKeyPair();
 
@@ -200,7 +200,7 @@ public class LMSTest
 
         LMSKeyPairGenerator lmsKpg = new LMSKeyPairGenerator();
         lmsKpg.init(new LMSKeyGenerationParameters(
-            new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4), rnd));
+            LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4), rnd));
         AsymmetricCipherKeyPair lmsKp = lmsKpg.generateKeyPair();
 
         LMSSigner lmsSigner = new LMSSigner();
@@ -223,8 +223,8 @@ public class LMSTest
 
         HSSKeyPairGenerator hssKpg = new HSSKeyPairGenerator();
         hssKpg.init(new HSSKeyGenerationParameters(new LMSParameters[]{
-            new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
-            new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4)}, rnd));
+            LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
+            LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4)}, rnd));
         AsymmetricCipherKeyPair hssKp = hssKpg.generateKeyPair();
 
         HSSSigner hssSigner = new HSSSigner();
@@ -357,7 +357,7 @@ public class LMSTest
     {
         AsymmetricCipherKeyPairGenerator kpGen = new LMSKeyPairGenerator();
         kpGen.init(new LMSKeyGenerationParameters(
-            new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4), new SecureRandom()));
+            LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4), new SecureRandom()));
         LMSPublicKeyParameters pubKey = (LMSPublicKeyParameters)kpGen.generateKeyPair().getPublic();
 
         // q (4 bytes) followed by an unknown LM-OTS type code (0x7FFFFFFF).
@@ -389,7 +389,7 @@ public class LMSTest
     {
         AsymmetricCipherKeyPairGenerator kpGen = new LMSKeyPairGenerator();
         kpGen.init(new LMSKeyGenerationParameters(
-            new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4), new SecureRandom()));
+            LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4), new SecureRandom()));
         LMSPublicKeyParameters pubKey = (LMSPublicKeyParameters)kpGen.generateKeyPair().getPublic();
 
         LMOtsParameters ots = LMOtsParameters.sha256_n32_w4;
@@ -426,7 +426,7 @@ public class LMSTest
         AsymmetricCipherKeyPairGenerator kpGen = new LMSKeyPairGenerator();
 
         kpGen.init(new LMSKeyGenerationParameters(
-            new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4), new SecureRandom()));
+            LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4), new SecureRandom()));
 
         AsymmetricCipherKeyPair kp = kpGen.generateKeyPair();
 

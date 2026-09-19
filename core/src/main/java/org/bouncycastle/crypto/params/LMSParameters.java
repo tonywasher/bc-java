@@ -1,14 +1,65 @@
 package org.bouncycastle.crypto.params;
 
+/**
+ * An LMS parameter set: the LMS tree parameters paired with the LM-OTS parameters of its one-time keys.
+ * Obtain instances via {@link #create(LMSigParameters, LMOtsParameters)}.
+ */
 public class LMSParameters
 {
+    /**
+     * Pair LMS tree parameters with the LM-OTS parameters of its one-time keys.
+     *
+     * @param sigParameters the LMS tree parameters.
+     * @param otsParameters the LM-OTS one-time signature parameters.
+     * @return the parameter set.
+     * @throws NullPointerException if either argument is null.
+     */
+    public static LMSParameters create(LMSigParameters sigParameters, LMOtsParameters otsParameters)
+    {
+        return new LMSParameters(sigParameters, otsParameters);
+    }
+
     private final LMSigParameters lmSigParam;
     private final LMOtsParameters lmOTSParam;
 
+    /**
+     * @deprecated Use {@link #create(LMSigParameters, LMOtsParameters)}; this class is not intended to be subclassed
+     * and this constructor will be made private.
+     */
+    @Deprecated
     public LMSParameters(LMSigParameters lmSigParam, LMOtsParameters lmOTSParam)
     {
+        if (lmSigParam == null)
+        {
+            throw new NullPointerException("lmSigParam cannot be null");
+        }
+        if (lmOTSParam == null)
+        {
+            throw new NullPointerException("lmOTSParam cannot be null");
+        }
+
         this.lmSigParam = lmSigParam;
         this.lmOTSParam = lmOTSParam;
+    }
+
+    public boolean equals(Object obj)
+    {
+        if (this == obj)
+        {
+            return true;
+        }
+        if (!(obj instanceof LMSParameters))
+        {
+            return false;
+        }
+
+        LMSParameters that = (LMSParameters)obj;
+        return lmSigParam.equals(that.lmSigParam) && lmOTSParam.equals(that.lmOTSParam);
+    }
+
+    public int hashCode()
+    {
+        return lmSigParam.hashCode() * 31 + lmOTSParam.hashCode();
     }
 
     public LMSigParameters getLMSigParam()

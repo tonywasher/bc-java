@@ -24,12 +24,14 @@ public class LMSKeyPairGenerator
     {
         SecureRandom source = param.getRandom();
 
-        byte[] I = new byte[16];
-        source.nextBytes(I);
-
         LMSigParameters sigParameter = param.getParameters().getLMSigParam();
+
+        // SEED first, then I, matching org.bouncycastle.crypto.generators.LMSKeyPairGenerator
         byte[] rootSecret = new byte[sigParameter.getM()];
         source.nextBytes(rootSecret);
+
+        byte[] I = new byte[16];
+        source.nextBytes(I);
 
         LMSPrivateKeyParameters privKey = LMS.generateKeys(sigParameter, param.getParameters().getLMOTSParam(), 0, I, rootSecret);
 

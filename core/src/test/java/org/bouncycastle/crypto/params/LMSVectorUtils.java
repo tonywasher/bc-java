@@ -72,6 +72,12 @@ public class LMSVectorUtils
             return this;
         }
 
+        public Encoder bytes(byte[] data, int off, int len)
+        {
+            bOut.write(data, off, len);
+            return this;
+        }
+
         public byte[] build()
         {
             return bOut.toByteArray();

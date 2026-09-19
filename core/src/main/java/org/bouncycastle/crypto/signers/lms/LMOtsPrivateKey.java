@@ -14,7 +14,7 @@ class LMOtsPrivateKey
     private final int q;
     private final byte[] masterSecret;
 
-    public LMOtsPrivateKey(LMOtsParameters parameter, byte[] i, int q, byte[] masterSecret)
+    LMOtsPrivateKey(LMOtsParameters parameter, byte[] i, int q, byte[] masterSecret)
     {
         this.parameter = parameter;
         I = i;
@@ -22,7 +22,7 @@ class LMOtsPrivateKey
         this.masterSecret = masterSecret;
     }
 
-    public LMSContext getSignatureContext(LMSigParameters sigParams, byte[][] path)
+    LMSContext getSignatureContext(LMSigParameters sigParams, byte[][] path)
     {
         byte[] C = new byte[parameter.getN()];
 
@@ -40,31 +40,32 @@ class LMOtsPrivateKey
         return new LMSContext(this, sigParams, ctx, C, path);
     }
 
-    public SeedDerive getDerivationFunction()
+    SeedDerive getDerivationFunction()
     {
         SeedDerive derive = new SeedDerive(I, masterSecret, DigestUtil.getDigest(parameter));
         derive.setQ(q);
         return derive;
     }
 
+    LMOtsPublicKey generatePublicKey()
+    {
+        byte[] K = LM_OTS.lms_ots_generatePublicKey(parameter, I, q, masterSecret);
+        return new LMOtsPublicKey(parameter, I, q, K);
+    }
 
-    public LMOtsParameters getParameter()
+
+    LMOtsParameters getParameter()
     {
         return parameter;
     }
 
-    public byte[] getI()
+    byte[] getI()
     {
         return I;
     }
 
-    public int getQ()
+    int getQ()
     {
         return q;
-    }
-
-    public byte[] getMasterSecret()
-    {
-        return masterSecret;
     }
 }

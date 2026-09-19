@@ -101,7 +101,7 @@ class Composer
         try
         {
             int j = start;
-            while (j != end)
+            while (j < end)
             {
                 bos.write(arrays[j]);
                 j++;

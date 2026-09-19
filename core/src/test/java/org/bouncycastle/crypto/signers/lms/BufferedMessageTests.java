@@ -50,7 +50,7 @@ public class BufferedMessageTests
 
     private static LMSParameters lmsParams()
     {
-        return new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w1);
+        return LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w1);
     }
 
     private static AsymmetricCipherKeyPair lmsKeyPair(int n)

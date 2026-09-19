@@ -1,6 +1,8 @@
 package org.bouncycastle.crypto.signers.lms;
 
 import org.bouncycastle.crypto.Digest;
+import org.bouncycastle.crypto.OutputLengthException;
+import org.bouncycastle.crypto.params.LMOtsParameters;
 import org.bouncycastle.crypto.params.LMSigParameters;
 
 /**
@@ -51,15 +53,67 @@ public class LMSContext
         return C;
     }
 
-    byte[] getQ()
+    /**
+     * Write Q, the message hash, to the given buffer. The context cannot be used afterwards.
+     * <p>
+     * A caller that goes on to append the LM-OTS checksum needs two bytes beyond the value written here.
+     * </p>
+     *
+     * @param output the byte array Q is to be copied into.
+     * @param outOff the offset into the byte array Q is to start at.
+     * @return the number of bytes written.
+     */
+    public int outputQ(byte[] output, int outOff)
     {
-        byte[] Q = new byte[LM_OTS.MAX_HASH + 2];
+        Digest digest = this.digest;
+        int qLen = digest.getDigestSize();
+        if (outOff > output.length - qLen)
+        {
+            throw new OutputLengthException("output buffer too short");
+        }
 
-        digest.doFinal(Q, 0);
-        
-        digest = null;
+        digest.doFinal(output, outOff);
+        this.digest = null;
+        return qLen;
+    }
 
+    /**
+     * Take Q, the message hash, in the buffer shape the LM-OTS chaining expects: the N bytes of Q,
+     * followed by room for the two bytes of {@link LM_OTS#cksm(byte[], int, LMOtsParameters)} that the
+     * caller appends (RFC 8554 sec. 4.5). The context cannot be used afterwards.
+     */
+    byte[] collectQ(LMOtsParameters otsParameters)
+    {
+        byte[] Q = new byte[otsParameters.getN() + 2];
+        outputQ(Q, 0);
         return Q;
+    }
+
+    /**
+     * Kc, the LM-OTS public key the signature this context carries computes for itself over the
+     * message absorbed into it. The context cannot be used afterwards.
+     */
+    byte[] calculateKc()
+    {
+        // Either an LMS signature, whose LM-OTS part this verifies, or a bare LM-OTS one
+        LMOtsSignature otsSignature = (signature instanceof LMSSignature)
+            ? ((LMSSignature)signature).getOtsSignature()
+            : (LMOtsSignature)signature;
+
+        return LM_OTS.calculateKc(publicKey, otsSignature, collectQ(publicKey.getParameter()));
+    }
+
+    /**
+     * Complete the LMS signature of the one-time key this context was opened on, over the message
+     * absorbed into it (RFC 8554 sec. 5.4.1). The context cannot be used afterwards.
+     */
+    LMSSignature generateSignature()
+    {
+        byte[] Q = collectQ(key.getParameter());
+
+        LMOtsSignature otsSignature = LM_OTS.lm_ots_generate_signature(key, Q, C);
+
+        return new LMSSignature(key.getQ(), otsSignature, sigParams, path);
     }
 
     byte[][] getPath()

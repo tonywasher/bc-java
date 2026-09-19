@@ -5,6 +5,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.security.SecureRandom;
 
 import javax.security.auth.Destroyable;
 
@@ -16,7 +17,7 @@ import org.bouncycastle.crypto.signers.lms.LMSEngine;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Exceptions;
 import org.bouncycastle.util.Integers;
-import org.bouncycastle.util.Objects;
+import org.bouncycastle.util.Properties;
 import org.bouncycastle.util.io.Streams;
 
 public class LMSPrivateKeyParameters
@@ -30,9 +31,14 @@ public class LMSPrivateKeyParameters
      */
     private static final int CACHE_TOP_LIMIT = 64;
 
+    /**
+     * The default ceiling on SEED, overridden by Properties.LMS_MAX_SEED_LENGTH. SP 800-208 sec. 6.1 makes SEED
+     * n bytes, so anything beyond the parameter set's m is interchange slack and 1KiB is generous.
+     */
+    private static final int DEFAULT_MAX_SEED_LENGTH = 1024;
+
     private final byte[] I;
-    private final LMSigParameters parameters;
-    private final LMOtsParameters otsParameters;
+    private final LMSParameters lmsParameters;
     private final int maxQ;
     private final byte[] masterSecret;
 
@@ -90,41 +96,85 @@ public class LMSPrivateKeyParameters
     // These are not final because they can be generated.
     // They also do not need to be persisted.
     //
-    private LMSPublicKeyParameters publicKey;
+    private volatile LMSPublicKeyParameters publicKey;
 
+    /**
+     * A fresh LMS private key (RFC 8554 sec. 5.2, Algorithm 5): the SEED (m bytes) and then the identifier I
+     * (16 bytes) are drawn from the random, in that order, and the key starts at q = 0 with all 2^h one-time
+     * keys available.
+     */
+    public static LMSPrivateKeyParameters generate(LMSParameters lmsParameters, SecureRandom random)
+    {
+        if (lmsParameters == null)
+        {
+            throw new NullPointerException("lmsParameters cannot be null");
+        }
 
-    public LMSPrivateKeyParameters(LMSigParameters lmsParameter, LMOtsParameters otsParameters, int q, byte[] I, int maxQ, byte[] masterSecret)
+        LMSigParameters sigParameters = lmsParameters.getLMSigParam();
+
+        byte[] masterSecret = new byte[sigParameters.getM()];
+        random.nextBytes(masterSecret);
+
+        byte[] I = new byte[16];
+        random.nextBytes(I);
+
+        return new LMSPrivateKeyParameters(lmsParameters, 0, I, 1 << sigParameters.getH(), masterSecret);
+    }
+
+    /**
+     * The stand-in an HSS hierarchy holds for a level below the root while a fresh key is built: it carries
+     * the level's parameter set and size so that resetKeyToIndex can replace it, and refuses to act as a key.
+     */
+    static LMSPrivateKeyParameters createPlaceholder(LMSParameters lmsParameters, int maxQ)
+    {
+        return new PlaceholderLMSPrivateKey(lmsParameters, maxQ);
+    }
+
+    /**
+     * An LMS private key positioned at one-time key q of the tree named by I (RFC 8554 sec. 5.2, Algorithm 5).
+     * The identifier and master secret are copied, so the caller keeps its arrays.
+     */
+    public LMSPrivateKeyParameters(LMSigParameters sigParameters, LMOtsParameters otsParameters, int q, byte[] I, int maxQ, byte[] masterSecret)
+    {
+        this(LMSParameters.create(sigParameters, otsParameters), q, Arrays.clone(I), maxQ, Arrays.clone(masterSecret));
+    }
+
+    /**
+     * An LMS private key positioned at one-time key q of the tree named by I (RFC 8554 sec. 5.2, Algorithm 5).
+     * <p>
+     * Takes ownership of I and masterSecret: they become the key's own arrays, so a caller must pass arrays it
+     * neither retains nor reuses. The public constructors clone or draw on the caller's behalf; the callers here
+     * pass bytes freshly decoded or derived from a parent key.
+     */
+    LMSPrivateKeyParameters(LMSParameters lmsParameters, int q, byte[] I, int maxQ, byte[] masterSecret)
     {
         super(true);
 
+        LMSigParameters sigParameters = lmsParameters.getLMSigParam();
+
         // the checks the decoder applies, so a key built directly is not one it would refuse
-        if (lmsParameter == null || otsParameters == null)
-        {
-            throw new IllegalArgumentException("LMS private key needs both parameter sets");
-        }
         if (I == null || I.length != 16)
         {
             throw new IllegalArgumentException("LMS key identifier I must be 16 bytes");
         }
-        if (masterSecret == null || masterSecret.length < lmsParameter.getM())
+        if (masterSecret == null || masterSecret.length < sigParameters.getM())
         {
-            throw new IllegalArgumentException("master secret is less than " + lmsParameter.getM());
+            throw new IllegalArgumentException("master secret length is less than " + sigParameters.getM());
         }
 
-        int twoToH = 1 << lmsParameter.getH();
+        int twoToH = 1 << sigParameters.getH();
         if (q < 0 || maxQ < 0 || maxQ > twoToH || q > maxQ)
         {
             throw new IllegalArgumentException(
                 "LMS private key q/maxQ out of range: q=" + q + " maxQ=" + maxQ + " 2^h=" + twoToH);
         }
 
-        this.parameters = lmsParameter;
-        this.otsParameters = otsParameters;
+        this.lmsParameters = lmsParameters;
         this.q = q;
-        this.I = Arrays.clone(I);
+        this.I = I;
         this.maxQ = maxQ;
-        this.masterSecret = Arrays.clone(masterSecret);
-        this.maxCacheR = Math.min(CACHE_TOP_LIMIT, 1 << (parameters.getH() + 1));
+        this.masterSecret = masterSecret;
+        this.maxCacheR = Math.min(CACHE_TOP_LIMIT, 1 << (sigParameters.getH() + 1));
         this.tCache = new byte[maxCacheR][];
     }
 
@@ -134,23 +184,33 @@ public class LMSPrivateKeyParameters
      * level above before the key is used. The sentinel values are deliberately ones the public
      * constructor refuses, so a placeholder can never be mistaken for a key that was merely built
      * carelessly; a subclass using this must not present the result as a usable key.
+     *
+     * @deprecated This class is not intended to be subclassed; the constructor will be removed.
      */
-    protected LMSPrivateKeyParameters(LMSigParameters lmsParameter, LMOtsParameters otsParameters, int maxQ)
+    @Deprecated
+    protected LMSPrivateKeyParameters(LMSigParameters sigParameters, LMOtsParameters otsParameters, int maxQ)
+    {
+        this(LMSParameters.create(sigParameters, otsParameters), maxQ);
+    }
+
+    /**
+     * The placeholder constructor above, taking the parameter sets already bundled.
+     */
+    private LMSPrivateKeyParameters(LMSParameters lmsParameters, int maxQ)
     {
         super(true);
-        this.parameters = lmsParameter;
-        this.otsParameters = otsParameters;
+        this.lmsParameters = lmsParameters;
         this.q = -1;
         this.I = new byte[0];
         this.maxQ = maxQ;
         this.masterSecret = new byte[0];
-        this.maxCacheR = Math.min(CACHE_TOP_LIMIT, 1 << (lmsParameter.getH() + 1));
+        this.maxCacheR = Math.min(CACHE_TOP_LIMIT, 1 << (lmsParameters.getLMSigParam().getH() + 1));
         this.tCache = new byte[maxCacheR][];
     }
 
     private LMSPrivateKeyParameters(LMSPrivateKeyParameters parent, int q, int maxQ)
     {
-        this(parent, q, maxQ, Math.min(CACHE_TOP_LIMIT, 1 << parent.parameters.getH()));
+        this(parent, q, maxQ, Math.min(CACHE_TOP_LIMIT, 1 << parent.lmsParameters.getLMSigParam().getH()));
     }
 
     // Called under the parent's lock (extractKeyShard, repositionTo), which is what makes reading its
@@ -159,8 +219,7 @@ public class LMSPrivateKeyParameters
     private LMSPrivateKeyParameters(LMSPrivateKeyParameters parent, int q, int maxQ, int maxCacheR)
     {
         super(true);
-        this.parameters = parent.parameters;
-        this.otsParameters = parent.otsParameters;
+        this.lmsParameters = parent.lmsParameters;
         this.q = q;
         this.I = parent.I;
         this.maxQ = maxQ;
@@ -187,7 +246,7 @@ public class LMSPrivateKeyParameters
      */
     synchronized LMSPrivateKeyParameters repositionTo(int q)
     {
-        int twoToH = 1 << parameters.getH();
+        int twoToH = 1 << lmsParameters.getLMSigParam().getH();
 
         if (q < 0 || q > twoToH)
         {
@@ -220,10 +279,7 @@ public class LMSPrivateKeyParameters
             throw new IOException("LMS private key tree cache does not match the public key");
         }
 
-        synchronized (pKey)
-        {
-            pKey.publicKey = pubKey;
-        }
+        pKey.publicKey = pubKey;
 
         return pKey;
     }
@@ -239,7 +295,7 @@ public class LMSPrivateKeyParameters
         {
             DataInputStream dIn = (DataInputStream)src;
 
-            LMSPrivateKeyParameters key = readCoreKey(dIn);
+            LMSPrivateKeyParameters key = readCoreKey(dIn, getMaxSeedLength());
 
             //
             // Anything after the master secret is a cache of the top of the Merkle tree (see
@@ -290,10 +346,10 @@ public class LMSPrivateKeyParameters
      * present is dictated by the caller - from the enclosing HSS encoding's version - rather
      * than inferred from the stream having more data, which is meaningless mid-stream.
      */
-    static LMSPrivateKeyParameters readKey(DataInputStream dIn, boolean withCache)
+    static LMSPrivateKeyParameters readComponentKey(DataInputStream dIn, int maxSeedLength, boolean withCache)
         throws IOException
     {
-        LMSPrivateKeyParameters key = readCoreKey(dIn);
+        LMSPrivateKeyParameters key = readCoreKey(dIn, maxSeedLength);
 
         if (withCache)
         {
@@ -303,13 +359,13 @@ public class LMSPrivateKeyParameters
         return key;
     }
 
-    private static LMSPrivateKeyParameters readCoreKey(DataInputStream dIn)
+    private static LMSPrivateKeyParameters readCoreKey(DataInputStream dIn, int maxSeedLength)
         throws IOException
     {
         /*
         .u32str(0) // version
-        .u32str(parameters.getType()) // type
-        .u32str(otsParameters.getType()) // ots type
+        .u32str(lmsParameters.getLMSigParam().getType()) // type
+        .u32str(lmsParameters.getLMOTSParam().getType()) // ots type
         .bytes(I) // I at 16 bytes
         .u32str(q) // q
         .u32str(maxQ) // maximum q
@@ -324,14 +380,14 @@ public class LMSPrivateKeyParameters
         }
 
         int sigType = dIn.readInt();
-        LMSigParameters parameter = LMSigParameters.getParametersForType(sigType);
-        if (parameter == null)
+        LMSigParameters sigParameters = LMSigParameters.getParametersForType(sigType);
+        if (sigParameters == null)
         {
             throw new IOException("unknown LMS type code: " + sigType);
         }
         int otsType = dIn.readInt();
-        LMOtsParameters otsParameter = LMOtsParameters.getParametersForType(otsType);
-        if (otsParameter == null)
+        LMOtsParameters otsParameters = LMOtsParameters.getParametersForType(otsType);
+        if (otsParameters == null)
         {
             throw new IOException("unknown LM-OTS type code: " + otsType);
         }
@@ -345,26 +401,44 @@ public class LMSPrivateKeyParameters
         // and the signature simply does not verify (github #2414). RFC 8554 sec. 5.3 has
         // 0 <= q < 2^h; maxQ is 2^h for a whole key and lower for a shard (extractKeyShard), and
         // q == maxQ is the legitimate exhausted state.
-        int twoToH = 1 << parameter.getH();
+        int twoToH = 1 << sigParameters.getH();
         if (q < 0 || maxQ < 0 || maxQ > twoToH || q > maxQ)
         {
             throw new IOException(
                 "LMS private key q/maxQ out of range: q=" + q + " maxQ=" + maxQ + " 2^h=" + twoToH);
         }
         int l = dIn.readInt();
-        if (l < parameter.getM())
+        if (l < sigParameters.getM())
         {
             // SP 800-208 sec. 6.1 requires SEED to be n bytes; generateKey has always required m
-            throw new IOException("secret length less than " + parameter.getM() + ": " + l);
+            throw new IOException("master secret length is less than " + sigParameters.getM() + ": " + l);
         }
-        if (l > dIn.available())
-        {
-            throw new IOException("secret length exceeded " + dIn.available());
-        }
-        byte[] masterSecret = new byte[l];
-        dIn.readFully(masterSecret);
 
-        return new LMSPrivateKeyParameters(parameter, otsParameter, q, I, maxQ, masterSecret);
+        // SP 800-208 sec. 6.1 makes SEED n bytes, so anything beyond m is interchange slack, and the ceiling
+        // keeps what is committed on the strength of a length field finite where the stream has no known
+        // length for readLenBytesFully to refuse it against. A ceiling below m is ignored: SEED cannot be shorter
+        // than m, so it would refuse every key. The limit is the caller's, read once for the whole encoding.
+        if (l > Math.max(sigParameters.getM(), maxSeedLength))
+        {
+            throw new IOException("master secret length exceeds " + maxSeedLength + ": " + l);
+        }
+
+        byte[] masterSecret = Streams.readLenBytesFully(dIn, l);
+
+        return new LMSPrivateKeyParameters(LMSParameters.create(sigParameters, otsParameters), q, I, maxQ, masterSecret);
+    }
+
+    /**
+     * The ceiling on SEED length the decoder holds every key in one encoding to: the configured
+     * Properties.LMS_MAX_SEED_LENGTH, or DEFAULT_MAX_SEED_LENGTH when none is set.
+     * <p>
+     * Read once by the top-level parse of the structure - a standalone key, or an HSS key with its component
+     * keys - and passed down, so the limit cannot shift between the keys of one encoding.
+     * </remarks>
+     */
+    static int getMaxSeedLength()
+    {
+        return Properties.asInteger(Properties.LMS_MAX_SEED_LENGTH, DEFAULT_MAX_SEED_LENGTH);
     }
 
     private static void readTreeCache(DataInputStream dIn, LMSPrivateKeyParameters key)
@@ -443,18 +517,56 @@ public class LMSPrivateKeyParameters
      */
     byte[][] deriveChildKey()
     {
-        int q;
         synchronized (this)
         {
             checkDestroyed();
 
-            q = this.q;
             if (q >= maxQ)
             {
                 throw new ExhaustedPrivateKeyException("ots private key exhausted");
             }
+
+            return LMSEngine.deriveChildKey(lmsParameters.getLMOTSParam(), I, masterSecret, q);
         }
-        return LMSEngine.deriveChildKey(otsParameters, I, masterSecret, q);
+    }
+
+    /**
+     * Derive the identifier and master seed of the tree below one-time key q of this key, which need
+     * not be the current one: HSS repositioning asks for the child at the leaf its index names. The
+     * index is not advanced. The derivation runs under the lock so that the secret is read whole.
+     *
+     * @return { I of the child tree, master seed of the child tree }.
+     */
+    byte[][] deriveChildKey(int q)
+    {
+        // maxQ rather than 2^h: the two coincide for a whole key, but a leaf beyond a shard's usage limit
+        // belongs to some other holder's range, and deriving its child is a misconfiguration to refuse.
+        if (q < 0 || q >= maxQ)
+        {
+            throw new IllegalArgumentException("q out of range");
+        }
+
+        synchronized (this)
+        {
+            checkDestroyed();
+
+            return LMSEngine.deriveChildKey(lmsParameters.getLMOTSParam(), I, masterSecret, q);
+        }
+    }
+
+    /**
+     * Whether this key is the tree with the given identifier and master seed. A Merkle tree is a
+     * function of those and the parameter sets, so two keys agreeing on them are the same tree at
+     * (possibly) different one-time keys.
+     */
+    boolean hasIdentity(byte[] I, byte[] masterSecret)
+    {
+        synchronized (this)
+        {
+            checkDestroyed();
+
+            return Arrays.areEqual(this.I, I) && Arrays.constantTimeAreEqual(this.masterSecret, masterSecret);
+        }
     }
 
     /**
@@ -475,10 +587,9 @@ public class LMSPrivateKeyParameters
     public LMSContext generateLMSContext()
     {
         // Step 1.
-        LMSigParameters lmsParameter = this.getSigParameters();
+        LMSigParameters sigParameters = this.getSigParameters();
 
         // Step 2
-        int h = lmsParameter.getH();
         int q;
         byte[][] path;
 
@@ -496,10 +607,10 @@ public class LMSPrivateKeyParameters
                 throw new ExhaustedPrivateKeyException("ots private key exhausted");
             }
             q = this.q++;
-            path = advanceRetainedPath(h, q);
+            path = advanceRetainedPath(q);
         }
 
-        return LMSEngine.generateSignContext(lmsParameter, otsParameters, I, q, masterSecret, path);
+        return LMSEngine.generateSignContext(sigParameters, lmsParameters.getLMOTSParam(), I, q, masterSecret, path);
     }
 
     public byte[] generateSignature(LMSContext context)
@@ -546,14 +657,19 @@ public class LMSPrivateKeyParameters
         }
     }
 
+    public LMSParameters getLMSParameters()
+    {
+        return lmsParameters;
+    }
+
     public LMSigParameters getSigParameters()
     {
-        return parameters;
+        return lmsParameters.getLMSigParam();
     }
 
     public LMOtsParameters getOtsParameters()
     {
-        return otsParameters;
+        return lmsParameters.getLMOTSParam();
     }
 
     public byte[] getI()
@@ -561,6 +677,14 @@ public class LMSPrivateKeyParameters
         return Arrays.clone(I);
     }
 
+    /**
+     * Return a copy of the master seed of this tree.
+     *
+     * @deprecated use {@link #getEncoded()} instead. A seed handed out alone is a second copy of the
+     * key with no index attached - the state duplication SP 800-208 rules out - whereas the encoding
+     * carries the index, usage limit and tree cache with it.
+     */
+    @Deprecated
     public byte[] getMasterSecret()
     {
         byte[] rv = Arrays.clone(masterSecret);
@@ -617,32 +741,70 @@ public class LMSPrivateKeyParameters
         return getIndexLimit() - getIndex();
     }
 
+    /**
+     * The public key of this tree, derived on first use and kept thereafter.
+     * <p>
+     * Deliberately not taken under the key's monitor: the root node is a function of the identifier,
+     * the master secret and the parameter sets and not of q, so nothing the monitor guards takes part
+     * in deriving it, and holding the monitor for a tree build (up to 2^h leaf derivations) would stall
+     * every one-time key claim on the key for its duration. Concurrent callers race harmlessly -
+     * {@link #findT(int)} already dedupes the expensive per-node work, so a second caller finds the
+     * tree built - and they publish equal keys.
+     * </p>
+     */
     public LMSPublicKeyParameters getPublicKey()
     {
+        LMSPublicKeyParameters pk = publicKey;
+        if (pk == null)
+        {
+            retainFirstPath();
+
+            // Tree nodes and I are immutable once published, so the public key shares them rather than copying.
+            pk = new LMSPublicKeyParameters(lmsParameters, findT(1), I);
+            publicKey = pk;
+        }
+        return pk;
+    }
+
+    /**
+     * Build the tree as the authentication path of the current one-time key, when it has to be built
+     * from nothing. It costs exactly the same - every leaf and interior node once - but leaves that
+     * path retained, so the first signature does not rebuild the 2^(h - 5) leaves below the cached top
+     * that the build has just computed and dropped.
+     * <p>
+     * Unlike the rest of {@link #getPublicKey()} this does take the key's monitor, since the retained
+     * path is the monitor's to advance. It does so only in the case where the first one-time key claim
+     * would take it for the same build anyway, and by the time that claim arrives the path is there
+     * for it: a key with the root cached, or one that has signed, returns here without contending for
+     * anything.
+     * </p>
+     */
+    private void retainFirstPath()
+    {
+        // retained is only ever set, never cleared, so a racy non-null read is a reliable "yes"
+        if (retained != null || peekRootT() != null)
+        {
+            return;
+        }
+
         synchronized (this)
         {
-            if (publicKey == null)
+            if (retained != null || peekRootT() != null)
             {
-                //
-                // With no root cached the whole tree has to be built. Built as the authentication path
-                // of the current one-time key it costs exactly the same - every leaf and interior node
-                // once - but leaves that path retained, so the first signature does not rebuild the
-                // 2^(h - 5) leaves below the cached top that the build has just computed and dropped.
-                //
-                if (retained == null && peekRootT() == null && q >= 0 && q < (1 << parameters.getH()))
-                {
-                    advanceRetainedPath(parameters.getH(), q);
-                }
-
-                publicKey = new LMSPublicKeyParameters(parameters, otsParameters, this.findT(1), I);
+                return;
             }
-            return publicKey;
+
+            // Not an exhausted key, whose q is one past the last leaf and names no path
+            if (q < (1 << lmsParameters.getLMSigParam().getH()))
+            {
+                advanceRetainedPath(q);
+            }
         }
     }
 
     /**
      * Whether an authentication path is currently retained. Used by the regression tests that check
-     * a key built or signed with keeps the path its work produced.
+     * that a key keeps the path produced by building its tree or by signing.
      */
     synchronized boolean isPathRetained()
     {
@@ -676,8 +838,9 @@ public class LMSPrivateKeyParameters
      * Build the authentication path of one-time key q, reusing whatever it shares with the path of the
      * last one-time key signed with, and retain the result in its place. Called under the key's lock.
      */
-    private byte[][] advanceRetainedPath(int h, int q)
+    private byte[][] advanceRetainedPath(int q)
     {
+        int h = lmsParameters.getLMSigParam().getH();
         int r = (1 << h) + q;
 
         byte[][] path = new byte[h][];
@@ -721,7 +884,7 @@ public class LMSPrivateKeyParameters
         {
             anc[0] = findT(r);
 
-            Digest tDigest = LMSEngine.createDigest(parameters);
+            Digest tDigest = LMSEngine.createDigest(lmsParameters.getLMSigParam());
 
             for (int i = 1; i < fresh; ++i)
             {
@@ -784,7 +947,7 @@ public class LMSPrivateKeyParameters
             //
             checkDestroyed();
 
-            return LMSEngine.computeLeaf(tDigest, otsParameters, I, r, r - twoToh, masterSecret);
+            return LMSEngine.computeLeaf(tDigest, lmsParameters.getLMOTSParam(), I, r, r - twoToh, masterSecret);
         }
 
         byte[] t2r = findT(2 * r);
@@ -835,10 +998,7 @@ public class LMSPrivateKeyParameters
      */
     boolean isTreeCachePrimed()
     {
-        synchronized (tCache)
-        {
-            return tCache[1] != null;
-        }
+        return peekRootT() != null;
     }
 
     @Override
@@ -864,8 +1024,7 @@ public class LMSPrivateKeyParameters
         return this.getIndex() == that.getIndex()
             && this.maxQ == that.maxQ
             && Arrays.areEqual(this.I, that.I)
-            && Objects.areEqual(this.parameters, that.parameters)
-            && Objects.areEqual(this.otsParameters, that.otsParameters)
+            && this.lmsParameters.equals(that.lmsParameters)
             && Arrays.constantTimeAreEqual(this.masterSecret, that.masterSecret);
     }
 
@@ -880,8 +1039,7 @@ public class LMSPrivateKeyParameters
         // secret, so no function of the seed is handed out. Equal keys agree on every field used
         // here, so the equals() contract holds.
         //
-        int hc = Objects.hashCode(parameters);
-        hc = 31 * hc + Objects.hashCode(otsParameters);
+        int hc = lmsParameters.hashCode();
         hc = 31 * hc + maxQ;
         hc = 31 * hc + Arrays.hashCode(I);
         return hc;
@@ -927,8 +1085,8 @@ public class LMSPrivateKeyParameters
         ByteArrayOutputStream bOut = new ByteArrayOutputStream();
 
         u32str(0, bOut); // version
-        u32str(parameters.getType(), bOut); // type
-        u32str(otsParameters.getType(), bOut); // ots type
+        u32str(lmsParameters.getLMSigParam().getType(), bOut); // type
+        u32str(lmsParameters.getLMOTSParam().getType(), bOut); // ots type
         bytes(I, bOut); // I at 16 bytes
         u32str(q, bOut); // q
         u32str(maxQ, bOut); // maximum q
@@ -944,4 +1102,22 @@ public class LMSPrivateKeyParameters
         return bOut.toByteArray();
     }
 
+    private static class PlaceholderLMSPrivateKey
+        extends LMSPrivateKeyParameters
+    {
+        PlaceholderLMSPrivateKey(LMSParameters lmsParameters, int maxQ)
+        {
+            super(lmsParameters, maxQ);
+        }
+
+        public LMSContext generateLMSContext()
+        {
+            throw new RuntimeException("placeholder only");
+        }
+
+        public LMSPublicKeyParameters getPublicKey()
+        {
+            throw new RuntimeException("placeholder only");
+        }
+    }
 }

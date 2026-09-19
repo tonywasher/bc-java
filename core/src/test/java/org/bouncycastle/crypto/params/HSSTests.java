@@ -24,7 +24,6 @@ import org.bouncycastle.crypto.generators.LMSKeyPairGenerator;
 import org.bouncycastle.crypto.signers.HSSSigner;
 import org.bouncycastle.crypto.signers.LMSSigner;
 import org.bouncycastle.crypto.signers.lms.LMSContext;
-import org.bouncycastle.crypto.signers.lms.LMSEngine;
 import org.bouncycastle.crypto.signers.lms.LMSSignature;
 
 public class HSSTests
@@ -43,10 +42,10 @@ public class HSSTests
         SecureRandom rand = new FixedSecureRandom(fixedSource);
 
 
-        HSSPrivateKeyParameters generatedPrivateKey = LMSEngine.generateHSSKeyPair(
+        HSSPrivateKeyParameters generatedPrivateKey = HSSPrivateKeyParameters.generate(
             new HSSKeyGenerationParameters(new LMSParameters[]{
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
             }, rand)
         );
 
@@ -95,21 +94,23 @@ public class HSSTests
     {
         HSSPrivateKeyParameters generated = generateKey(d);
 
+        // Rewrite the version 1 encoding into what a pre-tree-cache release wrote: version 0, each
+        // component key ending at its master secret, with the chaining signatures unchanged.
+        byte[] enc = generated.getEncoded();
         LMSVectorUtils.Encoder composer = LMSVectorUtils.compose()
             .u32str(0) // version 0: pre-tree-cache component keys
-            .u32str(generated.getL())
-            .u64str(generated.getIndex())
-            .u64str(generated.getIndexLimit())
-            .bool(false);
-
-        for (LMSPrivateKeyParameters key : generated.getKeys())
+            .bytes(enc, 4, 21); // l, index, indexLimit, isShard - unchanged
+        int pos = 25;
+        for (int t = 0; t < d; t++)
         {
-            composer.bytes(version0KeyEncoding(key));
+            int m = LMSigParameters.getParametersForType(Pack.bigEndianToInt(enc, pos + 4)).getM();
+            // up to and including the master secret
+            int keyCoreLength = 40 + Pack.bigEndianToInt(enc, pos + 36);
+            composer.bytes(enc, pos, keyCoreLength);
+            int cacheCount = Pack.bigEndianToInt(enc, pos + keyCoreLength);
+            pos += keyCoreLength + 4 + cacheCount * m; // skip the version 1 tree-cache field
         }
-        for (LMSSignature s : generated.getSig())
-        {
-            composer.bytes(s.getEncoded());
-        }
+        composer.bytes(enc, pos, enc.length - pos); // the chaining signatures
 
         HSSPrivateKeyParameters decoded = HSSPrivateKeyParameters.getInstance(composer.build());
 
@@ -156,29 +157,11 @@ public class HSSTests
         LMSParameters[] lmsParameters = new LMSParameters[d];
         for (int t = 0; t < d; t++)
         {
-            lmsParameters[t] = new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4);
+            lmsParameters[t] = LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4);
         }
 
-        return LMSEngine.generateHSSKeyPair(new HSSKeyGenerationParameters(lmsParameters, new SecureRandom()));
+        return HSSPrivateKeyParameters.generate(new HSSKeyGenerationParameters(lmsParameters, new SecureRandom()));
     }
-
-    // Exactly what LMSPrivateKeyParameters.getEncoded() produced before the tree-cache feature:
-    // version, type, otstype, I, q, maxQ, secret length, secret - no trailing cache.
-    private static byte[] version0KeyEncoding(LMSPrivateKeyParameters key)
-        throws Exception
-    {
-        return LMSVectorUtils.compose()
-            .u32str(0)
-            .u32str(key.getSigParameters().getType())
-            .u32str(key.getOtsParameters().getType())
-            .bytes(key.getI())
-            .u32str((int)key.getIndex())
-            .u32str((int)key.getIndexLimit())
-            .u32str(key.getMasterSecret().length)
-            .bytes(key.getMasterSecret())
-            .build();
-    }
-
 
     /**
      * Test Case 1 Signature
@@ -400,10 +383,10 @@ public class HSSTests
 
         SecureRandom rand = new FixedSecureRandom(fixedSource);
 
-        HSSPrivateKeyParameters keyPair = LMSEngine.generateHSSKeyPair(
+        HSSPrivateKeyParameters keyPair = HSSPrivateKeyParameters.generate(
             new HSSKeyGenerationParameters(new LMSParameters[]{
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
             }, rand));
 
 
@@ -429,10 +412,10 @@ public class HSSTests
         {
             SecureRandom rand1 = new FixedSecureRandom(fixedSource);
 
-            HSSPrivateKeyParameters regenKeyPair = LMSEngine.generateHSSKeyPair(
+            HSSPrivateKeyParameters regenKeyPair = HSSPrivateKeyParameters.generate(
                 new HSSKeyGenerationParameters(new LMSParameters[]{
-                    new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
-                    new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
+                    LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
+                    LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
                 }, rand1));
 
 
@@ -470,10 +453,10 @@ public class HSSTests
             // Use a real secure random this time.
             SecureRandom rand1 = new SecureRandom();
 
-            HSSPrivateKeyParameters differentKey = LMSEngine.generateHSSKeyPair(
+            HSSPrivateKeyParameters differentKey = HSSPrivateKeyParameters.generate(
                 new HSSKeyGenerationParameters(new LMSParameters[]{
-                    new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
-                    new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
+                    LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w4),
+                    LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
                 }, rand1)
             );
 
@@ -587,7 +570,7 @@ public class HSSTests
 
                 for (int i = 0; i != lmsParameters.size(); i++)
                 {
-                    lmsParams.add(new LMSParameters(lmsParameters.get(i), lmOtsParameters.get(i)));
+                    lmsParams.add(LMSParameters.create(lmsParameters.get(i), lmOtsParameters.get(i)));
                 }
 
                 //
@@ -595,7 +578,7 @@ public class HSSTests
                 //
 
 
-                HSSPrivateKeyParameters keyPair = LMSEngine.generateHSSKeyPair(
+                HSSPrivateKeyParameters keyPair = HSSPrivateKeyParameters.generate(
                     new HSSKeyGenerationParameters(
                         lmsParams.toArray(new LMSParameters[lmsParams.size()]), fixRnd)
                 );
@@ -732,10 +715,10 @@ public class HSSTests
 
         for (int i = 0; i != lmsParameters.size(); i++)
         {
-            lmsParams.add(new LMSParameters(lmsParameters.get(i), lmOtsParameters.get(i)));
+            lmsParams.add(LMSParameters.create(lmsParameters.get(i), lmOtsParameters.get(i)));
         }
 
-        HSSPrivateKeyParameters keyPair = LMSEngine.generateHSSKeyPair(
+        HSSPrivateKeyParameters keyPair = HSSPrivateKeyParameters.generate(
             new HSSKeyGenerationParameters(
                 lmsParams.toArray(new LMSParameters[lmsParams.size()]), fixRnd)
         );
@@ -817,10 +800,10 @@ public class HSSTests
     public void testRemaining()
         throws Exception
     {
-        HSSPrivateKeyParameters keyPair = LMSEngine.generateHSSKeyPair(
+        HSSPrivateKeyParameters keyPair = HSSPrivateKeyParameters.generate(
             new HSSKeyGenerationParameters(new LMSParameters[]{
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2)
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2)
             }, new SecureRandom())
         );
 
@@ -876,10 +859,10 @@ public class HSSTests
     public void testSharding()
         throws Exception
     {
-        HSSPrivateKeyParameters keyPair = LMSEngine.generateHSSKeyPair(
+        HSSPrivateKeyParameters keyPair = HSSPrivateKeyParameters.generate(
             new HSSKeyGenerationParameters(new LMSParameters[]{
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2)
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2)
             }, new SecureRandom())
         );
 
@@ -957,10 +940,10 @@ public class HSSTests
             }
         };
 
-        HSSPrivateKeyParameters keyPair = LMSEngine.generateHSSKeyPair(
+        HSSPrivateKeyParameters keyPair = HSSPrivateKeyParameters.generate(
             new HSSKeyGenerationParameters(new LMSParameters[]{
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
-                new LMSParameters(LMSigParameters.lms_sha256_n32_h10, LMOtsParameters.sha256_n32_w1),
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w2),
+                LMSParameters.create(LMSigParameters.lms_sha256_n32_h10, LMOtsParameters.sha256_n32_w1),
             }, rand)
         );
 
@@ -1270,8 +1253,8 @@ public class HSSTests
     {
         HSSKeyPairGenerator gen = new HSSKeyPairGenerator();
         gen.init(new HSSKeyGenerationParameters(new LMSParameters[]{
-            new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w1),
-            new LMSParameters(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w1) },
+            LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w1),
+            LMSParameters.create(LMSigParameters.lms_sha256_n32_h5, LMOtsParameters.sha256_n32_w1) },
             new SecureRandom()));
         return (HSSPrivateKeyParameters)gen.generateKeyPair().getPrivate();
     }
@@ -1344,7 +1327,7 @@ public class HSSTests
 
         HSSKeyPairGenerator gen = new HSSKeyPairGenerator();
         gen.init(new HSSKeyGenerationParameters(
-            new LMSParameters[]{new LMSParameters(sigParams, otsParams), new LMSParameters(sigParams, otsParams)},
+            new LMSParameters[]{LMSParameters.create(sigParams, otsParams), LMSParameters.create(sigParams, otsParams)},
             new SecureRandom()));
         HSSPrivateKeyParameters hss = (HSSPrivateKeyParameters)gen.generateKeyPair().getPrivate();
 
@@ -1398,7 +1381,7 @@ public class HSSTests
         LMOtsParameters otsParams = LMOtsParameters.sha256_n32_w2;
 
         LMSKeyPairGenerator gen = new LMSKeyPairGenerator();
-        gen.init(new LMSKeyGenerationParameters(new LMSParameters(sigParams, otsParams), new SecureRandom()));
+        gen.init(new LMSKeyGenerationParameters(LMSParameters.create(sigParams, otsParams), new SecureRandom()));
         LMSPrivateKeyParameters lms = (LMSPrivateKeyParameters)gen.generateKeyPair().getPrivate();
 
         byte[] rootT1 = lms.getPublicKey().getT1();
@@ -1428,11 +1411,12 @@ public class HSSTests
         assertSame("the wrap regenerated an advanced root key", lms, advanced.getRootKey());
         assertEquals("the wrap moved the index", 3, advanced.getIndex());
 
-        // the reset itself still works: asked for a different position, it does reposition
-        HSSPrivateKeyParameters moved = new HSSPrivateKeyParameters(lms, 1, 1 << sigParams.getH());
+        // the reset itself still works: asked for a different (later - see
+        // testResetKeyToIndexRefusesToRewind) position, it does reposition
+        HSSPrivateKeyParameters moved = new HSSPrivateKeyParameters(lms, 4, 1 << sigParams.getH());
 
         assertNotSame("the reset failed to reposition to a different index", lms, moved.getRootKey());
-        assertEquals(1, moved.getRootKey().getIndex());
+        assertEquals(4, moved.getRootKey().getIndex());
 
         // the Merkle tree is a function of I, the seed and the parameters and not of q, so the
         // repositioned key is entitled to the tree it was built from rather than a rebuild costing
@@ -1454,6 +1438,87 @@ public class HSSTests
         HSSSigner verifier = new HSSSigner();
         verifier.init(false, advanced.getPublicKey());
         assertTrue("wrapped key produced a signature that does not verify", verifier.verifySignature(msg, sig));
+    }
+
+    /**
+     * A component key whose identifier and seed are unchanged is the same tree; an index that would
+     * move it back within that tree asks for one-time keys already used, and is refused. Forward
+     * moves still reposition.
+     */
+    public void testResetKeyToIndexRefusesToRewind()
+        throws Exception
+    {
+        LMSigParameters sigParams = LMSigParameters.lms_sha256_n32_h5;
+        LMOtsParameters otsParams = LMOtsParameters.sha256_n32_w2;
+        int twoToH = 1 << sigParams.getH();
+        byte[] msg = Hex.decode("48656c6c6f");
+
+        // single level: the root is the last level and reads its q directly
+        LMSKeyPairGenerator gen = new LMSKeyPairGenerator();
+        gen.init(new LMSKeyGenerationParameters(LMSParameters.create(sigParams, otsParams), new SecureRandom()));
+        LMSPrivateKeyParameters lms = (LMSPrivateKeyParameters)gen.generateKeyPair().getPrivate();
+        LMSSigner lmsSigner = new LMSSigner();
+        lmsSigner.init(true, lms);
+        for (int i = 0; i < 3; ++i)
+        {
+            lmsSigner.generateSignature(msg);
+        }
+        assertEquals(3, lms.getIndex());
+
+        expectRewindRefused(lms, 2, twoToH);
+        assertEquals(3, new HSSPrivateKeyParameters(lms, 3, twoToH).getIndex());
+        assertEquals(4, new HSSPrivateKeyParameters(lms, 4, twoToH).getKeys().get(0).getIndex());
+
+        // two levels: the root is post-incremented past the child it signed, the bottom reads its q directly
+        HSSPrivateKeyParameters hss = HSSPrivateKeyParameters.generate(new HSSKeyGenerationParameters(
+            new LMSParameters[]{ LMSParameters.create(sigParams, otsParams), LMSParameters.create(sigParams, otsParams) },
+            new SecureRandom()));
+        for (int i = 0; i < twoToH + 1; ++i)
+        {
+            sign(hss, msg);
+        }
+        List<LMSPrivateKeyParameters> keys = hss.getKeys();
+        List<LMSSignature> sig = hss.getSig();
+        long limit = (long)twoToH * twoToH;
+        assertEquals(2, keys.get(0).getIndex());
+        assertEquals(1, keys.get(1).getIndex());
+
+        // back one leaf within the current bottom tree
+        expectRewindRefused(2, keys, sig, twoToH, limit);
+        // back into the previous bottom tree, which the root has already signed and moved past
+        expectRewindRefused(2, keys, sig, 5, limit);
+        // the position the keys are at, and one further on, are both fine
+        assertEquals(twoToH + 1, new HSSPrivateKeyParameters(2, keys, sig, twoToH + 1, limit).getIndex());
+        HSSPrivateKeyParameters forward = new HSSPrivateKeyParameters(2, keys, sig, twoToH + 8, limit);
+        assertEquals(8, forward.getKeys().get(1).getIndex());
+        assertTrue(verify(hss.getPublicKey(), sign(forward, msg), msg));
+    }
+
+    private static void expectRewindRefused(LMSPrivateKeyParameters lms, long index, long indexLimit)
+    {
+        try
+        {
+            new HSSPrivateKeyParameters(lms, index, indexLimit);
+            fail("index " + index + " rewound the key");
+        }
+        catch (IllegalArgumentException e)
+        {
+            assertTrue(e.getMessage(), e.getMessage().startsWith("HSS private key index would move level"));
+        }
+    }
+
+    private static void expectRewindRefused(int l, List<LMSPrivateKeyParameters> keys, List<LMSSignature> sig,
+        long index, long indexLimit)
+    {
+        try
+        {
+            new HSSPrivateKeyParameters(l, keys, sig, index, indexLimit);
+            fail("index " + index + " rewound the key");
+        }
+        catch (IllegalArgumentException e)
+        {
+            assertTrue(e.getMessage(), e.getMessage().startsWith("HSS private key index would move level"));
+        }
     }
 
     /**
@@ -1605,6 +1670,189 @@ public class HSSTests
             }
 
             return super.generateLMSContext();
+        }
+    }
+
+    /**
+     * When more than one level of an HSS key is exhausted at once - the bottom tree's last
+     * one-time key was also the last the tree above it could sign for - every exhausted level is
+     * rebuilt, and the rebuild reaches readers as one hierarchy. The component keys and chaining
+     * signatures are read without the key's monitor, so a rebuild published one level at a time
+     * would expose a hierarchy in which the fresh tree at level i sits above the signature the
+     * tree it replaced made over the still-exhausted level i + 1: a chain that does not verify.
+     * <p>
+     * The rebuild is held open here with an exhausted bottom key that parks when the second pass
+     * asks it for the parameters its replacement inherits, which is after the first pass has
+     * replaced the level above it. A reader taking the hierarchy at that point must find every
+     * chaining signature verifying under the level above - which, published as one snapshot,
+     * means the whole exhausted hierarchy as it was.
+     */
+    public void testMultiLevelRebuildPublishedAsOneSnapshot()
+        throws Exception
+    {
+        LMSigParameters sigParams = LMSigParameters.lms_sha256_n32_h5;
+        LMOtsParameters otsParams = LMOtsParameters.sha256_n32_w8;
+        int twoToH = 1 << sigParams.getH();
+
+        byte[] I = Hex.decode("000102030405060708090a0b0c0d0e0f");
+        byte[] seed = Hex.decode("0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20");
+
+        // a three-level key one signature short of exhausting both lower trees: the root has
+        // signed the middle tree (q = 1), the middle tree is on its last one-time key (q = 31)
+        // when it signs the bottom tree, and the bottom tree is on its last one-time key too
+        LMSPrivateKeyParameters root = new LMSPrivateKeyParameters(sigParams, otsParams, 0, I, twoToH, seed);
+        byte[][] middleChild = root.deriveChildKey();
+        LMSPrivateKeyParameters middle = new LMSPrivateKeyParameters(
+            sigParams, otsParams, twoToH - 1, middleChild[0], twoToH, middleChild[1]);
+        byte[][] bottomChild = middle.deriveChildKey();
+        ParameterGatedKey bottom = new ParameterGatedKey(
+            sigParams, otsParams, twoToH - 1, bottomChild[0], twoToH, bottomChild[1]);
+
+        List<LMSPrivateKeyParameters> keys = new ArrayList<LMSPrivateKeyParameters>();
+        keys.add(root);
+        keys.add(middle);
+        keys.add(bottom);
+        List<LMSSignature> sigs = new ArrayList<LMSSignature>();
+        sigs.add(signPublicKey(root, middle));
+        sigs.add(signPublicKey(middle, bottom));
+
+        long indexLimit = (long)twoToH * twoToH * twoToH;
+        final HSSPrivateKeyParameters hss = new HSSPrivateKeyParameters(3, keys, sigs, indexLimit / twoToH - 1, indexLimit);
+
+        assertSame("the key was built one signature short, so the bottom key is kept as given",
+            bottom, hss.getKeys().get(2));
+        assertCoherent(hss.getKeys(), hss.getSig());
+
+        final byte[] msg = Hex.decode("48656c6c6f");
+
+        // the last signature of both lower trees; the next one has to replace them both
+        HSSSigner last = new HSSSigner();
+        last.init(true, hss);
+        byte[] lastSig = last.generateSignature(msg);
+        HSSSigner lastVerifier = new HSSSigner();
+        lastVerifier.init(false, hss.getPublicKey());
+        assertTrue(lastVerifier.verifySignature(msg, lastSig));
+        assertEquals(twoToH, bottom.getIndex());
+        assertEquals(twoToH, middle.getIndex());
+
+        // park the rebuild between replacing the middle tree and replacing the bottom one
+        bottom.gated = true;
+
+        final byte[][] nextSig = new byte[1][];
+        Thread signer = new Thread(new Runnable()
+        {
+            public void run()
+            {
+                HSSSigner s = new HSSSigner();
+                s.init(true, hss);
+                nextSig[0] = s.generateSignature(msg);
+            }
+        });
+        signer.start();
+        assertTrue("rebuild never reached the bottom key", bottom.entered.await(10, TimeUnit.SECONDS));
+
+        // the accessors take no monitor, so a reader is not held up by the rebuild in progress -
+        // and what it reads has to be a hierarchy whose chaining signatures all verify
+        final List<LMSPrivateKeyParameters>[] seenKeys = new List[1];
+        final List<LMSSignature>[] seenSig = new List[1];
+        Thread reader = new Thread(new Runnable()
+        {
+            public void run()
+            {
+                seenKeys[0] = hss.getKeys();
+                seenSig[0] = hss.getSig();
+            }
+        });
+        reader.start();
+        reader.join(5000);
+        assertFalse("reader was held up by the rebuild in progress", reader.isAlive());
+
+        try
+        {
+            assertCoherent(seenKeys[0], seenSig[0]);
+        }
+        finally
+        {
+            bottom.release.countDown();
+        }
+
+        signer.join(10000);
+        assertFalse("signer did not finish", signer.isAlive());
+
+        // the rebuilt key signs under the same public key, is coherent again and round-trips
+        HSSSigner nextVerifier = new HSSSigner();
+        nextVerifier.init(false, hss.getPublicKey());
+        assertTrue(nextVerifier.verifySignature(msg, nextSig[0]));
+        assertCoherent(hss.getKeys(), hss.getSig());
+        assertEquals(hss, HSSPrivateKeyParameters.getInstance(hss.getEncoded()));
+    }
+
+    /**
+     * The chaining signature of an HSS hierarchy: signer signs the public key of the tree below,
+     * advancing signer's one-time index.
+     */
+    private static LMSSignature signPublicKey(LMSPrivateKeyParameters signer, LMSPrivateKeyParameters below)
+        throws IOException
+    {
+        LMSSigner lmsSigner = new LMSSigner();
+        lmsSigner.init(true, signer);
+        return LMSSignature.getInstance(lmsSigner.generateSignature(below.getPublicKey().getEncoded()));
+    }
+
+    /**
+     * Every chaining signature verifies the public key of the level below it under the public
+     * key of the level that carries it.
+     */
+    private static void assertCoherent(List<LMSPrivateKeyParameters> keys, List<LMSSignature> sig)
+        throws IOException
+    {
+        assertEquals(keys.size() - 1, sig.size());
+
+        for (int i = 0; i < sig.size(); i++)
+        {
+            LMSSigner verifier = new LMSSigner();
+            verifier.init(false, keys.get(i).getPublicKey());
+            assertTrue("chaining signature at level " + i + " does not verify under the level above",
+                verifier.verifySignature(keys.get(i + 1).getPublicKey().getEncoded(), sig.get(i).getEncoded()));
+        }
+    }
+
+    /**
+     * An LMS key that parks on a latch when asked for its parameter set, which the rebuild
+     * of an exhausted level asks its outgoing key for on that level's pass - after the pass for
+     * the level above has completed.
+     */
+    private static class ParameterGatedKey
+        extends LMSPrivateKeyParameters
+    {
+        final CountDownLatch entered = new CountDownLatch(1);
+        final CountDownLatch release = new CountDownLatch(1);
+
+        volatile boolean gated = false;
+
+        ParameterGatedKey(LMSigParameters sigParams, LMOtsParameters otsParams, int q, byte[] I, int maxQ, byte[] seed)
+        {
+            super(sigParams, otsParams, q, I, maxQ, seed);
+        }
+
+        public LMSParameters getLMSParameters()
+        {
+            if (gated)
+            {
+                gated = false;
+                entered.countDown();
+                try
+                {
+                    release.await();
+                }
+                catch (InterruptedException e)
+                {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("interrupted");
+                }
+            }
+
+            return super.getLMSParameters();
         }
     }
 }

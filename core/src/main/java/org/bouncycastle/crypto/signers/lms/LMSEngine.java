@@ -7,7 +7,6 @@ import org.bouncycastle.crypto.params.HSSKeyGenerationParameters;
 import org.bouncycastle.crypto.params.HSSPrivateKeyParameters;
 import org.bouncycastle.crypto.params.HSSPublicKeyParameters;
 import org.bouncycastle.crypto.params.LMOtsParameters;
-import org.bouncycastle.crypto.params.LMSPrivateKeyParameters;
 import org.bouncycastle.crypto.params.LMSPublicKeyParameters;
 import org.bouncycastle.crypto.params.LMSigParameters;
 import org.bouncycastle.util.Arrays;
@@ -125,10 +124,7 @@ public final class LMSEngine
      */
     public static LMSSignature generateSign(LMSContext context)
     {
-        // Step 1.
-        LMOtsSignature ots_signature = LM_OTS.lm_ots_generate_signature(context.getPrivateKey(), context.getQ(), context.getC());
-
-        return new LMSSignature(context.getPrivateKey().getQ(), ots_signature, context.getSigParams(), context.getPath());
+        return context.generateSignature();
     }
 
     /**
@@ -154,44 +150,41 @@ public final class LMSEngine
     //
 
     /**
-     * The context a message is absorbed into before verifying an encoded LMS signature against a
-     * public key. Consumed by {@link #verifySignature(LMSPublicKeyParameters, LMSContext)}.
-     *
-     * @throws IllegalStateException if the signature does not decode.
+     * @deprecated use {@link LMSPublicKeyParameters#generateLMSContext(byte[])} instead.
      */
+    @Deprecated
     public static LMSContext generateVerifyContext(LMSPublicKeyParameters publicKey, byte[] signature)
     {
-        try
-        {
-            return generateVerifyContext(publicKey, LMSSignature.getInstance(signature));
-        }
-        catch (IOException e)
-        {
-            throw Exceptions.illegalStateException("cannot parse signature", e);
-        }
+        return publicKey.generateLMSContext(signature);
     }
 
     /**
+     * The context a message is absorbed into before verifying a decoded LMS signature against a
+     * public key: the LM-OTS verification context of the leaf the signature names. Public only
+     * because {@link LMSPublicKeyParameters#generateLMSContext(byte[])} lives in another package;
+     * callers holding an encoded signature use that.
+     * <p>
      * The typecode and leaf-number checks RFC 8554 sec. 5.4.2 requires before a signature is
-     * processed: step 2g refuses a signature whose LMS typecode is not the one from the public key,
-     * and step 2i refuses a leaf number q outside the tree. Without the first, the path computation
-     * below took its height and tree digest from the parameter set the signature named rather than
-     * the key's, so a signature claiming h25 drove a 25-level computation against an h5 key; without
-     * the second, an out-of-range q flowed into the node arithmetic and was left to be caught by the
-     * candidate-root comparison. Neither was a forgery under a secure hash - the domain separation
-     * and the final comparison saw to that - but both are work the specification says to refuse up
-     * front.
+     * processed happen here: step 2g refuses a signature whose LMS typecode is not the one from the
+     * public key, and step 2i refuses a leaf number q outside the tree. Without the first, the path
+     * computation took its height and tree digest from the parameter set the signature named rather
+     * than the key's, so a signature claiming h25 drove a 25-level computation against an h5 key;
+     * without the second, an out-of-range q flowed into the node arithmetic and was left to be caught
+     * by the candidate-root comparison. Neither was a forgery under a secure hash - the domain
+     * separation and the final comparison saw to that - but both are work the specification says to
+     * refuse up front.
+     * </p>
      */
-    static LMSContext generateVerifyContext(LMSPublicKeyParameters publicKey, LMSSignature S)
+    public static LMSContext generateVerifyContext(LMSPublicKeyParameters publicKey, LMSSignature signature)
     {
         LMSigParameters sigParameters = publicKey.getSigParameters();
-        if (S.getParameter().getType() != sigParameters.getType())
+        if (signature.getParameter().getType() != sigParameters.getType())
         {
             throw new IllegalArgumentException("lms type from lms signature does not match lms type" +
                 " from public key");
         }
 
-        int q = S.getQ();
+        int q = signature.getQ();
         if (q < 0 || q >= (1 << sigParameters.getH()))
         {
             throw new IllegalArgumentException("lms leaf number q from lms signature is outside the" +
@@ -199,80 +192,89 @@ public final class LMSEngine
         }
 
         int ots_typecode = publicKey.getOtsParameters().getType();
-        if (S.getOtsSignature().getType().getType() != ots_typecode)
+        if (signature.getOtsSignature().getType().getType() != ots_typecode)
         {
             throw new IllegalArgumentException("ots type from lsm signature does not match ots" +
                 " signature type from embedded ots signature");
         }
 
-        return new LMOtsPublicKey(LMOtsParameters.getParametersForType(ots_typecode), publicKey.getI(), S.getQ(), null).createOtsContext(S);
+        LMOtsParameters otsParameters = LMOtsParameters.getParametersForType(ots_typecode);
+        LMOtsPublicKey otsPublicKey = new LMOtsPublicKey(otsParameters, publicKey.getI(), q, null);
+        return otsPublicKey.createOtsContext(signature);
     }
 
     /**
-     * Verify the LMS signature a context from {@link #generateVerifyContext} carries over the
-     * message absorbed into it (RFC 8554 sec. 5.4.2, Algorithm 6).
+     * Verify the LMS signature a context from {@link LMSPublicKeyParameters#generateLMSContext(byte[])}
+     * carries over the message absorbed into it (RFC 8554 sec. 5.4.2, Algorithm 6).
      */
     public static boolean verifySignature(LMSPublicKeyParameters publicKey, LMSContext context)
     {
-        LMSSignature S = (LMSSignature)context.getSignature();
-        LMSigParameters lmsParameter = S.getParameter();
-        int h = lmsParameter.getH();
-        byte[][] path = S.getY();
-        byte[] Kc = LM_OTS.lm_ots_validate_signature_calculate(context);
-        // Step 4
-        // node_num = 2^h + q
-        int node_num = (1 << h) + S.getQ();
+        Object contextSignature = context.getSignature();
 
-        // tmp = H(I || u32str(node_num) || u16str(D_LEAF) || Kc)
+        // Guaranteed by every route the library has to a verification context, all of which reach
+        // LMOtsPublicKey.createOtsContext with a decoded LMS signature. No public path to mis-construction.
+        if (!(contextSignature instanceof LMSSignature))
+        {
+            throw new IllegalStateException("context was not created from an LMS signature");
+        }
+
+        LMSSignature signature = (LMSSignature)contextSignature;
+        LMSigParameters sigParameters = signature.getParameter();
+        byte[][] path = signature.getY();
+
+        // Kc, the LM-OTS public key the signature computes for itself
+        byte[] Kc = context.calculateKc();
+
         byte[] I = publicKey.getI();
-        Digest H = DigestUtil.getDigest(lmsParameter);
-        byte[] tmp = new byte[H.getDigestSize()];
+        Digest digest = DigestUtil.getDigest(sigParameters);
 
-        H.update(I, 0, I.length);
-        LmsUtils.u32str(node_num, H);
-        LmsUtils.u16str(D_LEAF, H);
-        H.update(Kc, 0, Kc.length);
-        H.doFinal(tmp, 0);
+        // The node the walk is at, and the hash it has computed for it: the leaf of the one-time key that
+        // signed, then each parent in turn, leaving the root the signature claims.
+        // RFC 8554 sec. 5.4.2 step 4: node_num = 2^h + q, tmp = H(I || u32str(node_num) || u16str(D_LEAF) || Kc)
+        int node_num = (1 << sigParameters.getH()) + signature.getQ();
+        byte[] nodeHash = new byte[digest.getDigestSize()];
+
+        digest.update(I, 0, I.length);
+        LmsUtils.u32str(node_num, digest);
+        LmsUtils.u16str(D_LEAF, digest);
+        digest.update(Kc, 0, Kc.length);
+        digest.doFinal(nodeHash, 0);
 
         int i = 0;
 
         while (node_num > 1)
         {
-            if ((node_num & 1) == 1)
-            {
-                // is odd
-                H.update(I, 0, I.length);
-                LmsUtils.u32str(node_num / 2, H);
-                LmsUtils.u16str(D_INTR, H);
-                H.update(path[i], 0, path[i].length);
-                H.update(tmp, 0, tmp.length);
-                H.doFinal(tmp, 0);
-            }
-            else
-            {
-                H.update(I, 0, I.length);
-                LmsUtils.u32str(node_num / 2, H);
-                LmsUtils.u16str(D_INTR, H);
-                H.update(tmp, 0, tmp.length);
-                H.update(path[i], 0, path[i].length);
-                H.doFinal(tmp, 0);
-            }
-            node_num = node_num / 2;
-            i++;
-            // these two can get out of sync with an invalid signature, we'll
-            // try and fail gracefully
-            if (i == path.length && node_num > 1)
+            // The path and the node count can get out of sync with an invalid signature, so fail gracefully
+            // rather than index past the path the signature carries.
+            if (i >= path.length)
             {
                 return false;
             }
+
+            byte[] siblingHash = path[i++];
+
+            // The node's parity decides which side its sibling from the path goes on - left for an odd node,
+            // right for an even one - while the hash itself is over the parent (RFC 8554 sec. 5.4.2 step 4).
+            boolean isOdd = (node_num & 1) == 1;
+            node_num >>= 1;
+
+            byte[] left = isOdd ? siblingHash : nodeHash;
+            byte[] right = isOdd ? nodeHash : siblingHash;
+
+            digest.update(I, 0, I.length);
+            LmsUtils.u32str(node_num, digest);
+            LmsUtils.u16str(D_INTR, digest);
+            digest.update(left, 0, left.length);
+            digest.update(right, 0, right.length);
+            digest.doFinal(nodeHash, 0);
         }
-        byte[] Tc = tmp;
-        return Arrays.constantTimeAreEqual(publicKey.getT1(), Tc);
+
+        return Arrays.constantTimeAreEqual(publicKey.getT1(), nodeHash);
     }
 
-    static boolean verifySignature(LMSPublicKeyParameters publicKey, LMSSignature S, byte[] message)
+    static boolean verifySignature(LMSPublicKeyParameters publicKey, LMSSignature signature, byte[] message)
     {
-        LMSContext context = generateVerifyContext(publicKey, S);
+        LMSContext context = generateVerifyContext(publicKey, signature);
 
         LmsUtils.byteArray(message, context);
 
@@ -342,6 +344,19 @@ public final class LMSEngine
         return passed & verifySignature(key, context);
     }
 
+    //
+    // HSS key management (RFC 8554 sec. 6.1).
+    //
+
+    /**
+     * @deprecated Use {@link HSSPrivateKeyParameters#generate(HSSKeyGenerationParameters)}.
+     */
+    @Deprecated
+    public static HSSPrivateKeyParameters generateHSSKeyPair(HSSKeyGenerationParameters parameters)
+    {
+        return HSSPrivateKeyParameters.generate(parameters);
+    }
+
     private static byte[] encodePublicKey(LMSPublicKeyParameters publicKey)
     {
         try
@@ -352,71 +367,6 @@ public final class LMSEngine
         {
             throw Exceptions.illegalStateException("unable to encode public key", e);
         }
-    }
-
-    //
-    // HSS key management (RFC 8554 sec. 6.1).
-    //
-
-    /**
-     * Generate an HSS private key: a root LMS key drawn from the parameters' random source, with
-     * the lower trees derived from it when the key is first positioned at index 0.
-     */
-    public static HSSPrivateKeyParameters generateHSSKeyPair(HSSKeyGenerationParameters parameters)
-    {
-        //
-        // LmsPrivateKey can derive and hold the public key so we just use an array of those.
-        //
-        LMSPrivateKeyParameters[] keys = new LMSPrivateKeyParameters[parameters.getDepth()];
-        LMSSignature[] sig = new LMSSignature[parameters.getDepth() - 1];
-
-        byte[] rootSeed = new byte[parameters.getLmsParameters()[0].getLMSigParam().getM()];
-        parameters.getRandom().nextBytes(rootSeed);
-
-        byte[] I = new byte[16];
-        parameters.getRandom().nextBytes(I);
-
-        //
-        // Set the HSS key up with a valid root LMSPrivateKeyParameters and placeholders for the remaining LMS keys.
-        // The placeholders pass enough information to allow the HSSPrivateKeyParameters to be properly reset to an
-        // index of zero. Rather than repeat the same reset-to-index logic in this static method.
-        //
-
-        long hssKeyMaxIndex = 1;
-        for (int t = 0; t < keys.length; t++)
-        {
-            if (t == 0)
-            {
-                keys[t] = new LMSPrivateKeyParameters(
-                    parameters.getLmsParameters()[t].getLMSigParam(),
-                    parameters.getLmsParameters()[t].getLMOTSParam(),
-                    0,
-                    I,
-                    1 << parameters.getLmsParameters()[t].getLMSigParam().getH(),
-                    rootSeed);
-            }
-            else
-            {
-                keys[t] = new PlaceholderLMSPrivateKey(
-                    parameters.getLmsParameters()[t].getLMSigParam(),
-                    parameters.getLmsParameters()[t].getLMOTSParam(),
-                    1 << parameters.getLmsParameters()[t].getLMSigParam().getH());
-            }
-            hssKeyMaxIndex *= 1 << parameters.getLmsParameters()[t].getLMSigParam().getH();
-        }
-
-        // if this has happened we're trying to generate a really large key
-        // we'll use MAX_VALUE so that it's at least usable until someone upgrades the structure.
-        if (hssKeyMaxIndex == 0)
-        {
-            hssKeyMaxIndex = Long.MAX_VALUE;
-        }
-
-        return new HSSPrivateKeyParameters(
-            parameters.getDepth(),
-            java.util.Arrays.asList(keys),
-            java.util.Arrays.asList(sig),
-            0, hssKeyMaxIndex);
     }
 
     /**
@@ -441,24 +391,5 @@ public final class LMSEngine
         System.arraycopy(postImage, 0, childI, 0, childI.length);
 
         return new byte[][]{ childI, childSeed };
-    }
-
-    private static class PlaceholderLMSPrivateKey
-        extends LMSPrivateKeyParameters
-    {
-        PlaceholderLMSPrivateKey(LMSigParameters lmsParameter, LMOtsParameters otsParameters, int maxQ)
-        {
-            super(lmsParameter, otsParameters, maxQ);
-        }
-
-        public LMSContext generateLMSContext()
-        {
-            throw new RuntimeException("placeholder only");
-        }
-
-        public LMSPublicKeyParameters getPublicKey()
-        {
-            throw new RuntimeException("placeholder only");
-        }
     }
 }
