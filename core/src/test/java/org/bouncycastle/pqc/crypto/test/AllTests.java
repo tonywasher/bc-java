@@ -36,6 +36,7 @@ public class AllTests
         suite.addTestSuite(MLKEMTest.class);
         suite.addTestSuite(CrystalsDilithiumTest.class);
         suite.addTestSuite(MLDSATest.class);
+        suite.addTestSuite(MLDSAWycheproofTest.class);
         suite.addTestSuite(NTRULPRimeTest.class);
         suite.addTestSuite(SNTRUPrimeTest.class);
 //        suite.addTestSuite(BIKETest.class);
