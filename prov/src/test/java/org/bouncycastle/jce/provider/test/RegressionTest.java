@@ -61,6 +61,7 @@ public class RegressionTest
         new HardwareKeyInvalidKeyExceptionTest(),
         new IESTest(),
         new ImplicitlyCaTest(),
+        new JKSStoreTest(),
         new KeccakTest(),
         new KeyAgreementKeySizeTest(),
         new Argon2KeyFactoryTest(),
