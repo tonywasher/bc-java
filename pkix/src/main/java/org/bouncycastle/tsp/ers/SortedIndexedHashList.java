@@ -13,13 +13,7 @@ public class SortedIndexedHashList
 {
     private static final Comparator<byte[]> hashComp = new ByteArrayComparator();
 
-    private static final Comparator<IndexedHash> digestComp = new Comparator<IndexedHash>()
-    {
-        public int compare(IndexedHash l, IndexedHash r)
-        {
-            return hashComp.compare(l.digest, r.digest);
-        }
-    };
+    private static final Comparator<IndexedHash> digestComp = new DigestComparator();
 
     private final List<IndexedHash> baseList = new ArrayList<IndexedHash>();
 
@@ -74,5 +68,16 @@ public class SortedIndexedHashList
         Collections.sort(sorted, digestComp);
 
         return sorted;
+    }
+
+    // takes Objects, as ByteArrayComparator does: the legacy builds strip the type parameters
+    // and a compare() declared on IndexedHash then implements nothing.
+    private static class DigestComparator
+        implements Comparator
+    {
+        public int compare(Object l, Object r)
+        {
+            return hashComp.compare(((IndexedHash)l).digest, ((IndexedHash)r).digest);
+        }
     }
 }
