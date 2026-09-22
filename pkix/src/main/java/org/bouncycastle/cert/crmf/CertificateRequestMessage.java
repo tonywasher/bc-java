@@ -16,6 +16,7 @@ import org.bouncycastle.asn1.crmf.PKIArchiveOptions;
 import org.bouncycastle.asn1.crmf.PKMACValue;
 import org.bouncycastle.asn1.crmf.POPOSigningKey;
 import org.bouncycastle.asn1.crmf.ProofOfPossession;
+import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.cert.CertIOException;
 import org.bouncycastle.operator.ContentVerifier;
 import org.bouncycastle.operator.ContentVerifierProvider;
@@ -145,6 +146,10 @@ public class CertificateRequestMessage
             if (found.getType().equals(CRMFObjectIdentifiers.id_regCtrl_authenticator))
             {
                 return new AuthenticatorControl(ASN1UTF8String.getInstance(found.getValue()));
+            }
+            if (found.getType().equals(CRMFObjectIdentifiers.id_regCtrl_protocolEncrKey))
+            {
+                return new ProtocolEncrKeyControl(SubjectPublicKeyInfo.getInstance(found.getValue()));
             }
         }
 

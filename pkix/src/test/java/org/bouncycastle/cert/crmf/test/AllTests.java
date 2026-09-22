@@ -47,6 +47,7 @@ import org.bouncycastle.cert.crmf.EncryptedValuePadder;
 import org.bouncycastle.cert.crmf.EncryptedValueParser;
 import org.bouncycastle.cert.crmf.PKIArchiveControl;
 import org.bouncycastle.cert.crmf.PKMACBuilder;
+import org.bouncycastle.cert.crmf.ProtocolEncrKeyControl;
 import org.bouncycastle.cert.crmf.ValueDecryptorGenerator;
 import org.bouncycastle.cert.crmf.bc.BcCRMFEncryptorBuilder;
 import org.bouncycastle.cert.crmf.bc.BcEncryptedValueBuilder;
@@ -226,6 +227,40 @@ public class AllTests
         CertReqMsg certReqMsgASN1 = certReqMsg.toASN1Structure();
         TestCase.assertEquals(1, certReqMsgASN1.getRegInfo().length);
         TestCase.assertEquals(atavArr[0], certReqMsgASN1.getRegInfo()[0]);
+    }
+
+    public void testBasicMessageWithProtocolEncrKeyControl()
+        throws Exception
+    {
+        KeyPairGenerator kGen = KeyPairGenerator.getInstance("RSA", BC);
+
+        kGen.initialize(512);
+
+        KeyPair kp = kGen.generateKeyPair();
+        SubjectPublicKeyInfo publicKeyInfo = SubjectPublicKeyInfo.getInstance(kp.getPublic().getEncoded());
+
+        JcaCertificateRequestMessageBuilder certReqBuild = new JcaCertificateRequestMessageBuilder(BigInteger.ONE);
+
+        certReqBuild.setSubject(new X500Principal("CN=Test"))
+            .setPublicKey(kp.getPublic())
+            .addControl(new ProtocolEncrKeyControl(publicKeyInfo));
+
+        CertificateRequestMessage certReqMsg = certReqBuild.build();
+
+        checkCertReqMsgWithProtocolEncrKeyControl(certReqMsg, publicKeyInfo);
+        checkCertReqMsgWithProtocolEncrKeyControl(new CertificateRequestMessage(certReqMsg.getEncoded()), publicKeyInfo);
+    }
+
+    private void checkCertReqMsgWithProtocolEncrKeyControl(CertificateRequestMessage certReqMsg,
+        SubjectPublicKeyInfo publicKeyInfo)
+    {
+        TestCase.assertTrue(certReqMsg.hasControl(CRMFObjectIdentifiers.id_regCtrl_protocolEncrKey));
+
+        ProtocolEncrKeyControl protocolEncrKeyControl = (ProtocolEncrKeyControl)certReqMsg.getControl(
+            CRMFObjectIdentifiers.id_regCtrl_protocolEncrKey);
+
+        TestCase.assertEquals(CRMFObjectIdentifiers.id_regCtrl_protocolEncrKey, protocolEncrKeyControl.getType());
+        TestCase.assertEquals(publicKeyInfo, protocolEncrKeyControl.getValue());
     }
 
     public void testBasicMessageWithArchiveControl()
