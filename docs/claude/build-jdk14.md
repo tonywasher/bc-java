@@ -18,9 +18,9 @@ passes (patterns in `ant/build.regexp`) over the result. The preprocessor strips
 `@Override`/`@Deprecated`/`@SuppressWarnings`, rewrites `StringBuilder`→`StringBuffer`, and
 turns varargs *declarations* (`...`) into arrays.
 
-What is therefore FINE in 1.4-reachable code: generics, `StringBuilder`, varargs
-declarations. What is NOT (the regexes can't fix syntax or APIs): enhanced-for loops,
-autoboxing, enums, covariant return overrides, varargs *call sites*, and any post-1.4 API —
+What is therefore FINE in 1.4-reachable code: generics (but see the erased-override trap
+below), `StringBuilder`, varargs declarations. What is NOT (the regexes can't fix syntax or
+APIs): enhanced-for loops, autoboxing, enums, covariant return overrides, varargs *call sites*, and any post-1.4 API —
 `String.contains`/`isEmpty`, `System.clearProperty` (use `System.getProperties().remove`),
 `java.nio.charset.StandardCharsets` (Java 7 — use BC `Strings.toUTF8ByteArray` /
 `Strings.toByteArray`; this is the single most common way a new *test* breaks this build),
@@ -35,12 +35,22 @@ or plain `Thread` + `join`), `ArrayDeque`, `ResourceBundle.Control`,
 exception constructors (use `Exceptions` / `SecurityExceptions` factories, or
 `super(msg)` + `initCause` in subclasses), and `ThreadLocal.remove()` (use `set(null)`).
 
-Two 1.4-only compiler/runtime traps with no modern analogue:
+1.4-only compiler/runtime traps with no modern analogue:
 
 - **`System.getenv` throws `java.lang.Error` on JRE 1.4** ("getenv no longer supported").
   The six `TestResourceFinder` copies guard their `BC_TEST_DATA_HOME` lookup with
   `catch (Error)` for this reason — any new env-var read in test-reachable code needs the
   same guard.
+- **Implementing a generic interface with the type argument's signature collapses.** The
+  type parameters are stripped but the method parameters are not, so
+  `new Comparator<IndexedHash>() { public int compare(IndexedHash l, IndexedHash r) }`
+  becomes a raw `Comparator` declaring `compare(IndexedHash, IndexedHash)` and real 1.4 javac
+  rejects it - "is not abstract and does not override abstract method
+  `compare(java.lang.Object,java.lang.Object)`". Implement such an interface with the erased
+  signature and cast inside, as `tsp/ers/ByteArrayComparator` and
+  `SortedIndexedHashList.DigestComparator` do. Cheap check without the full build: run the
+  `ant/build.regexp` pattern over the file and its package and compile the result with
+  `/opt/jdk1.4.2/bin/javac`.
 - **JLS2 static method hiding requires identical return types.** A subclass static
   `getInstance(Object)` cannot narrow the parent's return type on 1.4 javac — that is why
   the `util/src/main/jdk1.4` cmp overlays (`CertAnnContent`, `OOBCert`,
