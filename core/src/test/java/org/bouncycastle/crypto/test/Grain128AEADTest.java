@@ -3,6 +3,7 @@ package org.bouncycastle.crypto.test;
 import java.security.SecureRandom;
 
 import org.bouncycastle.crypto.InvalidCipherTextException;
+import org.bouncycastle.crypto.OutputLengthException;
 import org.bouncycastle.crypto.engines.Grain128AEADEngine;
 import org.bouncycastle.crypto.modes.AEADCipher;
 import org.bouncycastle.crypto.params.KeyParameter;
@@ -233,6 +234,56 @@ public class Grain128AEADTest
         {
             isEquals("Grain-128 AEAD key must be 16 bytes long", e.getMessage());
         }
+
+        ParametersWithIV params = new ParametersWithIV(new KeyParameter(new byte[16]), new byte[12]);
+        byte[] pt = new byte[64];
+
+        Grain128AEADEngine grain = new Grain128AEADEngine();
+
+        grain.init(true, params);
+
+        byte[] ct = new byte[grain.getOutputSize(pt.length)];
+        int ctLen = grain.processBytes(pt, 0, pt.length, ct, 0);
+        ctLen += grain.doFinal(ct, ctLen);
+
+        // an output buffer too short for what the call would write is reported the way the other
+        // AEAD engines report it, rather than as an ArrayIndexOutOfBoundsException
+        try
+        {
+            grain.init(true, params);
+            grain.processBytes(pt, 0, pt.length, new byte[pt.length - 1], 0);
+            fail("no exception");
+        }
+        catch (OutputLengthException e)
+        {
+            isEquals("output buffer too short", e.getMessage());
+        }
+
+        try
+        {
+            grain.init(false, params);
+            grain.processBytes(ct, 0, ctLen, new byte[pt.length - 1], 0);
+            fail("no exception");
+        }
+        catch (OutputLengthException e)
+        {
+            isEquals("output buffer too short", e.getMessage());
+        }
+
+        try
+        {
+            grain.init(true, params);
+            grain.processByte((byte)1, new byte[0], 0);
+            fail("no exception");
+        }
+        catch (OutputLengthException e)
+        {
+            isEquals("output buffer too short", e.getMessage());
+        }
+
+        // nothing is released while the tag is still buffered, so the output is not touched
+        grain.init(false, params);
+        isEquals("buffered decryption releases nothing", 0, grain.processBytes(ct, 0, 8, new byte[0], 0));
     }
 
     static void checkAEADCipherOutputSize(SimpleTest parent, int keySize, int ivSize, int tagSize, AEADCipher cipher)
