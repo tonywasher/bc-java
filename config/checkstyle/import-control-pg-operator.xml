@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<!DOCTYPE import-control PUBLIC
+        "-//Checkstyle//DTD ImportControl Configuration 1.4//EN"
+        "https://checkstyle.org/dtds/import_control_1_4.dtd">
+
+<!--
+    org.bouncycastle.openpgp.operator is the operator layer the high-level API is built on, so it
+    must not depend on org.bouncycastle.openpgp.api (or any of its subpackages) - the dependency
+    runs api -> operator and not back. A class that needs both belongs in openpgp.api.operator,
+    where PGPContentSignerBuilderProviderFactory sits. Scoped to
+    pg/src/main/java/org/bouncycastle/openpgp/operator by the ImportControl module's path property
+    in checkstyle.xml; the subpackages (bc, jcajce, ...) are covered with it.
+-->
+<import-control pkg="org.bouncycastle.openpgp.operator" strategyOnMismatch="allowed">
+
+    <disallow pkg="org.bouncycastle.openpgp.api"/>
+
+</import-control>

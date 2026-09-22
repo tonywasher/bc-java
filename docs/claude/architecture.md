@@ -243,7 +243,17 @@ Practical implications when adding code:
 - Need to wrap an existing `Jca*` builder? Either (a) wrap the JCA-free parent (e.g. wrap `SignerInfoGeneratorBuilder` instead of `JcaSignerInfoGeneratorBuilder`) so the class can stay at the top, or (b) move the class into the `.jcajce` subpackage.
 - A top-level class that does need to expose a JCA-friendly or lightweight-friendly factory method should ship the factory in its `.jcajce` or `.bc` peer instead of pulling JCA/lightweight imports into the top package.
 
-The rule applies uniformly to `pkix` (`cms`, `cades`, `tsp`, `cert`, `operator`, ...), `pg`, `mail`/`jmail`, `tls`, and `mls`. When adding a new package under any of these modules, decide on the split up-front: if any class needs `java.security` / `javax.crypto` beyond `SecureRandom`, the package should be a `.jcajce` subpackage; if any class needs `org.bouncycastle.crypto.*`, the package should be a `.bc` subpackage. A JCA-free, lightweight-free top-level parent is usually still appropriate to host the operator interfaces both flavours adapt to.
+The rule applies uniformly to `pkix` (`cms`, `cades`, `tsp`, `cert`, `operator`, ...), `pg`, `mail`/`jmail`, `tls`, and `mls`.
+
+`pg` carries one extra layering rule, and it is machine-enforced: **`org.bouncycastle.openpgp.operator`
+must not import `org.bouncycastle.openpgp.api`** (or any of its subpackages). The dependency runs
+api -> operator, not back; a class that needs both belongs in `org.bouncycastle.openpgp.api.operator`,
+where `PGPContentSignerBuilderProviderFactory` sits. A second `ImportControl` module in
+`config/checkstyle/checkstyle.xml` applies `config/checkstyle/import-control-pg-operator.xml` to
+`pg/src/main/java/org/bouncycastle/openpgp/operator` (subpackages included), so a new import fails
+`:pg:checkstyleMain` with `Disallowed import - org.bouncycastle.openpgp.api.<X>. [ImportControl]`.
+As with the core import control, checkstyle only sees imports - a fully-qualified
+`org.bouncycastle.openpgp.api.Foo` in a method body would slip past, so keep an eye out in review. When adding a new package under any of these modules, decide on the split up-front: if any class needs `java.security` / `javax.crypto` beyond `SecureRandom`, the package should be a `.jcajce` subpackage; if any class needs `org.bouncycastle.crypto.*`, the package should be a `.bc` subpackage. A JCA-free, lightweight-free top-level parent is usually still appropriate to host the operator interfaces both flavours adapt to.
 
 ## Shared prov/pkix cert-path logic goes in `asn1.x509` as a public pure-ASN.1 validator
 
