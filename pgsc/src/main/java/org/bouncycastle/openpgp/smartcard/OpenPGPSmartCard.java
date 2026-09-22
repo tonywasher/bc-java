@@ -8,6 +8,7 @@ import org.bouncycastle.openpgp.api.OpenPGPCertificate.OpenPGPComponentKey;
 import org.bouncycastle.openpgp.api.OpenPGPKey;
 import org.bouncycastle.openpgp.api.OpenPGPKey.OpenPGPPrivateKey;
 import org.bouncycastle.openpgp.api.exception.KeyPassphraseException;
+import org.bouncycastle.util.Arrays;
 import org.bouncycastle.openpgp.smartcard.card.CardException;
 
 import java.security.PublicKey;
@@ -368,13 +369,15 @@ public abstract class OpenPGPSmartCard
         throws KeyPassphraseException, CardException;
 
     /**
-     * Fetch the card's user PIN. The returned array is the caller's to zeroize once the card has
+     * Fetch the card's user PIN. A {@link KeyPassphraseProvider} keeps ownership of the array it
+     * hands out - both implementations BC ships return the application's own array by reference -
+     * so a copy is returned here, and that copy is the caller's to zeroize once the card has
      * verified it.
      */
     protected char[] requireUserPin(KeyPassphraseProvider userPinProvider, OpenPGPKey.OpenPGPSecretKey signingKey)
             throws KeyPassphraseException
     {
-        char[] pin = userPinProvider.getKeyPassword(signingKey);
+        char[] pin = Arrays.clone(userPinProvider.getKeyPassword(signingKey));
         if (pin == null || pin.length == 0)
         {
             throw new KeyPassphraseException(signingKey, new IllegalStateException("PIN required."));

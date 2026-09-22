@@ -48,6 +48,8 @@ public class AllTests
     {
         TestSuite suite = new TestSuite("OpenPGP SmartCard Tests");
 
+        // this class's own testUnits(), which JUnit ignores in favour of suite()
+        suite.addTestSuite(AllTests.class);
         suite.addTestSuite(SimulatorTests.class);
         suite.addTestSuite(YubikeyTests.class);
 
