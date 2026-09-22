@@ -1562,6 +1562,108 @@ public class ERSTest
         return ersGen.generateTimeStampRequest(tspReqGen).getMessageImprintDigest();
     }
 
+    /**
+     * The leaves are built once and kept, so adding data after a request has been generated has
+     * to discard them - the generator is otherwise still describing the data it was asked about
+     * the first time.
+     */
+    public void testDataAddedAfterRequest()
+        throws Exception
+    {
+        DigestCalculatorProvider digestCalculatorProvider = new JcaDigestCalculatorProviderBuilder().build();
+
+        ERSData doc1 = new ERSByteData(Strings.toByteArray("document 1"));
+        ERSData doc2 = new ERSByteData(Strings.toByteArray("document 2"));
+        ERSData doc3 = new ERSByteData(Strings.toByteArray("document 3"));
+
+        List<ERSData> two = new ArrayList<ERSData>();
+        two.add(doc1);
+        two.add(doc2);
+
+        List<ERSData> three = new ArrayList<ERSData>(two);
+        three.add(doc3);
+
+        ERSArchiveTimeStampGenerator ersGen = new ERSArchiveTimeStampGenerator(
+            digestCalculatorProvider.get(new AlgorithmIdentifier(NISTObjectIdentifiers.id_sha256)));
+
+        ersGen.addData(doc1);
+        ersGen.addData(doc2);
+
+        TimeStampRequestGenerator tspReqGen = new TimeStampRequestGenerator();
+
+        tspReqGen.setCertReq(true);
+
+        byte[] twoRoot = ersGen.generateTimeStampRequest(tspReqGen).getMessageImprintDigest();
+
+        assertTrue(Arrays.areEqual(rootOf(two, digestCalculatorProvider), twoRoot));
+
+        // a repeat request over unchanged data gives the same root
+        assertTrue(Arrays.areEqual(twoRoot, ersGen.generateTimeStampRequest(tspReqGen).getMessageImprintDigest()));
+
+        ersGen.addData(doc3);
+
+        byte[] threeRoot = ersGen.generateTimeStampRequest(tspReqGen).getMessageImprintDigest();
+
+        assertFalse(Arrays.areEqual(twoRoot, threeRoot));
+        assertTrue(Arrays.areEqual(rootOf(three, digestCalculatorProvider), threeRoot));
+
+        // and the same by way of addAllData()
+        ERSArchiveTimeStampGenerator allGen = new ERSArchiveTimeStampGenerator(
+            digestCalculatorProvider.get(new AlgorithmIdentifier(NISTObjectIdentifiers.id_sha256)));
+
+        allGen.addData(doc1);
+
+        assertTrue(Arrays.areEqual(rootOf(Collections.singletonList(doc1), digestCalculatorProvider),
+            allGen.generateTimeStampRequest(tspReqGen).getMessageImprintDigest()));
+
+        List<ERSData> rest = new ArrayList<ERSData>();
+        rest.add(doc2);
+        rest.add(doc3);
+
+        allGen.addAllData(rest);
+
+        assertTrue(Arrays.areEqual(threeRoot, allGen.generateTimeStampRequest(tspReqGen).getMessageImprintDigest()));
+    }
+
+    /**
+     * A data group's hash is the digest of its members' hashes in ascending order, and it comes
+     * from the cache ERSCachingData provides, as every other ERSData's does.
+     */
+    public void testDataGroupHash()
+        throws Exception
+    {
+        DigestCalculatorProvider digestCalculatorProvider = new JcaDigestCalculatorProviderBuilder().build();
+        DigestCalculator digestCalculator = digestCalculatorProvider.get(
+            new AlgorithmIdentifier(NISTObjectIdentifiers.id_sha256));
+
+        ERSData doc1 = new ERSByteData(Strings.toByteArray("document 1"));
+        ERSData doc2 = new ERSByteData(Strings.toByteArray("document 2"));
+        ERSData doc3 = new ERSByteData(Strings.toByteArray("document 3"));
+
+        ERSDataGroup group = new ERSDataGroup(new ERSData[]{doc1, doc2, doc3});
+
+        List<byte[]> hashes = group.getHashes(digestCalculator, null);
+
+        assertEquals(3, hashes.size());
+
+        MessageDigest digest = MessageDigest.getInstance("SHA-256", "BC");
+
+        for (int i = 0; i != hashes.size(); i++)
+        {
+            digest.update((byte[])hashes.get(i));
+        }
+
+        assertTrue(Arrays.areEqual(digest.digest(), group.getHash(digestCalculator, null)));
+
+        // the group hash is cached, so the same value comes back rather than being recomputed
+        assertTrue(group.getHash(digestCalculator, null) == group.getHash(digestCalculator, null));
+
+        // a group of one is the hash of its member
+        ERSDataGroup single = new ERSDataGroup(doc1);
+
+        assertTrue(Arrays.areEqual(doc1.getHash(digestCalculator, null), single.getHash(digestCalculator, null)));
+    }
+
     public void testReducedHashTrees()
         throws Exception
     {
