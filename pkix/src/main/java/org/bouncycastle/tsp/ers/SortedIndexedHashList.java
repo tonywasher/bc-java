@@ -23,8 +23,6 @@ public class SortedIndexedHashList
 
     private final List<IndexedHash> baseList = new ArrayList<IndexedHash>();
 
-    private boolean isSorted = true;
-
     public SortedIndexedHashList()
     {
     }
@@ -36,15 +34,25 @@ public class SortedIndexedHashList
             throw new NoSuchElementException();
         }
 
-        sort();
+        IndexedHash first = (IndexedHash)baseList.get(0);
 
-        return (IndexedHash)baseList.get(0);
+        for (int i = 1; i != baseList.size(); i++)
+        {
+            IndexedHash next = (IndexedHash)baseList.get(i);
+
+            // strictly less than, so the earliest added of a set of equal hashes is returned
+            if (digestComp.compare(next, first) < 0)
+            {
+                first = next;
+            }
+        }
+
+        return first;
     }
 
     public void add(IndexedHash hash)
     {
         baseList.add(hash);
-        isSorted = false;
     }
 
     public int size()
@@ -52,24 +60,19 @@ public class SortedIndexedHashList
         return baseList.size();
     }
 
+    /**
+     * Return the hashes added so far in ascending order of digest.
+     * <p>
+     * The sort is stable, so hashes comparing equal come back in the order they were added in.
+     *
+     * @return a sorted list of the hashes added.
+     */
     public List<IndexedHash> toList()
     {
-        sort();
+        List<IndexedHash> sorted = new ArrayList<IndexedHash>(baseList);
 
-        return new ArrayList<IndexedHash>(baseList);
-    }
+        Collections.sort(sorted, digestComp);
 
-    /**
-     * Sorting is deferred to the accessors, for the reason given on SortedHashList.sort():
-     * finding the insertion point with LinkedList.get(index) made building a list of n hashes
-     * O(n^3). Collections.sort() is stable, so hashes comparing equal keep ascending order.
-     */
-    private void sort()
-    {
-        if (!isSorted)
-        {
-            Collections.sort(baseList, digestComp);
-            isSorted = true;
-        }
+        return sorted;
     }
 }

@@ -21,6 +21,7 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Random;
 
 import junit.framework.TestCase;
@@ -1457,13 +1458,72 @@ public class ERSTest
     }
 
     /**
-     * A reduced hash tree over a large number of data objects. This reaches both sorted lists -
+     * toList() sorts a copy, so the list handed back belongs to the caller and the accessors can
+     * be interleaved with add() in any order. getFirst() answers without sorting at all.
+     */
+    public void testSortedHashListAccessors()
+    {
+        SortedHashList list = new SortedHashList();
+
+        assertEquals(0, list.size());
+        assertTrue(list.toList().isEmpty());
+
+        try
+        {
+            list.getFirst();
+            fail("no exception on empty list");
+        }
+        catch (NoSuchElementException e)
+        {
+            // expected - as LinkedList.getFirst() did
+        }
+
+        byte[] three = Hex.decode("03");
+        byte[] oneA = Hex.decode("01");
+        byte[] two = Hex.decode("02");
+        byte[] oneB = Hex.decode("01");
+
+        byte[][] values = new byte[][]{three, oneA, two, oneB};
+        for (int i = 0; i != values.length; i++)
+        {
+            list.add(values[i]);
+        }
+
+        List<byte[]> first = list.toList();
+
+        assertEquals(4, first.size());
+        // equal hashes come back in the order they were added in
+        assertTrue(oneA == first.get(0));
+        assertTrue(oneB == first.get(1));
+        assertTrue(two == first.get(2));
+        assertTrue(three == first.get(3));
+        assertTrue(oneA == list.getFirst());
+
+        // the caller owns the list returned, and the one before it
+        first.clear();
+
+        List<byte[]> second = list.toList();
+
+        assertEquals(4, list.size());
+        assertEquals(4, second.size());
+        assertTrue(oneA == second.get(0));
+
+        byte[] zero = Hex.decode("00");
+
+        list.add(zero);
+
+        assertEquals(5, list.size());
+        assertTrue(zero == list.getFirst());
+        assertTrue(zero == list.toList().get(0));
+    }
+
+    /**
+     * A reduced hash tree over a large number of data objects, reaching both sorted lists -
      * SortedIndexedHashList from ERSArchiveTimeStampGenerator.getPartialHashtrees(), and
-     * SortedHashList from BinaryTreeRootCalculator.computeRootHash() - and took about 2.5
-     * seconds for these 2,000 objects when the insertion point was found by walking a
-     * LinkedList, rising by roughly a factor of eight per doubling (10,000 objects took 347
-     * seconds). The root is also checked to be independent of the order the objects were added
-     * in, which is what the sorting is there for.
+     * SortedHashList from BinaryTreeRootCalculator.computeRootHash(). Finding each insertion
+     * point by walking a LinkedList made this cubic in the number of data objects; the root is
+     * also checked to be independent of the order the objects were added in, which is what the
+     * sorting is there for.
      */
     public void testLargeDataObjectSet()
         throws Exception

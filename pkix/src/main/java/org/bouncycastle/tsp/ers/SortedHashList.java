@@ -15,8 +15,6 @@ public class SortedHashList
 
     private final List<byte[]> baseList = new ArrayList<byte[]>();
 
-    private boolean isSorted = true;
-
     public SortedHashList()
     {
     }
@@ -28,15 +26,25 @@ public class SortedHashList
             throw new NoSuchElementException();
         }
 
-        sort();
+        byte[] first = (byte[])baseList.get(0);
 
-        return (byte[])baseList.get(0);
+        for (int i = 1; i != baseList.size(); i++)
+        {
+            byte[] next = (byte[])baseList.get(i);
+
+            // strictly less than, so the earliest added of a set of equal hashes is returned
+            if (hashComp.compare(next, first) < 0)
+            {
+                first = next;
+            }
+        }
+
+        return first;
     }
 
     public void add(byte[] hash)
     {
         baseList.add(hash);
-        isSorted = false;
     }
 
     public int size()
@@ -44,27 +52,19 @@ public class SortedHashList
         return baseList.size();
     }
 
+    /**
+     * Return the hashes added so far in ascending order.
+     * <p>
+     * The sort is stable, so hashes comparing equal come back in the order they were added in.
+     *
+     * @return a sorted list of the hashes added.
+     */
     public List<byte[]> toList()
     {
-        sort();
+        List<byte[]> sorted = new ArrayList<byte[]>(baseList);
 
-        return new ArrayList<byte[]>(baseList);
-    }
+        Collections.sort(sorted, hashComp);
 
-    /**
-     * Sorting is deferred to the accessors. Inserting each hash on add() meant searching a
-     * LinkedList for the insertion point with get(index), which is O(index), so a single add()
-     * was O(n^2) and building a list of n hashes was O(n^3).
-     * <p>
-     * Collections.sort() is stable, so hashes comparing equal keep the order they were added
-     * in - which is where inserting after the last equal element used to put them.
-     */
-    private void sort()
-    {
-        if (!isSorted)
-        {
-            Collections.sort(baseList, hashComp);
-            isSorted = true;
-        }
+        return sorted;
     }
 }
