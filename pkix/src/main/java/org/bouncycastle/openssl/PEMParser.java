@@ -402,7 +402,7 @@ public class PEMParser
             }
             catch (Exception e)
             {
-                throw new PEMException("problem parsing cert: " + e.toString(), e);
+                throw new PEMException("problem parsing certificate: " + e.toString(), e);
             }
         }
     }
@@ -411,9 +411,9 @@ public class PEMParser
         implements PemObjectParser
     {
         /**
-         * Reads in a X509Certificate.
+         * Reads in a X509TrustedCertificateBlock.
          *
-         * @return the X509Certificate
+         * @return the X509TrustedCertificateBlock
          * @throws java.io.IOException if an I/O error occured
          */
         public Object parseObject(PemObject obj)
@@ -425,7 +425,7 @@ public class PEMParser
             }
             catch (Exception e)
             {
-                throw new PEMException("problem parsing cert: " + e.toString(), e);
+                throw new PEMException("problem parsing trusted certificate: " + e.toString(), e);
             }
         }
     }
@@ -436,7 +436,7 @@ public class PEMParser
         /**
          * Reads in a X509CRL.
          *
-         * @return the X509Certificate
+         * @return the X509CRL
          * @throws java.io.IOException if an I/O error occured
          */
         public Object parseObject(PemObject obj)
@@ -448,7 +448,7 @@ public class PEMParser
             }
             catch (Exception e)
             {
-                throw new PEMException("problem parsing cert: " + e.toString(), e);
+                throw new PEMException("problem parsing CRL: " + e.toString(), e);
             }
         }
     }

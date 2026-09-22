@@ -3,7 +3,6 @@ package org.bouncycastle.crypto.params;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 
-import org.bouncycastle.crypto.params.AsymmetricKeyParameter;
 import org.bouncycastle.util.Encodable;
 import org.bouncycastle.util.Pack;
 
