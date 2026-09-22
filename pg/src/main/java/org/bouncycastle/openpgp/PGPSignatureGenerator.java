@@ -18,6 +18,7 @@ import org.bouncycastle.bcpg.sig.SignatureCreationTime;
 import org.bouncycastle.crypto.CryptoServicesRegistrar;
 import org.bouncycastle.openpgp.operator.PGPContentSigner;
 import org.bouncycastle.openpgp.operator.PGPContentSignerBuilder;
+import org.bouncycastle.openpgp.operator.PGPExternalContentSignerBuilder;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Strings;
 
@@ -90,7 +91,7 @@ public class PGPSignatureGenerator
     }
 
     /**
-     * Initialise the generator for signing.
+     * Initialize the generator for signing.
      *
      * @param signatureType type of signature
      * @param key private signing key
@@ -105,7 +106,20 @@ public class PGPSignatureGenerator
         {
             throw new PGPException("Illegal signature type 0xFF provided.");
         }
-        contentSigner = contentSignerBuilder.build(signatureType, key);
+
+        if (contentSignerBuilder instanceof PGPExternalContentSignerBuilder)
+        {
+            contentSigner = ((PGPExternalContentSignerBuilder)contentSignerBuilder).build(signatureType);
+        }
+        else if (key != null)
+        {
+            contentSigner = contentSignerBuilder.build(signatureType, key);
+        }
+        else
+        {
+            throw new PGPException("Missing private key.");
+        }
+
         sigOut = contentSigner.getOutputStream();
         sigType = contentSigner.getType();
         lastb = 0;
@@ -115,7 +129,7 @@ public class PGPSignatureGenerator
             throw new PGPException("key algorithm mismatch");
         }
 
-        if (key.getPublicKeyPacket().getVersion() != version)
+        if (key != null && key.getPublicKeyPacket().getVersion() != version)
         {
             throw new PGPException("Key version mismatch.");
         }

@@ -3,15 +3,18 @@ package org.bouncycastle.openpgp.api.operator.jcajce;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
 import java.security.Provider;
 import java.security.PublicKey;
+import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
-import java.util.Date;
 
 import javax.crypto.Cipher;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.SecretKeySpec;
 
+import org.bouncycastle.asn1.ASN1Encoding;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.edec.EdECObjectIdentifiers;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
@@ -22,7 +25,6 @@ import org.bouncycastle.bcpg.AEADEncDataPacket;
 import org.bouncycastle.bcpg.ECDHPublicBCPGKey;
 import org.bouncycastle.bcpg.HashAlgorithmTags;
 import org.bouncycastle.bcpg.PublicKeyAlgorithmTags;
-import org.bouncycastle.bcpg.PublicKeyPacket;
 import org.bouncycastle.bcpg.SymmetricEncIntegrityPacket;
 import org.bouncycastle.bcpg.SymmetricKeyAlgorithmTags;
 import org.bouncycastle.jcajce.spec.HKDFParameterSpec;
@@ -50,6 +52,8 @@ import org.bouncycastle.openpgp.operator.jcajce.JcaPGPKeyConverter;
 import org.bouncycastle.openpgp.operator.jcajce.JcePublicKeyDataDecryptorFactoryBuilder;
 import org.bouncycastle.openpgp.operator.jcajce.JceSessionKeyDataDecryptorFactoryBuilder;
 import org.bouncycastle.util.Strings;
+
+import static org.bouncycastle.asn1.x9.X9ObjectIdentifiers.id_ecPublicKey;
 
 /**
  * Builder for a {@link PublicKeyDataDecryptorFactory} whose private key material is held outside
@@ -180,35 +184,35 @@ public abstract class JceExternalPublicKeyDataDecryptorFactoryBuilder
         protected byte[] decryptRSA(int keyAlgorithm, byte[] sessionKey)
             throws PGPException
         {
-            return cryptoCallback.decryptRSA(keyAlgorithm, sessionKey);
+            return cryptoCallback.decrypt(keyAlgorithm, new byte[][]{sessionKey});
         }
 
         @Override
         protected byte[] decryptElGamal(int keyAlgorithm, byte[][] secKeyData)
             throws PGPException
         {
-            return cryptoCallback.decryptElGamal(keyAlgorithm, secKeyData);
+            return cryptoCallback.decrypt(keyAlgorithm, secKeyData);
         }
 
         @Override
         protected byte[] agreeECDH(ECDHPublicBCPGKey ecKey, byte[] ephemeralKeyBytes)
             throws PGPException
         {
-            return cryptoCallback.decryptECDH(ecKey, toECPublicKey(ecKey, ephemeralKeyBytes));
+            return cryptoCallback.decrypt(PublicKeyAlgorithmTags.ECDH, toECPublicKey(ecKey.getCurveOID(), ephemeralKeyBytes));
         }
 
         @Override
         protected byte[] agreeX25519(byte[] ephemeralKey)
             throws PGPException
         {
-            return cryptoCallback.decryptX25519(toXDHPublicKey(EdECObjectIdentifiers.id_X25519, ephemeralKey));
+            return cryptoCallback.decrypt(PublicKeyAlgorithmTags.X25519, toXDHPublicKey(EdECObjectIdentifiers.id_X25519, ephemeralKey));
         }
 
         @Override
         protected byte[] agreeX448(byte[] ephemeralKey)
             throws PGPException
         {
-            return cryptoCallback.decryptX448(toXDHPublicKey(EdECObjectIdentifiers.id_X448, ephemeralKey));
+            return cryptoCallback.decrypt(PublicKeyAlgorithmTags.X448, toXDHPublicKey(EdECObjectIdentifiers.id_X448, ephemeralKey));
         }
 
         @Override
@@ -331,13 +335,13 @@ public abstract class JceExternalPublicKeyDataDecryptorFactoryBuilder
             }
         }
 
-        private PublicKey toECPublicKey(ECDHPublicBCPGKey ecKey, byte[] pEnc)
+        private PublicKey toECPublicKey(ASN1ObjectIdentifier curveOID, byte[] pEnc)
             throws PGPException
         {
-            X9ECParametersHolder x9Params = ECNamedCurveTable.getByOIDLazy(ecKey.getCurveOID());
+            X9ECParametersHolder x9Params = ECNamedCurveTable.getByOIDLazy(curveOID);
             if (x9Params == null)
             {
-                throw new PGPException("unable to resolve EC curve: " + ecKey.getCurveOID());
+                throw new PGPException("unable to resolve EC curve: " + curveOID);
             }
 
             // the point arrives from the message, so it is attacker-supplied: reject anything that is
@@ -357,20 +361,17 @@ public abstract class JceExternalPublicKeyDataDecryptorFactoryBuilder
                 throw new PGPException("Invalid ephemeral EC point: point at infinity");
             }
 
-            // the only conversion BC offers from a raw point to a JCA key runs through a PGPPublicKey -
-            // hence the throwaway packet. Only the point is used; the creation date never leaves this
-            // method.
-            return keyConverter.getPublicKey(new PGPPublicKey(
-                new PublicKeyPacket(
-                    getPublicKey().getPublicKeyPacket().getVersion(),
-                    PublicKeyAlgorithmTags.ECDH,
-                    new Date(),
-                    new ECDHPublicBCPGKey(
-                        ecKey.getCurveOID(),
-                        publicPoint,
-                        ecKey.getHashAlgorithm(),
-                        ecKey.getSymmetricKeyAlgorithm())),
-                fingerprintCalculator));
+            SubjectPublicKeyInfo info = new SubjectPublicKeyInfo(new AlgorithmIdentifier(id_ecPublicKey, curveOID), pEnc);
+            try
+            {
+                KeyFactory factory = helper.createKeyFactory("EC");
+                X509EncodedKeySpec keySpec = new X509EncodedKeySpec(info.toASN1Primitive().getEncoded(ASN1Encoding.DER));
+                return factory.generatePublic(keySpec);
+            }
+            catch (NoSuchAlgorithmException | NoSuchProviderException | IOException | InvalidKeySpecException e)
+            {
+                throw new PGPException("Cannot convert EC public key", e);
+            }
         }
     }
 
@@ -385,59 +386,26 @@ public abstract class JceExternalPublicKeyDataDecryptorFactoryBuilder
     public static abstract class PublicKeyCryptoCallback
     {
         /**
-         * Perform RSA decryption of an encrypted session key.
+         * Perform RSA/ElGamal decryption of an encrypted session key.
          *
          * @param keyAlgorithm public key algorithm
          * @param pEnc encrypted session key
          * @return decrypted session key
          * @throws PGPException if the message cannot be decrypted
          */
-        public abstract byte[] decryptRSA(int keyAlgorithm,
-                                          byte[] pEnc)
+        public abstract byte[] decrypt(int keyAlgorithm,
+                                          byte[][] pEnc)
             throws PGPException;
 
         /**
-         * Perform ElGamal decryption of an encrypted session key.
+         * Perform an ECDH / X25519 / X448 agreement to calculate a shared secret.
          *
-         * @param keyAlgorithm public key algorithm
-         * @param secKeyData encrypted session key data
-         * @return decrypted session key
-         * @throws PGPException if the message cannot be decrypted
-         */
-        public abstract byte[] decryptElGamal(int keyAlgorithm,
-                                              byte[][] secKeyData)
-            throws PGPException;
-
-        /**
-         * Perform an ECDH agreement to calculate a shared secret.
-         *
-         * @param pubKey our ECDH public key
-         * @param ephemeralKey the sender's ephemeral public key
+         * @param ephemeralKey the message's ephemeral public key
          * @return shared secret
          * @throws PGPException if the message cannot be decrypted
          */
-        public abstract byte[] decryptECDH(ECDHPublicBCPGKey pubKey,
-                                           PublicKey ephemeralKey)
+        public abstract byte[] decrypt(int keyAlgorithm, PublicKey ephemeralKey)
             throws PGPException;
 
-        /**
-         * Perform an X25519 agreement to calculate a shared secret.
-         *
-         * @param ephemeralKey the sender's ephemeral X25519 public key
-         * @return shared secret
-         * @throws PGPException if the message cannot be decrypted
-         */
-        public abstract byte[] decryptX25519(PublicKey ephemeralKey)
-            throws PGPException;
-
-        /**
-         * Perform an X448 agreement to calculate a shared secret.
-         *
-         * @param ephemeralKey the sender's ephemeral X448 public key
-         * @return shared secret
-         * @throws PGPException if the message cannot be decrypted
-         */
-        public abstract byte[] decryptX448(PublicKey ephemeralKey)
-            throws PGPException;
     }
 }

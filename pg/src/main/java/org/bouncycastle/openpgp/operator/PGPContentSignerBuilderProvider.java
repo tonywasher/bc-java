@@ -27,4 +27,5 @@ public abstract class PGPContentSignerBuilderProvider
      * @return content signer builder
      */
     public abstract PGPContentSignerBuilder get(PGPPublicKey signingKey);
+
 }

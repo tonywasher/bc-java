@@ -3,14 +3,20 @@ package org.bouncycastle.openpgp.api;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.bouncycastle.bcpg.sig.PreferredAlgorithms;
 import org.bouncycastle.openpgp.PGPException;
 import org.bouncycastle.openpgp.PGPKeyPair;
+import org.bouncycastle.openpgp.PGPPublicKey;
 import org.bouncycastle.openpgp.PGPSignatureGenerator;
 import org.bouncycastle.openpgp.api.exception.InvalidSigningKeyException;
 import org.bouncycastle.openpgp.api.exception.KeyPassphraseException;
+import org.bouncycastle.openpgp.api.operator.PGPContentSignerBuilderProviderFactory;
+import org.bouncycastle.openpgp.operator.PGPContentSignerBuilder;
+import org.bouncycastle.openpgp.operator.PGPContentSignerBuilderProvider;
 
 public class AbstractOpenPGPDocumentSignatureGenerator<T extends AbstractOpenPGPDocumentSignatureGenerator<T>>
 {
@@ -23,6 +29,7 @@ public class AbstractOpenPGPDocumentSignatureGenerator<T extends AbstractOpenPGP
     protected final List<OpenPGPKey.OpenPGPSecretKey> signingKeys = new ArrayList<OpenPGPKey.OpenPGPSecretKey>();
     protected final List<SignatureParameters.Callback> signatureCallbacks = new ArrayList<SignatureParameters.Callback>();
     protected final List<KeyPassphraseProvider> signingKeyPassphraseProviders = new ArrayList<KeyPassphraseProvider>();
+    protected final Set<PGPContentSignerBuilderProviderFactory> customContentSignerBuilderProviderFactories = new LinkedHashSet<PGPContentSignerBuilderProviderFactory>();
 
     protected final KeyPassphraseProvider.DefaultKeyPassphraseProvider defaultKeyPassphraseProvider =
         new KeyPassphraseProvider.DefaultKeyPassphraseProvider();
@@ -78,6 +85,18 @@ public class AbstractOpenPGPDocumentSignatureGenerator<T extends AbstractOpenPGP
     public T addKeyPassphrase(char[] passphrase)
     {
         defaultKeyPassphraseProvider.addPassphrase(passphrase);
+        return (T)this;
+    }
+
+    /**
+     * Add a custom {@link PGPContentSignerBuilderProviderFactory} for external key signing.
+     * This is useful to allow e.g. signing with keys stored on hardware tokens or smart cards.
+     * @param factory custom factory
+     * @return this
+     */
+    public T addCustomPGPContentSignerBuilderProviderFactory(PGPContentSignerBuilderProviderFactory factory)
+    {
+        customContentSignerBuilderProviderFactories.add(factory);
         return (T)this;
     }
 
@@ -243,15 +262,59 @@ public class AbstractOpenPGPDocumentSignatureGenerator<T extends AbstractOpenPGP
             throw new InvalidSigningKeyException(signingKey);
         }
 
-        char[] passphrase = passphraseProvider.getKeyPassword(signingKey);
-        PGPKeyPair unlockedKey = signingKey.unlock(passphrase).getKeyPair();
-        if (unlockedKey == null)
+        if (signingKey.getPGPSecretKey().isExternalKey())
         {
-            throw new KeyPassphraseException(signingKey, new PGPException("Cannot unlock secret key."));
-        }
+            PGPPublicKey publicKey = signingKey.getPGPPublicKey();
+            for (PGPContentSignerBuilderProviderFactory sigFac : customContentSignerBuilderProviderFactories)
+            {
+                PGPContentSignerBuilderProvider sigProv;
+                try
+                {
+                    sigProv = sigFac.getPGPContentSignerBuilderProvider(
+                            signingKey, passphraseProvider, parameters.getSignatureHashAlgorithmId());
+                    if (sigProv == null)
+                    {
+                        // no matching card found
+                        continue;
+                    }
+                }
+                catch (PGPException e)
+                {
+                    // No matching card found
+                    continue;
+                }
 
-        return Utils.getPgpSignatureGenerator(implementation, signingKey.getPGPPublicKey(),
-            unlockedKey.getPrivateKey(), parameters, parameters.getSignatureCreationTime(), null);
+                PGPContentSignerBuilder contentSignerBuilder;
+                try
+                {
+                    contentSignerBuilder = sigProv.get(publicKey);
+                }
+                catch (IllegalArgumentException e)
+                {
+                    // Mismatched key
+                    continue;
+                }
+
+                PGPSignatureGenerator sigGen = new PGPSignatureGenerator(contentSignerBuilder, publicKey);
+                sigGen.init(parameters.getSignatureType(), null);
+
+                return Utils.applyDefaultSubpackets(publicKey, parameters, parameters.getSignatureCreationTime(), null, sigGen);
+            }
+
+            throw new PGPException("Cannot initialize signature generator for external key " + signingKey.getKeyIdentifier());
+        }
+        else
+        {
+            char[] passphrase = passphraseProvider.getKeyPassword(signingKey);
+            PGPKeyPair unlockedKey = signingKey.unlock(passphrase).getKeyPair();
+            if (unlockedKey == null)
+            {
+                throw new KeyPassphraseException(signingKey, new PGPException("Cannot unlock secret key."));
+            }
+
+            return Utils.getPgpSignatureGenerator(implementation, signingKey.getPGPPublicKey(),
+                    unlockedKey.getPrivateKey(), parameters, parameters.getSignatureCreationTime(), null);
+        }
     }
 
     private int getPreferredHashAlgorithm(OpenPGPCertificate.OpenPGPComponentKey key)
