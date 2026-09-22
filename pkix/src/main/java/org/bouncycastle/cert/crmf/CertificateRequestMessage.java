@@ -2,6 +2,7 @@ package org.bouncycastle.cert.crmf;
 
 import java.io.IOException;
 
+import org.bouncycastle.asn1.ASN1Encodable;
 import org.bouncycastle.asn1.ASN1Integer;
 import org.bouncycastle.asn1.ASN1Object;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
@@ -9,10 +10,12 @@ import org.bouncycastle.asn1.ASN1Primitive;
 import org.bouncycastle.asn1.ASN1UTF8String;
 import org.bouncycastle.asn1.crmf.AttributeTypeAndValue;
 import org.bouncycastle.asn1.crmf.CRMFObjectIdentifiers;
+import org.bouncycastle.asn1.crmf.CertId;
 import org.bouncycastle.asn1.crmf.CertReqMsg;
 import org.bouncycastle.asn1.crmf.CertTemplate;
 import org.bouncycastle.asn1.crmf.Controls;
 import org.bouncycastle.asn1.crmf.PKIArchiveOptions;
+import org.bouncycastle.asn1.crmf.PKIPublicationInfo;
 import org.bouncycastle.asn1.crmf.PKMACValue;
 import org.bouncycastle.asn1.crmf.POPOSigningKey;
 import org.bouncycastle.asn1.crmf.ProofOfPossession;
@@ -151,9 +154,33 @@ public class CertificateRequestMessage
             {
                 return new ProtocolEncrKeyControl(SubjectPublicKeyInfo.getInstance(found.getValue()));
             }
+            if (found.getType().equals(CRMFObjectIdentifiers.id_regCtrl_pkiPublicationInfo))
+            {
+                return new PKIPublicationInfoControl(PKIPublicationInfo.getInstance(found.getValue()));
+            }
+            if (found.getType().equals(CRMFObjectIdentifiers.id_regCtrl_oldCertID))
+            {
+                return new OldCertIDControl(CertId.getInstance(found.getValue()));
+            }
         }
 
         return null;
+    }
+
+    /**
+     * Return the raw value of the control of passed in type, if present. Unlike
+     * {@link #getControl(ASN1ObjectIdentifier)} this makes no attempt to interpret the value, so a
+     * control this class has no {@link Control} implementation for can still be read, and a null
+     * return means the control is absent rather than unrecognised.
+     *
+     * @param type the type OID of the control to look for.
+     * @return the value of the control of the passed in type, null if the control is not present.
+     */
+    public ASN1Encodable getControlValue(ASN1ObjectIdentifier type)
+    {
+        AttributeTypeAndValue found = findControl(type);
+
+        return found != null ? found.getValue() : null;
     }
 
     private AttributeTypeAndValue findControl(ASN1ObjectIdentifier type)
