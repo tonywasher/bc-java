@@ -34,6 +34,15 @@ import org.bouncycastle.util.BigIntegers;
  * Usage follows the {@link SM2Engine} pattern: construct with the desired mode,
  * {@code init(true, new ParametersWithRandom(recipientKey, random))} to encrypt or
  * {@code init(false, userKey)} to decrypt, then {@link #processBlock(byte[], int, int)}.
+ * <p>
+ * The mode is the caller's to keep: C1 || C3 || C2 does not record which method produced it
+ * and C3 = MAC(K2, C2) does not cover the choice, so a ciphertext has to be decrypted by an
+ * engine constructed for the mode it was encrypted in. The two methods take K1 and K2 from the
+ * same KDF call when C2 is 16 bytes long - the one length at which a ciphertext of either method
+ * would pass the other's MAC check - and neither mode therefore produces or accepts a 16-byte C2:
+ * the stream mode refuses a 16-byte message, the SM4 mode a message of fewer than 16 bytes, which
+ * pads to one block, and both refuse a 16-byte C2 on decryption. A message of fewer than 16 bytes
+ * has to be sent in stream mode, and one of exactly 16 bytes in SM4 mode.
  */
 public class SM9Engine
 {
@@ -64,6 +73,23 @@ public class SM9Engine
      * declares. The SM4 mode is unaffected - its K1 is a fixed 16 bytes.
      */
     private static final int MAX_K1_LEN = (Integer.MAX_VALUE / 8) - K2_LEN;
+
+    /**
+     * K1_len for the SM4 method: the SM4 key, 128 bits. In the stream method K1_len is the message
+     * length, and GM/T 0044.4 takes K1 || K2 from one KDF(C1 || w || ID_B, K1_len + K2_len) in either
+     * method, so a stream-mode ciphertext with a 16-byte C2 and a one-block SM4 ciphertext (a message
+     * of 0 to 15 bytes, padded) that share a C1 derive the same K1 and K2, and each passes the other
+     * method's MAC check. Nothing in C1 || C3 || C2 says which method produced it, so a recipient
+     * cannot tell the two apart; both modes refuse that one length instead, on encryption and on
+     * decryption, rather than let a ciphertext of one method decrypt under the other. Refusing it in
+     * the stream mode alone would protect only a recipient that does so: the ciphertext whose key is
+     * given away - a stream-mode decryption of it hands back K1 xor C2 - is the one-block SM4 one,
+     * and its sender cannot know whether the recipient's implementation refuses the length, so the
+     * SM4 mode does not produce it. With no sender producing a 16-byte C2 in either mode the SM4 mode
+     * has no reason to accept one, and a 16-byte stream-mode C2 offered to it would pass the MAC check
+     * and decrypt to a random block, accepted as a message whenever its padding happened to be valid.
+     */
+    private static final int SM4_K1_LEN = 16;
 
     private final Mode mode;
 
@@ -180,7 +206,7 @@ public class SM9Engine
         {
             // K1_len is the message length, so an empty message has no K1 to test
             // against zero and the retry loop would never terminate; the SM4 mode
-            // handles empty input (one padding block).
+            // refuses it too, as it does every message of fewer than 16 bytes - see below.
             throw new InvalidCipherTextException("SM9 stream mode cannot encrypt an empty message");
         }
 
@@ -190,10 +216,24 @@ public class SM9Engine
         Fp12 g = master.pairingWithP2();
         BigInteger n = SM9Curve.N;
 
-        int k1Len = (mode == Mode.SM4) ? 16 : message.length;
+        int k1Len = (mode == Mode.SM4) ? SM4_K1_LEN : message.length;
         if (k1Len > MAX_K1_LEN)
         {
             throw new InvalidCipherTextException("SM9 message too long for the stream mode KDF");
+        }
+        if (mode == Mode.STREAM && k1Len == SM4_K1_LEN)
+        {
+            // the one length at which the KDF call, and so K1 and K2, coincide with the SM4
+            // method's - see SM4_K1_LEN; a 16-byte stream-mode C2 is refused on decryption too,
+            // so there is nothing to gain by producing one
+            throw new InvalidCipherTextException("SM9 stream mode cannot encrypt a 16-byte message");
+        }
+        if (mode == Mode.SM4 && message.length < SM4_K1_LEN)
+        {
+            // fewer than 16 bytes pad to a single SM4 block, the same 16-byte C2 from this method's
+            // side - see SM4_K1_LEN; a stream-mode recipient that does not refuse the length would
+            // decrypt it to K1 xor C2, and the sender cannot tell which recipients do
+            throw new InvalidCipherTextException("SM9 SM4 mode cannot encrypt a message shorter than 16 bytes");
         }
 
         for (;;)
@@ -235,11 +275,24 @@ public class SM9Engine
         byte[] c3 = Arrays.copyOfRange(ciphertext, 64, 96);
         byte[] c2 = Arrays.copyOfRange(ciphertext, 96, ciphertext.length);
 
-        int k1Len = (mode == Mode.SM4) ? 16 : c2.length;
+        int k1Len = (mode == Mode.SM4) ? SM4_K1_LEN : c2.length;
         if (k1Len > MAX_K1_LEN)
         {
             // checked before the pairing so an over-long ciphertext is rejected without paying for one
             throw new InvalidCipherTextException("SM9 ciphertext too long for the stream mode KDF");
+        }
+        if (mode == Mode.STREAM && k1Len == SM4_K1_LEN)
+        {
+            // the one C2 length at which an SM4-mode ciphertext passes this mode's MAC check and
+            // would decrypt to K1 xor C2 - see SM4_K1_LEN; also refused before the pairing
+            throw new InvalidCipherTextException("SM9 stream-mode ciphertext has a 16-byte C2");
+        }
+        if (mode == Mode.SM4 && c2.length == SM4_K1_LEN)
+        {
+            // and the C2 length this mode no longer produces, at which a 16-byte stream-mode
+            // ciphertext passes this mode's MAC check and would decrypt to a random block, a
+            // message whenever its padding happened to be valid - see SM4_K1_LEN
+            throw new InvalidCipherTextException("SM9 SM4-mode ciphertext has a 16-byte C2");
         }
 
         Fp12 w = SM9Pairing.pairing(c1, userKey.getPrivatePoint());

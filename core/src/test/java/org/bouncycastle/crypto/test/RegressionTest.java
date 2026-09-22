@@ -160,6 +160,7 @@ public class RegressionTest
             new ShortWrapCipherTextTest(),
             new SM4Test(),
             new SM9KEMTest(),
+            new SM9EngineTest(),
             new SM9SignerTest(),
             new SM9KeyExchangeTest(),
             new DSTU7624Test(),

@@ -33,8 +33,10 @@ import org.bouncycastle.util.encoders.Hex;
  * <p>
  * GM/T 0044.4 defines two data-encapsulation modes: the default wraps the message with the
  * SM4 block cipher ({@code Cipher.SM9}); {@code SM9/XOR/NoPadding} uses the KDF as a stream
- * cipher. The ciphertext (GM/T 0080-2020 SM9Cipher: enType, C1, C3, C2) is self-describing,
- * so a single {@code Cipher.SM9} decrypts either mode.
+ * cipher. The mode is set on the decrypting {@code Cipher} as well as the encrypting one -
+ * the ciphertext (GM/T 0080-2020 SM9Cipher: enType, C1, C3, C2) names its own mode, but that
+ * field is not covered by the C3 authenticator, so the mode the caller configured decides
+ * and a ciphertext whose enType disagrees is rejected.
  */
 public class SM9CipherExample
 {
@@ -79,13 +81,13 @@ public class SM9CipherExample
             + Hex.toHexString(ciphertext));
         System.out.println("decrypted for \"Bob\" back to: " + Strings.fromByteArray(recovered));
 
-        // 5. The KDF stream mode is selected on encryption; the same Cipher.SM9 decrypts it,
-        //    since the ciphertext carries its own mode.
+        // 5. The KDF stream mode is selected on encryption, and has to be selected on
+        //    decryption too - the mode is the caller's, not the ciphertext's.
         Cipher streamEncrypt = Cipher.getInstance("SM9/XOR/NoPadding", "BC");
         streamEncrypt.init(Cipher.ENCRYPT_MODE, bobPublic, random);
         byte[] streamCiphertext = streamEncrypt.doFinal(message);
 
-        Cipher streamDecrypt = Cipher.getInstance("SM9", "BC");
+        Cipher streamDecrypt = Cipher.getInstance("SM9/XOR/NoPadding", "BC");
         streamDecrypt.init(Cipher.DECRYPT_MODE, bob.getPrivate());
         if (!Arrays.areEqual(message, streamDecrypt.doFinal(streamCiphertext)))
         {

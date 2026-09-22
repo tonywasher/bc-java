@@ -49,6 +49,19 @@ import org.bouncycastle.util.test.TestRandomBigInteger;
 public class SM9CipherTest
     extends SimpleTest
 {
+    // The GM/T 0044.5-2016 Annex D encryption master private key ke, and the C1, C3 and C2 of a
+    // one-block SM4-mode ciphertext of the message "one block" to the identity "Bob" under it, made
+    // with the annex's r before the SM4 mode stopped encrypting messages of fewer than 16 bytes - so
+    // C1 is the annex's C1 and the K1 and K2 behind C2 and C3 are its method b) K1 and K2.
+    private static final BigInteger ANNEX_D_KE =
+        new BigInteger("01EDEE3778F441F8DEA3D9FA0ACC4E07EE36C93F9A08618AF4AD85CEDE1C22", 16);
+    private static final byte[] ONE_BLOCK_C1 = Hex.decode(
+        "042445471164490618E1EE20528FF1D545B0F14C8BCAA44544F03DAB5DAC07D8FF"
+            + "42FFCA97D57CDDC05EA405F2E586FEB3A6930715532B8000759F13059ED59AC0");
+    private static final byte[] ONE_BLOCK_C3 = Hex.decode(
+        "059C700E0E8FEE2801B3EEA529A39390C9138881914C3CAD9E1331EA9E430E9F");
+    private static final byte[] ONE_BLOCK_C2 = Hex.decode("195527A7B90D2A8CE59D01C20EC36E06");
+
     public String getName()
     {
         return "SM9Cipher";
@@ -89,23 +102,18 @@ public class SM9CipherTest
         dec.init(Cipher.DECRYPT_MODE, bobKey);
         isTrue("SM9 Cipher SM4-mode round-trip", Arrays.areEqual(dec.doFinal(ct), plaintext));
 
-        // KDF stream mode round-trip
+        // KDF stream mode round-trip - the mode has to be set for decryption too, a
+        // stream-mode ciphertext is not decryptable through the SM4-mode default
         Cipher encX = Cipher.getInstance("SM9/XOR/NoPadding", "BC");
         encX.init(Cipher.ENCRYPT_MODE, bobPublic);
         byte[] ctX = encX.doFinal(plaintext);
-        Cipher decX = Cipher.getInstance("SM9", "BC");
+        Cipher decX = Cipher.getInstance("SM9/XOR/NoPadding", "BC");
         decX.init(Cipher.DECRYPT_MODE, bobKey);
         isTrue("SM9 Cipher stream-mode round-trip", Arrays.areEqual(decX.doFinal(ctX), plaintext));
 
-        // empty plaintext: SM4 mode round-trips (one padding block); the stream mode
-        // has no K1 for an empty message and must reject it rather than loop retrying
-        Cipher encEmpty = Cipher.getInstance("SM9", "BC");
-        encEmpty.init(Cipher.ENCRYPT_MODE, bobPublic);
-        byte[] ctEmpty = encEmpty.doFinal(new byte[0]);
-        Cipher decEmpty = Cipher.getInstance("SM9", "BC");
-        decEmpty.init(Cipher.DECRYPT_MODE, bobKey);
-        isTrue("SM9 Cipher SM4-mode empty plaintext round-trip", decEmpty.doFinal(ctEmpty).length == 0);
-
+        // empty plaintext: the stream mode has no K1 for an empty message and must reject it
+        // rather than loop retrying (the SM4 mode refuses it as one of the messages of fewer
+        // than 16 bytes, further down)
         try
         {
             Cipher encXEmpty = Cipher.getInstance("SM9/XOR/NoPadding", "BC");
@@ -133,6 +141,155 @@ public class SM9CipherTest
         catch (BadPaddingException e)
         {
             // expected - MAC check failed
+        }
+
+        // a relabelled enType must be rejected. enType is not covered by C3 = MAC(K2, C2),
+        // and at |C2| = 16 both modes ask the KDF for the same K1_len and so derive the same
+        // K2 - an SM4 ciphertext of a one-block message presented as stream mode therefore
+        // passes the MAC check, and a decrypt that took its mode from the wire would return
+        // K1 xor C2, from which the SM4 key K1 and the plaintext both follow. The SM4 mode no
+        // longer produces a one-block ciphertext, so the one relabelled here is a stored one,
+        // decrypted with the user key of the master key it was made under.
+        PrivateKeyInfo annexPkcs8 = new PrivateKeyInfo(new AlgorithmIdentifier(GMObjectIdentifiers.sm9encrypt),
+            new DEROctetString(BigIntegers.asUnsignedByteArray(32, ANNEX_D_KE)));
+        PrivateKey annexBobKey = ((SM9EncMasterPrivateKey)kf.generatePrivate(
+            new PKCS8EncodedKeySpec(annexPkcs8.getEncoded())))
+            .generateUserKeyPair(bob, SM9EncMasterPrivateKeyParameters.HID).getPrivate();
+        isTrue("SM9 one-block SM4 ciphertext has a 16-byte C2", ONE_BLOCK_C2.length == 16);
+        byte[] relabelled = new SM9Cipher(SM9Cipher.EN_TYPE_STREAM,
+            ONE_BLOCK_C1, ONE_BLOCK_C3, ONE_BLOCK_C2).getEncoded();
+        try
+        {
+            Cipher decRelabelled = Cipher.getInstance("SM9", "BC");
+            decRelabelled.init(Cipher.DECRYPT_MODE, annexBobKey);
+            decRelabelled.doFinal(relabelled);
+            fail("SM9 decryption accepted an SM4 ciphertext relabelled as stream mode");
+        }
+        catch (BadPaddingException e)
+        {
+            // the configured mode decides, not the wire enType - and it is that check which
+            // answers here, ahead of the engine's refusal of the length
+            isTrue("SM9 relabelled enType rejection message",
+                "SM9 decryption failed: SM9 ciphertext enType does not match the configured mode".equals(e.getMessage()));
+        }
+
+        // the configured mode settles nothing at |C2| = 16 when the Cipher is a stream-mode one:
+        // the relabelled ciphertext then agrees with the configuration, the MAC check passes and
+        // the output would be K1 xor C2 - so the stream mode refuses a 16-byte C2 outright, the
+        // one C2 length at which the two modes collide
+        try
+        {
+            Cipher decRelabelledStream = Cipher.getInstance("SM9/XOR/NoPadding", "BC");
+            decRelabelledStream.init(Cipher.DECRYPT_MODE, annexBobKey);
+            decRelabelledStream.doFinal(relabelled);
+            fail("SM9 stream-mode decryption accepted a one-block SM4 ciphertext relabelled as stream mode");
+        }
+        catch (BadPaddingException e)
+        {
+            isTrue("SM9 stream-mode 16-byte C2 rejection message",
+                "SM9 decryption failed: SM9 stream-mode ciphertext has a 16-byte C2".equals(e.getMessage()));
+        }
+
+        // it will not produce one either, since no stream-mode recipient could decrypt it; the
+        // lengths either side of 16 round-trip, as does a 16-byte message in SM4 mode, whose
+        // padded C2 is 32 bytes
+        try
+        {
+            Cipher encX16 = Cipher.getInstance("SM9/XOR/NoPadding", "BC");
+            encX16.init(Cipher.ENCRYPT_MODE, bobPublic);
+            encX16.doFinal(new byte[16]);
+            fail("SM9 stream mode encrypted a 16-byte plaintext");
+        }
+        catch (BadPaddingException e)
+        {
+            isTrue("SM9 stream-mode 16-byte message rejection message",
+                "SM9 encryption failed: SM9 stream mode cannot encrypt a 16-byte message".equals(e.getMessage()));
+        }
+        int[] streamLengths = { 1, 15, 17, 32 };
+        for (int i = 0; i != streamLengths.length; i++)
+        {
+            byte[] m = new byte[streamLengths[i]];
+            for (int j = 0; j != m.length; j++)
+            {
+                m[j] = (byte)(j + 1);
+            }
+            Cipher encLen = Cipher.getInstance("SM9/XOR/NoPadding", "BC");
+            encLen.init(Cipher.ENCRYPT_MODE, bobPublic);
+            byte[] ctLen = encLen.doFinal(m);
+            isTrue("SM9 stream-mode C2 is the message length at " + m.length + " bytes",
+                SM9Cipher.getInstance(ctLen).getC2().length == m.length);
+            Cipher decLen = Cipher.getInstance("SM9/XOR/NoPadding", "BC");
+            decLen.init(Cipher.DECRYPT_MODE, bobKey);
+            isTrue("SM9 Cipher stream-mode round-trip at " + m.length + " bytes",
+                Arrays.areEqual(decLen.doFinal(ctLen), m));
+        }
+        Cipher enc16 = Cipher.getInstance("SM9", "BC");
+        enc16.init(Cipher.ENCRYPT_MODE, bobPublic);
+        byte[] ct16 = enc16.doFinal(new byte[16]);
+        isTrue("SM9 SM4-mode 16-byte message pads to a 32-byte C2", SM9Cipher.getInstance(ct16).getC2().length == 32);
+        Cipher dec16 = Cipher.getInstance("SM9", "BC");
+        dec16.init(Cipher.DECRYPT_MODE, bobKey);
+        isTrue("SM9 Cipher SM4-mode 16-byte round-trip", Arrays.areEqual(dec16.doFinal(ct16), new byte[16]));
+
+        // the SM4 mode does not produce a 16-byte C2 either. A recipient that refuses the length
+        // is protected by that alone, but the message given away is the SM4-mode sender's, who
+        // cannot tell whether the recipient does - so no message that pads to one block is
+        // encrypted, the empty one included
+        int[] oneBlockLengths = { 0, 1, 15 };
+        for (int i = 0; i != oneBlockLengths.length; i++)
+        {
+            try
+            {
+                Cipher encShort = Cipher.getInstance("SM9", "BC");
+                encShort.init(Cipher.ENCRYPT_MODE, bobPublic);
+                encShort.doFinal(new byte[oneBlockLengths[i]]);
+                fail("SM9 SM4 mode encrypted a " + oneBlockLengths[i] + "-byte plaintext");
+            }
+            catch (BadPaddingException e)
+            {
+                isTrue("SM9 SM4-mode short message rejection message at " + oneBlockLengths[i] + " bytes",
+                    "SM9 encryption failed: SM9 SM4 mode cannot encrypt a message shorter than 16 bytes".equals(e.getMessage()));
+            }
+        }
+
+        // and with neither mode producing one it does not accept one: the stored one-block
+        // ciphertext, genuine and under its own enType, is refused by the mode it was made in
+        try
+        {
+            Cipher decOneBlock = Cipher.getInstance("SM9", "BC");
+            decOneBlock.init(Cipher.DECRYPT_MODE, annexBobKey);
+            decOneBlock.doFinal(new SM9Cipher(SM9Cipher.EN_TYPE_SM4,
+                ONE_BLOCK_C1, ONE_BLOCK_C3, ONE_BLOCK_C2).getEncoded());
+            fail("SM9 SM4-mode decryption accepted a ciphertext with a 16-byte C2");
+        }
+        catch (BadPaddingException e)
+        {
+            isTrue("SM9 SM4-mode 16-byte C2 rejection message",
+                "SM9 decryption failed: SM9 SM4-mode ciphertext has a 16-byte C2".equals(e.getMessage()));
+        }
+
+        // and neither mode decrypts the other's ciphertext, relabelled or not
+        try
+        {
+            Cipher decStreamAsSM4 = Cipher.getInstance("SM9", "BC");
+            decStreamAsSM4.init(Cipher.DECRYPT_MODE, bobKey);
+            decStreamAsSM4.doFinal(ctX);
+            fail("SM9 SM4-mode decryption accepted a stream-mode ciphertext");
+        }
+        catch (BadPaddingException e)
+        {
+            // expected - enType disagrees with the configured mode
+        }
+        try
+        {
+            Cipher decSM4AsStream = Cipher.getInstance("SM9/XOR/NoPadding", "BC");
+            decSM4AsStream.init(Cipher.DECRYPT_MODE, bobKey);
+            decSM4AsStream.doFinal(ct);
+            fail("SM9 stream-mode decryption accepted an SM4-mode ciphertext");
+        }
+        catch (BadPaddingException e)
+        {
+            // expected - enType disagrees with the configured mode
         }
 
         // guards: a master public key is not a recipient key, and no spec is accepted
@@ -268,7 +425,7 @@ public class SM9CipherTest
         isTrue(fieldPrefix + " GM/T 0044.5 C3", Arrays.areEqual(actual.getC3(), expectedC3));
 
         byte[] officialCiphertext = new SM9Cipher(enType, c1, expectedC3, expectedC2).getEncoded();
-        Cipher katDec = Cipher.getInstance("SM9", "BC");
+        Cipher katDec = Cipher.getInstance(transformation, "BC");
         katDec.init(Cipher.DECRYPT_MODE, recipient.getPrivate());
         isTrue(fieldPrefix + " GM/T 0044.5 decrypt",
             Arrays.areEqual(katDec.doFinal(officialCiphertext), message));

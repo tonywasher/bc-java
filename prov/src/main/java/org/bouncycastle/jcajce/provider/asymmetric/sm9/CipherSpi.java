@@ -35,10 +35,23 @@ import org.bouncycastle.util.Strings;
  * and the recipient's identity via
  * {@link org.bouncycastle.jcajce.interfaces.SM9EncMasterPublicKey#getUserPublicKey(byte[])}
  * (the same recipient key the SM9-KEM encapsulates to); decrypt with the recipient's
- * private key. The ciphertext is a DER {@link SM9Cipher} whose {@code enType} records the
- * data-encapsulation mode, so decryption selects the mode automatically. The
- * default encryption mode is SM4/ECB/PKCS#7 ({@code enType} = 1); call
- * {@code setMode("XOR")} for the KDF stream mode.
+ * private key. The default data-encapsulation mode is SM4/ECB/PKCS#7 ({@code enType} = 1);
+ * call {@code setMode("XOR")} for the KDF stream mode.
+ * <p>
+ * The mode applies to decryption as well as encryption: the ciphertext is a DER
+ * {@link SM9Cipher} whose {@code enType} records the mode, but {@code enType} is not covered
+ * by the {@code C3 = MAC(K2, C2)} authenticator, so a {@code Cipher} that took the mode from
+ * the ciphertext could be steered into the other mode by an attacker re-labelling it. The mode
+ * this {@code Cipher} was configured with decides - a stream-mode ciphertext is decrypted
+ * through a stream-mode {@code Cipher} ({@code "SM9/XOR/NoPadding"}), an SM4-mode one through
+ * the default - and a ciphertext whose {@code enType} disagrees with it is rejected as
+ * malformed. That comparison is between two values a re-labelling attacker can make agree, so
+ * it does not on its own settle the one C2 length, 16 bytes, at which both modes derive the
+ * same K1 and K2 and a one-block SM4 ciphertext re-labelled as stream mode would pass a
+ * stream-mode {@code Cipher}'s MAC check: {@link SM9Engine} refuses a 16-byte C2 in either
+ * mode, whatever the {@code enType} says, and produces one in neither - a stream-mode message
+ * of exactly 16 bytes and an SM4-mode message of fewer than 16 bytes are refused on encryption,
+ * so the first has to be sent in SM4 mode and the second in stream mode.
  * <p>
  * The ciphertext is the GM/T 0080-2020 SM9Cipher structure (see {@link org.bouncycastle.asn1.gm.SM9Cipher}).
  */
@@ -188,6 +201,8 @@ public class CipherSpi
 
         try
         {
+            int enType = (mode == SM9Engine.Mode.SM4) ? SM9Cipher.EN_TYPE_SM4 : SM9Cipher.EN_TYPE_STREAM;
+
             if (state == Cipher.ENCRYPT_MODE)
             {
                 SM9Engine engine = new SM9Engine(mode);
@@ -198,16 +213,21 @@ public class CipherSpi
                 System.arraycopy(raw, 0, c1, 1, 64);
                 byte[] c3 = Arrays.copyOfRange(raw, 64, 96);
                 byte[] c2 = Arrays.copyOfRange(raw, 96, raw.length);
-                int enType = (mode == SM9Engine.Mode.SM4) ? SM9Cipher.EN_TYPE_SM4 : SM9Cipher.EN_TYPE_STREAM;
                 return new SM9Cipher(enType, c1, c3, c2).getEncoded();
             }
             else
             {
                 SM9Cipher c = SM9Cipher.getInstance(data);
+                if (c.getEnType() != enType)
+                {
+                    // enType is not covered by C3 = MAC(K2, C2), so taking the mode from the
+                    // ciphertext lets an attacker re-label it; the mode this Cipher was
+                    // configured with decides.
+                    throw new InvalidCipherTextException("SM9 ciphertext enType does not match the configured mode");
+                }
                 byte[] c1 = c.getC1();   // 0x04 || x || y
                 byte[] raw = Arrays.concatenate(Arrays.copyOfRange(c1, 1, 65), c.getC3(), c.getC2());
-                SM9Engine engine = new SM9Engine(
-                    (c.getEnType() == SM9Cipher.EN_TYPE_SM4) ? SM9Engine.Mode.SM4 : SM9Engine.Mode.STREAM);
+                SM9Engine engine = new SM9Engine(mode);
                 engine.init(false, userKey);
                 return engine.processBlock(raw, 0, raw.length);
             }
