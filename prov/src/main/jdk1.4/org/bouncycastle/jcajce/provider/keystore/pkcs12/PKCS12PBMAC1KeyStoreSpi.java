@@ -920,16 +920,15 @@ public class PKCS12PBMAC1KeyStoreSpi
             noMac = false;
             MacData mData = bag.getMacData();
             DigestInfo dInfo = mData.getMac();
-            macAlgorithm = dInfo.getAlgorithmId();
+            AlgorithmIdentifier fileMacAlgorithm = dInfo.getAlgorithmId();
             byte[] salt = mData.getSalt();
-            itCount = PKCS12Util.validateIterationCount(mData.getIterationCount());
-            saltLength = salt.length;
+            int fileItCount = PKCS12Util.validateIterationCount(mData.getIterationCount());
 
             byte[] data = PKCS12Util.getContentOctets(info);
 
             try
             {
-                byte[] res = calculatePbeMac(macAlgorithm.getAlgorithm(), salt, itCount, password, false, data);
+                byte[] res = calculatePbeMac(fileMacAlgorithm, salt, fileItCount, password, false, data);
                 byte[] dig = dInfo.getDigest();
 
                 if (!Arrays.constantTimeAreEqual(res, dig))
@@ -941,7 +940,7 @@ public class PKCS12PBMAC1KeyStoreSpi
                     }
 
                     // Try with incorrect zero length password
-                    res = calculatePbeMac(macAlgorithm.getAlgorithm(), salt, itCount, password, true, data);
+                    res = calculatePbeMac(fileMacAlgorithm, salt, fileItCount, password, true, data);
 
                     if (!Arrays.constantTimeAreEqual(res, dig))
                     {
@@ -950,6 +949,13 @@ public class PKCS12PBMAC1KeyStoreSpi
 
                     wrongPKCS12Zero = true;
                 }
+
+                // the file has verified: a write may now inherit the shape it arrived in. Neither
+                // the PBKDF2 salt inside fileMacAlgorithm nor the MacData salt is inherited with it -
+                // both are generated per write - and nothing is latched from a file that failed above.
+                macAlgorithm = fileMacAlgorithm;
+                itCount = fileItCount;
+                saltLength = PKCS12Util.getMacSaltLength(salt.length);
             }
             catch (IOException e)
             {
@@ -1824,9 +1830,12 @@ public class PKCS12PBMAC1KeyStoreSpi
         {
             try
             {
-                byte[] res = calculatePbeMac(macAlgorithm.getAlgorithm(), mSalt, macItCount, password, false, data);
+                // a PBMAC1 algorithm here came from a file we loaded, and carries that file's PBKDF2 salt
+                AlgorithmIdentifier writeMacAlgorithm = PKCS12Util.getWriteMacAlgorithm(macAlgorithm, random);
 
-                DigestInfo dInfo = new DigestInfo(macAlgorithm, res);
+                byte[] res = calculatePbeMac(writeMacAlgorithm, mSalt, macItCount, password, false, data);
+
+                DigestInfo dInfo = new DigestInfo(writeMacAlgorithm, res);
 
                 mData = new MacData(dInfo, mSalt, macItCount);
             }
@@ -1963,8 +1972,13 @@ public class PKCS12PBMAC1KeyStoreSpi
         return usedSet;
     }
 
+    /**
+     * Calculate the MAC named by macAlgorithm - the whole of it, so this reads no state of its own:
+     * on a load that is the AlgorithmIdentifier the file carries, on a store the one
+     * getWriteMacAlgorithm() has just built. Nothing here is latched for a later write.
+     */
     private byte[] calculatePbeMac(
-        ASN1ObjectIdentifier oid,
+        AlgorithmIdentifier macAlgorithm,
         byte[] salt,
         int itCount,
         char[] password,
@@ -1972,23 +1986,10 @@ public class PKCS12PBMAC1KeyStoreSpi
         byte[] data)
         throws Exception
     {
+        ASN1ObjectIdentifier oid = macAlgorithm.getAlgorithm();
+
         if (PKCSObjectIdentifiers.id_PBMAC1.equals(oid))
         {
-            if (macAlgorithm.getParameters() == null)
-            {
-                byte[] pbSalt = new byte[32];
-                helper.createSecureRandom("DEFAULT").nextBytes(pbSalt);
-
-                // RFC 9579 sec. 5: the derived key SHOULD be the size of the HMAC output, which is 64
-                // for the HMAC-SHA-512 auth scheme below. Releases up to 1.86 asked for 256 here; those
-                // files still verify, since the length is read back from the file.
-                PBKDF2Params pbkdf2Params = new PBKDF2Params(pbSalt, 1 << 16, 64, new AlgorithmIdentifier(PKCSObjectIdentifiers.id_hmacWithSHA256));
-                AlgorithmIdentifier keyDevFunc = new AlgorithmIdentifier(PKCSObjectIdentifiers.id_PBKDF2, pbkdf2Params);
-                AlgorithmIdentifier authScheme = new AlgorithmIdentifier(id_hmacWithSHA512);
-                PBMAC1Params pbmac1Params = new PBMAC1Params(keyDevFunc, authScheme);
-                macAlgorithm = new AlgorithmIdentifier(id_PBMAC1, pbmac1Params);
-            }
-
             PBMAC1Params pbmac1Params = PBMAC1Params.getInstance(macAlgorithm.getParameters());
             if (pbmac1Params == null)
             {

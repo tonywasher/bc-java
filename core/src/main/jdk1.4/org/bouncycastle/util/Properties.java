@@ -27,6 +27,7 @@ public class Properties
     public static final String PKCS12_IGNORE_USELESS_PASSWD = "org.bouncycastle.pkcs12.ignore_useless_passwd";
     public static final String PKCS12_MAX_IT_COUNT = "org.bouncycastle.pkcs12.max_it_count";
     public static final String PKCS12_STORE_IT_COUNT = "org.bouncycastle.pkcs12.store_it_count";
+    public static final String PKCS12_PBKDF2_IT_COUNT = "org.bouncycastle.pkcs12.pbkdf2_it_count";
     public static final String BKS_MAX_IT_COUNT = "org.bouncycastle.bks.max_it_count";
     public static final String OPENSSH_MAX_ROUNDS = "org.bouncycastle.openssh.max_rounds";
     public static final String X509_CRL_CACHE_TTL = "org.bouncycastle.x509.crl_cache_ttl";
