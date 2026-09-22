@@ -8,6 +8,32 @@
 - Tests pass `-Dbc.test.data.home=<core/src/test/data>` for fixture lookups.
 - The `:test` task runs each test class in its own JVM (`forkEvery = 1`).
 
+## Key agreement tests run with and without a UKM
+
+Any test of a CMS or JCA key agreement scheme should exercise it **both with and without a user
+keying material value**, wherever the scheme admits one. The two are different derivations, not one
+derivation with an extra field: a UKM typically feeds the KDF's info *and*, for HKDF-based schemes,
+its salt, so a test that only ever omits the UKM leaves the more complex of the two paths uncovered.
+
+RFC 8418 sec. 2.2 is the worked example (github #2454). Its KEK is
+
+```
+if ukm is provided, then salt = ukm, else salt is not provided
+PRK = HKDF-Extract(salt, K)
+KEK = HKDF-Expand(PRK, DER(ECC-CMS-SharedInfo), SizeInOctets(KEK))
+```
+
+so the UKM has two roles. BC placed it in the ECC-CMS-SharedInfo `entityUInfo` but never passed it
+as the HKDF salt, and 1.86 shipped that way because `testRFC8418X25519AndX448` round-tripped all six
+curve/scheme combinations **with no UKM set**. Nothing was wrong with the no-UKM path, so nothing
+failed.
+
+Note also that a self round trip cannot see this class of defect at all - BC agreed with itself
+either way. Where a spec states the derivation, derive the key independently in the test and
+unwrap/verify with it, and assert that the *wrong* derivation does **not** work
+(`NewEnvelopedDataTest.checkRFC8418Kek` is the model). A known-answer check against the spec's own
+recipe is what makes the UKM half meaningful.
+
 ## X.509 ASN.1 changes — check the RFC first
 
 Anything under `core/src/main/java/org/bouncycastle/asn1/x509/` is a wire-format ASN.1 type from a specific PKI RFC. Before changing or extending one of these classes (parsing rules, structural constraints, defaults, error messages thrown for malformed input), verify the proposed behaviour against the authoritative RFC:
