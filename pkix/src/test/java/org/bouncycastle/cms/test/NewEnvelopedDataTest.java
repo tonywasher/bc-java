@@ -2038,6 +2038,81 @@ public class NewEnvelopedDataTest
         }
     }
 
+    public void testHKDFWithMalformedContentEncryptionAlgorithm()
+        throws Exception
+    {
+        byte[] data = "WallaWallaWashington".getBytes();
+
+        SecretKey kek = new SecretKeySpec(new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}, "AES");
+        byte[] kekId = new byte[]{1, 2, 3, 4, 5};
+
+        CMSEnvelopedDataGenerator edGen = new CMSEnvelopedDataGenerator();
+
+        edGen.addRecipientInfoGenerator(new JceKEKRecipientInfoGenerator(kekId, kek).setProvider(BC));
+
+        CMSEnvelopedData ed = edGen.generate(
+            new CMSProcessableByteArray(data),
+            new JceCMSContentEncryptorBuilder(CMSAlgorithm.AES128_CBC)
+                .setEnableSha256HKdf(true)
+                .setProvider(BC).build());
+
+        // the key derivation is meant to carry the content-encryption AlgorithmIdentifier in its
+        // parameters, and every path that resolves it reports a message that carries nothing
+        // readable there as the CMSException getContent() declares
+        checkMalformedHKdf(ed, kek, new AlgorithmIdentifier(CMSObjectIdentifiers.id_alg_cek_hkdf_sha256),
+            "RFC 9709 key derivation names no content-encryption algorithm");
+
+        checkMalformedHKdf(ed, kek, new AlgorithmIdentifier(CMSObjectIdentifiers.id_alg_cek_hkdf_sha256, new ASN1Integer(7)),
+            "unable to read RFC 9709 content-encryption algorithm: unknown object in getInstance: org.bouncycastle.asn1.ASN1Integer");
+    }
+
+    private void checkMalformedHKdf(CMSEnvelopedData ed, SecretKey kek, AlgorithmIdentifier contentAlgorithm, String message)
+        throws Exception
+    {
+        EnvelopedData env = EnvelopedData.getInstance(ContentInfo.getInstance(ed.getEncoded()).getContent());
+        EncryptedContentInfo eci = env.getEncryptedContentInfo();
+
+        ContentInfo doctored = new ContentInfo(CMSObjectIdentifiers.envelopedData,
+            new EnvelopedData(env.getOriginatorInfo(), env.getRecipientInfos(),
+                new EncryptedContentInfo(eci.getContentType(), contentAlgorithm, eci.getEncryptedContent()),
+                env.getUnprotectedAttrs()));
+
+        CMSEnvelopedData malformed = new CMSEnvelopedData(doctored.getEncoded(ASN1Encoding.DER));
+
+        RecipientInformation recipient = (RecipientInformation)malformed.getRecipientInfos().getRecipients().iterator().next();
+
+        try
+        {
+            recipient.getContent(new JceKEKEnvelopedRecipient(kek).setProvider(BC));
+            fail("content recovered under an unreadable content-encryption algorithm");
+        }
+        catch (CMSException e)
+        {
+            assertEquals(message, e.getMessage());
+        }
+
+        try
+        {
+            recipient.getContent(new JceKEKEnvelopedRecipient(kek).setKeySizeValidation(true).setProvider(BC));
+            fail("content recovered under an unreadable content-encryption algorithm");
+        }
+        catch (CMSException e)
+        {
+            assertEquals(message, e.getMessage());
+        }
+
+        try
+        {
+            recipient.getContent(new JceKEKEnvelopedRecipient(kek).setProvider(BC)
+                .setAllowedContentAlgorithms(Collections.singleton(CMSAlgorithm.AES128_CBC)));
+            fail("content recovered under an unreadable content-encryption algorithm");
+        }
+        catch (CMSException e)
+        {
+            assertEquals(message, e.getMessage());
+        }
+    }
+
     public void testKeyTransOAEPDefault()
         throws Exception
     {

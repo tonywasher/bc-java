@@ -4,7 +4,6 @@ import java.util.HashSet;
 import java.util.Set;
 
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
-import org.bouncycastle.asn1.cms.CMSObjectIdentifiers;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 
 /**
@@ -67,18 +66,9 @@ public abstract class AbstractRecipient
     protected final void checkContentAlgorithm(AlgorithmIdentifier contentAlgorithm)
         throws CMSException
     {
-        AlgorithmIdentifier encAlgId;
-
-        // RFC 9709: the EncryptedContentInfo carries an outer id-alg-cek-hkdf-sha256 wrapping the
-        // real inner content-encryption AlgorithmIdentifier - it is the inner one these checks apply to.
-        if (contentAlgorithm.getAlgorithm().equals(CMSObjectIdentifiers.id_alg_cek_hkdf_sha256))
-        {
-            encAlgId = AlgorithmIdentifier.getInstance(contentAlgorithm.getParameters());
-        }
-        else
-        {
-            encAlgId = contentAlgorithm;
-        }
+        // an RFC 9709 key derivation wraps the real content-encryption algorithm in its parameters,
+        // and it is that one these checks apply to
+        AlgorithmIdentifier encAlgId = CMSUtils.getContentEncryptionAlgorithm(contentAlgorithm);
 
         if (!isContentAlgorithmAllowed(encAlgId.getAlgorithm()))
         {
