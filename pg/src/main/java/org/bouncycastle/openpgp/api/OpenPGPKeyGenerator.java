@@ -707,8 +707,13 @@ public class OpenPGPKeyGenerator
         /**
          * Build the {@link PGPSecretKeyRing OpenPGP key} using a single passphrase used to protect all subkeys.
          * The passphrase will override whichever key protectors were specified in previous builder steps.
+         * <p>
+         * The array passed in is zeroized once the key has been generated, so a caller that needs to keep
+         * the passphrase - to generate a second key with it, say - must pass a clone. This is the one place
+         * in the API that clears a caller's array; a {@code KeyPassphraseProvider} keeps ownership of what
+         * it hands out (see {@link KeyPassphraseProvider#getKeyPassword}).
          *
-         * @param passphrase nullable passphrase
+         * @param passphrase nullable passphrase, zeroized before this method returns
          * @return OpenPGP key
          * @throws PGPException if the key cannot be generated
          */
